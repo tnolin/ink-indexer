@@ -60,6 +60,20 @@ export function isSocketError(err: unknown): boolean {
   return false
 }
 
+/**
+ * A failure to reach the endpoint at all: a socket error, or an HTTP request that failed before any
+ * response (network down, DNS, reset, aborted). An HTTP response with a status (429, 5xx) is not
+ * one: that endpoint answered, so it keeps the range-halving path.
+ */
+export function isConnectionError(err: unknown): boolean {
+  if (isSocketError(err)) return true
+  for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
+    if (e instanceof HttpRequestError && e.status === undefined) return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
+}
+
 /** True when viem's TimeoutError is the error or anywhere in its cause chain. */
 export function isTimeoutError(err: unknown): boolean {
   for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
@@ -84,6 +98,8 @@ type TransportState = {
   range: number
   successes: number
   failures: number
+  /** Failures in a row, not reset by benching; drives the error-level log. */
+  consecutive: number
   benchedUntil: number
   head: bigint
   headAt: number
@@ -108,6 +124,7 @@ export class LogRouter {
       range: t.seed,
       successes: 0,
       failures: 0,
+      consecutive: 0,
       benchedUntil: 0,
       head: 0n,
       headAt: Number.NEGATIVE_INFINITY,
@@ -141,43 +158,43 @@ export class LogRouter {
           const end = [reach, to, head].reduce((a, b) => (a < b ? a : b))
           const logs = await s.t.getLogs({ fromBlock: from, toBlock: end, topics })
           s.failures = 0
+          s.consecutive = 0
           if (++s.successes >= GROW_AFTER) {
             s.successes = 0
             s.range = Math.min(s.t.seed, s.range * 2)
           }
           return { logs, toBlock: end }
         } catch (err) {
-          if (isSocketError(err)) {
-            // The endpoint's socket is down (viem reconnects it on its own): skip it for a while.
+          const consecutive = ++s.consecutive
+          if (isConnectionError(err)) {
+            // The connection to the endpoint is down: skip it for a while. The range says nothing about this.
             s.successes = 0
             s.failures = 0
             s.benchedUntil = now + BENCH_MS
-            this.logger("warn", "RPC socket error; transport benched", {
+            this.logger("warn", "RPC connection error; transport benched", {
               transport: s.t.name,
               benchedMs: BENCH_MS,
               error: String(err),
             })
-            failed = true
-            break
-          }
-          const wasMin = s.range === 1
-          const failures = s.failures + 1
-          s.successes = 0
-          s.range = Math.max(1, Math.floor(s.range / 2))
-          if (wasMin || ++s.failures >= BENCH_AFTER) {
-            s.benchedUntil = now + BENCH_MS
-            s.failures = 0
-          }
-          this.logger("warn", "getLogs failed", {
-            transport: s.t.name,
-            from,
-            nextRange: s.range,
-            error: String(err),
-          })
-          if (failures >= BENCH_AFTER)
-            this.logger("error", "getLogs failed repeatedly; transport benched", {
+          } else {
+            const wasMin = s.range === 1
+            s.successes = 0
+            s.range = Math.max(1, Math.floor(s.range / 2))
+            if (wasMin || ++s.failures >= BENCH_AFTER) {
+              s.benchedUntil = now + BENCH_MS
+              s.failures = 0
+            }
+            this.logger("warn", "getLogs failed", {
               transport: s.t.name,
-              failures,
+              from,
+              nextRange: s.range,
+              error: String(err),
+            })
+          }
+          if (consecutive >= BENCH_AFTER)
+            this.logger("error", "getLogs failed repeatedly", {
+              transport: s.t.name,
+              failures: consecutive,
               error: String(err),
             })
           failed = true
@@ -230,10 +247,17 @@ export const RPC_TIMEOUT_MS = 15_000
 /** Ink's websocket-only Gelato host serves its HTTP RPC on another host. */
 const HTTP_HOSTS: Record<string, string> = { "ws-gel.inkonchain.com": "rpc-gel.inkonchain.com" }
 
-/** The HTTP RPC URL for a configured WebSocket URL: same path, https for wss. */
-export function httpUrlFor(wsUrl: string): string {
-  const u = new URL(wsUrl)
-  u.protocol = u.protocol === "wss:" ? "https:" : "http:"
+/**
+ * The HTTP RPC URL for a configured endpoint: `wss` becomes `https` and `ws` becomes `http`, with
+ * host, port, path and query kept. An `https://` or `http://` entry is used as given.
+ */
+export function httpUrlFor(url: string): string {
+  const u = new URL(url)
+  const protocol = { "wss:": "https:", "ws:": "http:", "https:": "https:", "http:": "http:" }[
+    u.protocol
+  ]
+  if (!protocol) throw new Error(`unsupported RPC URL scheme: ${url}`)
+  u.protocol = protocol
   u.hostname = HTTP_HOSTS[u.hostname] ?? u.hostname
   return u.toString()
 }
@@ -260,7 +284,16 @@ export async function connectRpc(
   logger: Logger = log,
   opts: { fetchFn?: typeof fetch; timeoutMs?: number; rank?: boolean } = {},
 ) {
-  const { fetchFn, timeoutMs = RPC_TIMEOUT_MS, rank = true } = opts
+  const { timeoutMs = RPC_TIMEOUT_MS, rank = true } = opts
+  const baseFetch = opts.fetchFn ?? fetch
+  // viem's own timer stops once the response headers arrive; this bounds the body read too.
+  const fetchFn: typeof fetch = (input, init) =>
+    baseFetch(input, {
+      ...init,
+      signal: init?.signal
+        ? AbortSignal.any([init.signal, AbortSignal.timeout(timeoutMs)])
+        : AbortSignal.timeout(timeoutMs),
+    })
   const httpTransports = urls.map((u) =>
     http(httpUrlFor(u), { timeout: timeoutMs, retryCount: 0, fetchFn }),
   )
@@ -277,15 +310,27 @@ export async function connectRpc(
     chain: ink,
     transport: fallback(httpTransports, {
       retryCount: 0,
-      rank: rank && { interval: 10_000, sampleCount: 5, timeout: timeoutMs },
+      rank: rank && {
+        interval: 10_000,
+        sampleCount: 5,
+        timeout: timeoutMs,
+        ping: ({ transport }) => transport.request({ method: "eth_blockNumber" }),
+      },
     }),
   })
-  const heads = createPublicClient({
-    chain: ink,
-    transport: fallback(
-      urls.map((u) => webSocket(u, { reconnect: true, keepAlive: true, retryCount: 3 })),
-    ),
-  })
+  // New-head notifications need a WebSocket. With only http(s) entries, poll the HTTP client instead.
+  const wsUrls = urls.filter((u) => /^wss?:/i.test(u))
+  const pollHeads = wsUrls.length === 0
+  if (pollHeads)
+    logger("warn", "no ws:// or wss:// URL configured; polling for new heads every 4 s")
+  const heads = pollHeads
+    ? client
+    : createPublicClient({
+        chain: ink,
+        transport: fallback(
+          wsUrls.map((u) => webSocket(u, { reconnect: true, keepAlive: true, retryCount: 3 })),
+        ),
+      })
   const router = new LogRouter(
     perUrl.map((c, i) => ({
       name: new URL(urls[i]!).hostname,
@@ -304,7 +349,7 @@ export async function connectRpc(
     undefined,
     logger,
   )
-  return { client, heads, router }
+  return { client, heads, pollHeads, router }
 }
 
 /** Calls onHead for every new head, and on its own when no head has arrived for `stallMs`. */
@@ -313,11 +358,12 @@ export function watchHeads(
   onHead: () => void,
   logger: Logger = log,
   stallMs = 30_000,
+  poll = false,
 ): () => void {
   let last = Date.now()
   // `poll: false` (WebSocket subscription) is only typed on a client with a known WebSocket transport; the fallback transport is not one.
   const unwatch = client.watchBlockNumber({
-    poll: false,
+    poll,
     emitOnBegin: true,
     onBlockNumber: () => {
       last = Date.now()

@@ -70,3 +70,28 @@ describe("watchHeads", () => {
     stop()
   })
 })
+
+describe("watchHeads polling", () => {
+  it("passes poll through to the subscription", () => {
+    const seen: unknown[] = []
+    const client = {
+      watchBlockNumber: (opts: { poll: boolean }) => {
+        seen.push(opts.poll)
+        return () => {}
+      },
+    } as unknown as Pick<PublicClient, "watchBlockNumber">
+    watchHeads(
+      client,
+      () => {},
+      () => {},
+      30_000,
+      true,
+    ).call(null)
+    watchHeads(
+      client,
+      () => {},
+      () => {},
+    ).call(null)
+    expect(seen).toEqual([true, false])
+  })
+})

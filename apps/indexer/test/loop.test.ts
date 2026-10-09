@@ -202,3 +202,33 @@ describe("Indexer.lastHead", () => {
     expect(idx.lastHead).toBe(S + 5n)
   })
 })
+
+describe("Indexer in-memory cursor and head fetches", () => {
+  it("tracks the stored cursor through ingest and rollback, and counts head fetches", async () => {
+    const chain = new FakeChain(S + 100n)
+    launch(chain, { n: 1, block: S + 10n })
+    trade(chain, { n: 1, block: S + 100n, sold: 4n * 10n ** 26n })
+    const { idx } = await indexerFor(chain)
+    expect(idx.cursorBlock).toBeNull()
+    expect(idx.headFetches).toBe(0)
+    await idx.trigger()
+    expect(idx.cursorBlock).toBe(S + 100n)
+    expect(idx.cursorBlock).toBe((await store.getCursor())!.block)
+    expect(idx.headFetches).toBe(1)
+
+    chain.reorg(S + 100n)
+    trade(chain, { n: 1, block: S + 100n, sold: 2n * 10n ** 26n })
+    chain.states.set(LAUNCH_KEY, stateFor(tokenOf(1), 0n))
+    await idx.trigger()
+    expect(idx.cursorBlock).toBe((await store.getCursor())!.block)
+    expect(idx.headFetches).toBe(2)
+  })
+
+  it("starts from the stored cursor", async () => {
+    const chain = new FakeChain(S + 50n)
+    const first = await indexerFor(chain)
+    await first.idx.trigger()
+    const second = await indexerFor(chain)
+    expect(second.idx.cursorBlock).toBe(S + 50n)
+  })
+})

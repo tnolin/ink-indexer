@@ -80,9 +80,9 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 
 ## Reliability
 
-- WebSocket subscriptions reconnect automatically and backfill from the last processed block.
+- A WebSocket subscription announces new heads and reconnects automatically; the loop backfills from the last processed block.
 - Events are written unconfirmed and marked confirmed after 1 block, so consumers can choose how to handle reorgs.
-- RPC: dRPC (`wss://ink.drpc.org`) as primary, Ink's public QuickNode and Gelato endpoints as failover. See [Ink RPC docs](https://docs.inkonchain.com/tools/rpc).
+- RPC: dRPC, Ink's public QuickNode and Gelato endpoints over HTTP with a 15 second request limit. Reads go to the endpoint with the best recent success and latency and fail over on error. See ADR 0014 and [Ink RPC docs](https://docs.inkonchain.com/tools/rpc).
 - A heartbeat alerts the operator after 10 minutes with no processed events.
 - Errors go to Sentry from the first deploy.
 

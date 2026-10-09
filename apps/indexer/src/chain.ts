@@ -67,7 +67,7 @@ async function retryOnTransportError<T>(
       const fields = { call, failures, url: errorUrl(err), retryInMs: wait, error: String(err) }
       if (failures >= ERROR_AFTER_FAILURES)
         logger("error", "RPC read failing repeatedly; still retrying", fields)
-      else logger("warn", "RPC read failed on the socket; retrying", fields)
+      else logger("warn", "RPC read failed; retrying", fields)
       await sleep(wait)
     }
   }

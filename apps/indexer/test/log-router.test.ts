@@ -1,12 +1,13 @@
 import {
   ContractFunctionExecutionError,
+  HttpRequestError,
   RpcRequestError,
   SocketClosedError,
   TimeoutError,
   WebSocketRequestError,
 } from "viem"
 import { describe, expect, it } from "vitest"
-import { isSocketError, LogRouter, type LogTransport, seedFor } from "../src/rpc"
+import { isConnectionError, isSocketError, LogRouter, type LogTransport, seedFor } from "../src/rpc"
 
 function fakeClock() {
   const c = {
@@ -272,5 +273,55 @@ describe("repeated failures", () => {
     expect(errors).toHaveLength(1)
     expect(errors[0]![2]).toMatchObject({ transport: "qn", failures: 5 })
     expect(logged.indexOf(errors[0]!)).toBeGreaterThanOrEqual(5)
+  })
+})
+
+describe("http failures", () => {
+  const fetchFailure = () =>
+    new HttpRequestError({
+      url: "https://rpc-qnd.inkonchain.com/",
+      cause: new TypeError("fetch failed"),
+    })
+  const status = (n: number) =>
+    new HttpRequestError({ url: "https://rpc-qnd.inkonchain.com/", status: n })
+
+  it("classifies fetch-level failures, also through causes, apart from HTTP status errors", () => {
+    expect(isConnectionError(fetchFailure())).toBe(true)
+    expect(isConnectionError(new Error("wrapped", { cause: fetchFailure() }))).toBe(true)
+    expect(isConnectionError(status(503))).toBe(false)
+    expect(isConnectionError(status(429))).toBe(false)
+    expect(isConnectionError(new Error("boom"))).toBe(false)
+  })
+
+  it("benches at once without halving the range on a fetch-level failure", async () => {
+    const qn = transport("qn", 10_000)
+    qn.getLogs = async () => {
+      throw fetchFailure()
+    }
+    const ok = transport("ok", 1_000)
+    const router = new LogRouter([qn, ok], fakeClock(), quiet)
+    await router.getLogs(1n, FAR, [])
+    expect(router.ranges()[0]).toEqual({ name: "qn", range: 10_000, healthy: false })
+    expect(router.ranges()[1]!.healthy).toBe(true)
+  })
+
+  it("halves the range on an HTTP status error and benches only after the usual count", async () => {
+    const qn = transport("qn", 10_000)
+    qn.getLogs = async () => {
+      throw status(503)
+    }
+    const ok = transport("ok", 1_000)
+    const router = new LogRouter([qn, ok], fakeClock(), quiet)
+    await router.getLogs(1n, FAR, [])
+    expect(router.ranges()[0]).toEqual({ name: "qn", range: 625, healthy: true })
+  })
+
+  it("keeps logging the repeated-failure error at range 1, where every failure benches", async () => {
+    const logged: [string, string, Record<string, unknown> | undefined][] = []
+    const t = transport("qn", 1, (_f, _t, call) => call <= 6)
+    const router = new LogRouter([t], fakeClock(), (l, m, f) => logged.push([l, m, f]))
+    await router.getLogs(1n, 10n, [])
+    const errors = logged.filter(([l]) => l === "error")
+    expect(errors.map(([, , f]) => f!.failures)).toEqual([5, 6])
   })
 })

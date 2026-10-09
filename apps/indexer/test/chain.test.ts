@@ -44,7 +44,7 @@ describe("viemChain socket errors", () => {
     expect(calls).toBe(4)
     expect(sleeps).toEqual([1_000, 2_000, 4_000])
     expect(logged.map(([l, m]) => `${l} ${m}`)).toEqual(
-      Array(3).fill("warn RPC read failed on the socket; retrying"),
+      Array(3).fill("warn RPC read failed; retrying"),
     )
   })
 

@@ -123,3 +123,74 @@ describe("connectRpc over http", () => {
     expect(sleeps).toEqual([])
   })
 })
+
+describe("connectRpc hardening", () => {
+  it("bounds the whole request, so a body that never finishes fails over", async () => {
+    const calls: string[] = []
+    const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+      )
+      const body = JSON.parse(String(init?.body))
+      calls.push(url.hostname)
+      const json = (extra: object) =>
+        new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, ...extra }), {
+          headers: { "content-type": "application/json" },
+        })
+      if (url.hostname === "a.test" && body.method !== "eth_chainId")
+        // Headers arrive at once; the body never ends and only errors when the request is aborted.
+        return new Response(
+          new ReadableStream({
+            start(c) {
+              init?.signal?.addEventListener("abort", () => c.error(init.signal?.reason))
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        )
+      return json({ result: body.method === "eth_blockNumber" ? "0x64" : "0xdef1" })
+    }) as typeof fetch
+    const { client } = await connectRpc(["wss://a.test", "wss://b.test"], quiet, {
+      fetchFn,
+      timeoutMs: 100,
+      rank: false,
+    })
+    const started = Date.now()
+    expect(await client.getBlockNumber({ cacheTime: 0 })).toBe(100n)
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(calls).toContain("a.test")
+  })
+
+  it("pings endpoints with eth_blockNumber when ranking", async () => {
+    const { calls } = await connect({}, { rank: true })
+    await new Promise((r) => setTimeout(r, 100))
+    expect(calls.some((c) => c.method === "net_listening")).toBe(false)
+    const pings = calls.filter((c) => c.method === "eth_blockNumber").map((c) => c.host)
+    expect(pings).toEqual(expect.arrayContaining(["a.test", "b.test"]))
+  })
+
+  it("never downgrades and keeps http(s) entries as given", () => {
+    expect(httpUrlFor("https://x.test/p?k=v")).toBe("https://x.test/p?k=v")
+    expect(httpUrlFor("http://localhost:8545")).toBe("http://localhost:8545/")
+    expect(httpUrlFor("wss://x.test:8443/ws?key=1")).toBe("https://x.test:8443/ws?key=1")
+    expect(() => httpUrlFor("ftp://x.test")).toThrow()
+  })
+
+  it("polls for heads when no ws:// or wss:// entry is configured, and says so", async () => {
+    const f = fakeFetch({})
+    const logged: [string, string][] = []
+    const only = await connectRpc(
+      ["https://a.test", "https://b.test"],
+      (l, m) => logged.push([l, m]),
+      {
+        fetchFn: f.fetchFn,
+        timeoutMs: 50,
+        rank: false,
+      },
+    )
+    expect(only.pollHeads).toBe(true)
+    expect(logged.some(([l, m]) => l === "warn" && /polling/.test(m))).toBe(true)
+    expect(await only.heads.getBlockNumber({ cacheTime: 0 })).toBe(100n)
+    const both = await connect({})
+    expect(both.pollHeads).toBe(false)
+  })
+})

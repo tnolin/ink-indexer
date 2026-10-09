@@ -5,7 +5,7 @@ import { log } from "./log"
 import { Indexer } from "./loop"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { createShutdown } from "./shutdown"
-import { createStallWatchdog } from "./stall"
+import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 
 const USAGE = "usage: main.ts start | backfill --from <block> [--to <block>]"
@@ -46,7 +46,9 @@ const shutdown = createShutdown({
   logger: log,
 })
 await migrate(sql)
-const { client, heads, router } = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
+const { client, heads, pollHeads, router } = await connectRpc(
+  urls.length > 0 ? urls : DEFAULT_WS_URLS,
+)
 const indexer = new Indexer({
   chain: viemChain(client, router, { isStopping: shutdown.isStopping }),
   store,
@@ -61,20 +63,16 @@ if (command === "backfill") {
   process.exit(0)
 }
 
-const stopHeads = watchHeads(heads, () => {
-  current = indexer.trigger().catch(shutdown.fail)
-})
-const stall = createStallWatchdog({
-  getCursor: async () => (await store.getCursor())?.block ?? null,
-  getHead: () => indexer.lastHead,
-  now: Date.now,
-  logger: log,
-  onStall: () => void shutdown.abort("indexer exiting after stall; a supervisor should restart it"),
-})
-const stallTimer = setInterval(() => {
-  stall.check().catch((err) => log("warn", "stall check failed", { error: String(err) }))
-}, 30_000)
-stallTimer.unref()
+const stopHeads = watchHeads(
+  heads,
+  () => {
+    current = indexer.trigger().catch(shutdown.fail)
+  },
+  log,
+  undefined,
+  pollHeads,
+)
+const stallTimer = startStallWatch({ indexer, shutdown, logger: log })
 process.on("SIGINT", () => void shutdown.signal())
 process.on("SIGTERM", () => void shutdown.signal())
 log("info", "indexer started", { transports: router.ranges() })

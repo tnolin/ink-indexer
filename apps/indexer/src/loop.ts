@@ -12,12 +12,17 @@ export class Indexer {
   private again = false
   /** The chain head the last tick started from; undefined before the first tick. */
   lastHead: bigint | undefined
+  /** How many head fetches have succeeded. */
+  headFetches = 0
+  /** The stored cursor block, kept in memory so liveness checks never wait on the database. */
+  cursorBlock: bigint | null | undefined
 
   constructor(private readonly deps: { chain: Chain; store: Store; logger: Logger }) {}
 
   async init() {
     await this.deps.store.seedHooks(nativeHookRows())
     await this.reloadHooks()
+    this.cursorBlock = (await this.deps.store.getCursor())?.block ?? null
   }
 
   /** Single-flight: triggers during a running tick fold into one more tick. */
@@ -44,6 +49,7 @@ export class Indexer {
     const { chain, store } = this.deps
     const head = await chain.getBlockNumber()
     this.lastHead = head
+    this.headFetches++
     await this.checkReorg()
     const cursor = await store.getCursor()
     let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
@@ -80,6 +86,7 @@ export class Indexer {
         cursor = { block: toBlock, hash: end.hash }
       }
       await store.writeBatch(batch, { cursor, head })
+      if (cursor) this.cursorBlock = cursor.block
     } catch (err) {
       // processLogs registers new hooks in memory before they are persisted; drop that state.
       await this.reloadHooks()
@@ -129,6 +136,7 @@ export class Indexer {
       }
     })
     await store.rollback(fork, forkHash, refreshed)
+    this.cursorBlock = fork
     await this.reloadHooks()
     logger("warn", "reorg: rolled back to fork block", { fork, refreshed: refreshed.length })
   }
