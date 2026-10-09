@@ -32,10 +32,18 @@ const urls = (process.env.INK_RPC_WS_URLS ?? "")
   .filter(Boolean)
 
 const sql = connect(databaseUrl)
+let current: Promise<void> | undefined
+const shutdown = createShutdown({
+  stop: () => stopHeads(),
+  inFlight: () => current,
+  end: () => sql.end({ timeout: 5 }),
+  exit: (code) => process.exit(code),
+  logger: log,
+})
 await migrate(sql)
 const { client, router } = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
 const indexer = new Indexer({
-  chain: viemChain(client, router),
+  chain: viemChain(client, router, { isStopping: shutdown.isStopping }),
   store: createStore(sql),
   logger: log,
 })
@@ -48,14 +56,6 @@ if (command === "backfill") {
   process.exit(0)
 }
 
-let current: Promise<void> | undefined
-const shutdown = createShutdown({
-  stop: () => stopHeads(),
-  inFlight: () => current,
-  end: () => sql.end({ timeout: 5 }),
-  exit: (code) => process.exit(code),
-  logger: log,
-})
 const stopHeads = watchHeads(client, () => {
   current = indexer.trigger().catch(shutdown.fail)
 })

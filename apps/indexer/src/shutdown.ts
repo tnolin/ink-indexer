@@ -20,6 +20,7 @@ export function createShutdown(deps: {
   const { stop, inFlight, end, exit, logger, waitMs = 10_000 } = deps
   let stopping = false
   return {
+    isStopping: () => stopping,
     fail(err: unknown) {
       if (stopping) {
         logger("info", "ignored error during shutdown", { error: String(err) })

@@ -8,6 +8,7 @@ import {
   type PublicClient,
   type RpcLog,
   SocketClosedError,
+  TimeoutError,
   toHex,
   type WatchBlockNumberParameters,
   WebSocketRequestError,
@@ -52,6 +53,15 @@ export function isSocketError(err: unknown): boolean {
   for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
     if (e instanceof WebSocketRequestError || e instanceof SocketClosedError) return true
     if ((e as { type?: unknown }).type === "error" && "defaultPrevented" in e) return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
+}
+
+/** True when viem's TimeoutError is the error or anywhere in its cause chain. */
+export function isTimeoutError(err: unknown): boolean {
+  for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
+    if (e instanceof TimeoutError) return true
     e = (e as { cause?: unknown }).cause
   }
   return false

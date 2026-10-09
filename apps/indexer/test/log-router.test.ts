@@ -1,4 +1,10 @@
-import { SocketClosedError, WebSocketRequestError } from "viem"
+import {
+  ContractFunctionExecutionError,
+  RpcRequestError,
+  SocketClosedError,
+  TimeoutError,
+  WebSocketRequestError,
+} from "viem"
 import { describe, expect, it } from "vitest"
 import { isSocketError, LogRouter, type LogTransport, seedFor } from "../src/rpc"
 
@@ -179,6 +185,22 @@ describe("socket errors", () => {
     expect(isSocketError({ type: "error", defaultPrevented: false })).toBe(true)
     expect(isSocketError(new Error("Temporary internal error. Please retry"))).toBe(false)
     expect(isSocketError(new Error("WebSocket request failed"))).toBe(false)
+  })
+
+  it("does not treat other viem errors as socket errors, but follows causes", () => {
+    const rpc = new RpcRequestError({
+      body: {},
+      error: { code: -32000, message: "execution reverted" },
+      url: "wss://x",
+    })
+    const timeout = new TimeoutError({ body: {}, url: "wss://x" })
+    const exec = (cause: Error) =>
+      new ContractFunctionExecutionError(cause as never, { abi: [], functionName: "f" })
+    expect(isSocketError(rpc)).toBe(false)
+    expect(isSocketError(timeout)).toBe(false)
+    expect(isSocketError(exec(rpc))).toBe(false)
+    expect(isSocketError(exec(pingError()))).toBe(true)
+    expect(isSocketError(exec(new SocketClosedError({ url: "wss://x" })))).toBe(true)
   })
 
   it("logs a socket error, benches that transport at once and leaves the others alone", async () => {
