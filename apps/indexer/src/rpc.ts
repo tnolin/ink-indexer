@@ -1,5 +1,17 @@
-import type { ChainLog } from "@ink-indexer/sdk"
-import type { Hex } from "viem"
+import { type ChainLog, INK_CHAIN_ID } from "@ink-indexer/sdk"
+import {
+  type Address,
+  createPublicClient,
+  fallback,
+  type Hash,
+  type Hex,
+  type PublicClient,
+  type RpcLog,
+  toHex,
+  type WatchBlockNumberParameters,
+  webSocket,
+} from "viem"
+import { ink } from "viem/chains"
 import { type Logger, log } from "./log"
 
 export type GetLogsParams = { fromBlock: bigint; toBlock: bigint; topics: Hex[] }
@@ -142,5 +154,92 @@ export class LogRouter {
     s.head = await s.t.getBlockNumber()
     s.headAt = now
     return s.head
+  }
+}
+
+export function toChainLog(l: RpcLog): ChainLog {
+  if (
+    l.blockNumber === null ||
+    l.blockHash === null ||
+    l.transactionHash === null ||
+    l.logIndex === null
+  ) {
+    throw new Error("eth_getLogs returned a pending log")
+  }
+  return {
+    address: l.address.toLowerCase() as Address,
+    topics: [...l.topics] as Hex[],
+    data: l.data,
+    blockNumber: BigInt(l.blockNumber),
+    blockHash: l.blockHash.toLowerCase() as Hash,
+    transactionHash: l.transactionHash.toLowerCase() as Hash,
+    logIndex: Number(l.logIndex),
+  }
+}
+
+/** One WebSocket client per URL. Heads and reads use them in priority order; getLogs goes through LogRouter. */
+export async function connectRpc(urls: string[], logger: Logger = log) {
+  const transports = urls.map((u) =>
+    webSocket(u, { reconnect: true, keepAlive: true, retryCount: 3 }),
+  )
+  const perUrl = transports.map((t) => createPublicClient({ chain: ink, transport: t }))
+  for (const [i, c] of perUrl.entries()) {
+    const id = await c.getChainId().catch((err) => {
+      logger("warn", "RPC endpoint unreachable at startup", { url: urls[i], error: String(err) })
+      return null
+    })
+    if (id !== null && id !== INK_CHAIN_ID)
+      throw new Error(`${urls[i]} serves chain ${id}, expected ${INK_CHAIN_ID}`)
+  }
+  const client = createPublicClient({ chain: ink, transport: fallback(transports) })
+  const router = new LogRouter(
+    perUrl.map((c, i) => ({
+      name: new URL(urls[i]!).hostname,
+      seed: seedFor(urls[i]!),
+      getBlockNumber: () => c.getBlockNumber({ cacheTime: 0 }),
+      getLogs: async (p: GetLogsParams) => {
+        const raw = await c.request({
+          method: "eth_getLogs",
+          params: [
+            { fromBlock: toHex(p.fromBlock), toBlock: toHex(p.toBlock), topics: [[...p.topics]] },
+          ],
+        })
+        return raw.map(toChainLog)
+      },
+    })),
+    undefined,
+    logger,
+  )
+  return { client, router }
+}
+
+/** Calls onHead for every new head, and on its own when no head has arrived for `stallMs`. */
+export function watchHeads(
+  client: Pick<PublicClient, "watchBlockNumber">,
+  onHead: () => void,
+  logger: Logger = log,
+  stallMs = 30_000,
+): () => void {
+  let last = Date.now()
+  // `poll: false` (WebSocket subscription) is only typed on a client with a known WebSocket transport; the fallback transport is not one.
+  const unwatch = client.watchBlockNumber({
+    poll: false,
+    emitOnBegin: true,
+    onBlockNumber: () => {
+      last = Date.now()
+      onHead()
+    },
+    onError: (error: Error) => logger("warn", "head subscription error", { error: String(error) }),
+  } as unknown as WatchBlockNumberParameters)
+  const timer = setInterval(() => {
+    if (Date.now() - last < stallMs) return
+    logger("warn", "no new head for 30 s; ticking without the subscription", {
+      sinceMs: Date.now() - last,
+    })
+    onHead()
+  }, stallMs / 3)
+  return () => {
+    unwatch()
+    clearInterval(timer)
   }
 }

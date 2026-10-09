@@ -1,1 +1,64 @@
-export {}
+import { parseArgs } from "node:util"
+import { connect, migrate } from "@ink-indexer/db"
+import { viemChain } from "./chain"
+import { log } from "./log"
+import { Indexer } from "./loop"
+import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
+import { createStore } from "./store"
+
+const USAGE = "usage: main.ts start | backfill --from <block> [--to <block>]"
+const { positionals, values } = parseArgs({
+  allowPositionals: true,
+  options: { from: { type: "string" }, to: { type: "string" } },
+})
+const [command] = positionals
+if (command !== "start" && command !== "backfill") {
+  console.error(USAGE)
+  process.exit(2)
+}
+if (command === "backfill" && !values.from) {
+  console.error(USAGE)
+  process.exit(2)
+}
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) {
+  console.error("DATABASE_URL is not set")
+  process.exit(2)
+}
+const urls = (process.env.INK_RPC_WS_URLS ?? "")
+  .split(",")
+  .map((u) => u.trim())
+  .filter(Boolean)
+
+const sql = connect(databaseUrl)
+await migrate(sql)
+const { client, router } = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
+const indexer = new Indexer({
+  chain: viemChain(client, router),
+  store: createStore(sql),
+  logger: log,
+})
+await indexer.init()
+
+if (command === "backfill") {
+  await indexer.backfill(BigInt(values.from!), values.to ? BigInt(values.to) : undefined)
+  log("info", "backfill done", { from: values.from, to: values.to ?? "head" })
+  await sql.end()
+  process.exit(0)
+}
+
+const fail = (err: unknown) => {
+  log("error", "indexer stopped", { error: err instanceof Error ? err.stack : String(err) })
+  process.exit(1)
+}
+const stopHeads = watchHeads(client, () => {
+  indexer.trigger().catch(fail)
+})
+const shutdown = async () => {
+  stopHeads()
+  await sql.end({ timeout: 5 })
+  process.exit(0)
+}
+process.on("SIGINT", shutdown)
+process.on("SIGTERM", shutdown)
+log("info", "indexer started", { transports: router.ranges() })
