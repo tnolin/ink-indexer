@@ -16,13 +16,13 @@ export function curveValue(p: CurveParams, sold: bigint): bigint {
   )
 }
 
-/** Marginal curve price at `sold`, in quote base units per whole token. */
+/**
+ * Price of the next whole token at `sold`, in quote base units per whole token:
+ * curveValue(sold + 1 token) - curveValue(sold). This is what the Trade event's `price` reports
+ * on every hook family, within 1 wei.
+ */
 export function curvePrice(p: CurveParams, sold: bigint): bigint {
-  const g = BigInt(p.gainBps)
-  return (
-    (2n * p.targetRaise * (p.saleSupply * 10_000n + g * sold) * WHOLE_TOKEN) /
-    (p.saleSupply * p.saleSupply * (20_000n + g))
-  )
+  return curveValue(p, sold + WHOLE_TOKEN) - curveValue(p, sold)
 }
 
 /** Progress toward bond in basis points (0 to 10,000). */

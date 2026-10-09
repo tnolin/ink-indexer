@@ -24,7 +24,7 @@ describe("curve math", () => {
     expect(curveValue(flat, 4n * 10n ** 26n)).toBe(5n * 10n ** 17n)
   })
 
-  it("prices within 10 base units of the Trade event price", () => {
+  it("prices within 1 base unit of the Trade event price", () => {
     const cases: [bigint, bigint][] = [
       [10996462298049720546679419n, 1463554654n],
       [126456868244813729288597944n, 2685852827n],
@@ -32,7 +32,7 @@ describe("curve math", () => {
     ]
     for (const [sold, eventPrice] of cases) {
       const diff = curvePrice(LEGACY, sold) - eventPrice
-      expect(diff < 0n ? -diff : diff).toBeLessThanOrEqual(10n)
+      expect(diff < 0n ? -diff : diff).toBeLessThanOrEqual(1n)
     }
   })
 
