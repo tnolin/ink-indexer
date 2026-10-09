@@ -9,7 +9,8 @@ import {
   type StateReader,
 } from "@ink-indexer/sdk"
 import { type Address, BlockNotFoundError, type Hash } from "viem"
-import type { LogRouter } from "./rpc"
+import { type Logger, log } from "./log"
+import { isSocketError, type LogRouter } from "./rpc"
 
 /** Everything the indexer needs from Ink. viemChain is the real one; tests use FakeChain. */
 export type Chain = {
@@ -29,12 +30,44 @@ export type BlockReader = {
   getBlock(args: { blockNumber: bigint }): Promise<{ hash: Hash | null; timestamp: bigint }>
 }
 
-export function viemChain(client: StateReader & BlockReader, router: LogRouter): Chain {
+const sleepMs = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/**
+ * Reads go through viem's fallback over every endpoint, so a socket error only surfaces here when
+ * all of them are down (for example after the host slept). That is an outage, not a data error:
+ * wait and ask again. Every other error is rethrown at once.
+ */
+async function retryOnSocketError<T>(
+  fn: () => Promise<T>,
+  logger: Logger,
+  sleep: (ms: number) => Promise<void>,
+): Promise<T> {
+  for (let wait = 1_000; ; wait = Math.min(wait * 2, 30_000)) {
+    try {
+      return await fn()
+    } catch (err) {
+      if (!isSocketError(err)) throw err
+      logger("warn", "RPC read failed on the socket; retrying", {
+        retryInMs: wait,
+        error: String(err),
+      })
+      await sleep(wait)
+    }
+  }
+}
+
+export function viemChain(
+  client: StateReader & BlockReader,
+  router: LogRouter,
+  opts: { logger?: Logger; sleep?: (ms: number) => Promise<void> } = {},
+): Chain {
+  const { logger = log, sleep = sleepMs } = opts
+  const retry = <T>(fn: () => Promise<T>) => retryOnSocketError(fn, logger, sleep)
   return {
-    getBlockNumber: () => client.getBlockNumber({ cacheTime: 0 }),
+    getBlockNumber: () => retry(() => client.getBlockNumber({ cacheTime: 0 })),
     async getBlock(n) {
       try {
-        const b = await client.getBlock({ blockNumber: n })
+        const b = await retry(() => client.getBlock({ blockNumber: n }))
         return b.hash ? { hash: b.hash.toLowerCase() as Hash, timestamp: b.timestamp } : null
       } catch (err) {
         if (err instanceof BlockNotFoundError) return null
@@ -42,8 +75,8 @@ export function viemChain(client: StateReader & BlockReader, router: LogRouter):
       }
     },
     getLogs: (from, to) => router.getLogs(from, to, LOG_TOPICS),
-    readLaunchStates: (keys, block) => readLaunchStates(client, keys, block),
-    readTotalSupplies: (tokens, block) => readTotalSupplies(client, tokens, block),
-    readErc20Meta: (token) => readErc20Meta(client, token),
+    readLaunchStates: (keys, block) => retry(() => readLaunchStates(client, keys, block)),
+    readTotalSupplies: (tokens, block) => retry(() => readTotalSupplies(client, tokens, block)),
+    readErc20Meta: (token) => retry(() => readErc20Meta(client, token)),
   }
 }

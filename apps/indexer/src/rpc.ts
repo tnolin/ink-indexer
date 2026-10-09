@@ -7,8 +7,10 @@ import {
   type Hex,
   type PublicClient,
   type RpcLog,
+  SocketClosedError,
   toHex,
   type WatchBlockNumberParameters,
+  WebSocketRequestError,
   webSocket,
 } from "viem"
 import { ink } from "viem/chains"
@@ -39,6 +41,20 @@ export const DEFAULT_WS_URLS = [
 
 export function seedFor(url: string): number {
   return RANGE_SEEDS[new URL(url).hostname] ?? 1_000
+}
+
+/**
+ * True for a failure of the WebSocket itself: viem's WebSocketRequestError (also what its keepalive
+ * ping raises on a dead socket), SocketClosedError, or the raw socket ErrorEvent. These say nothing
+ * about the data. Request timeouts and JSON-RPC errors are not included.
+ */
+export function isSocketError(err: unknown): boolean {
+  for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
+    if (e instanceof WebSocketRequestError || e instanceof SocketClosedError) return true
+    if ((e as { type?: unknown }).type === "error" && "defaultPrevented" in e) return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
 }
 
 const realClock: Clock = {
@@ -119,6 +135,19 @@ export class LogRouter {
           }
           return { logs, toBlock: end }
         } catch (err) {
+          if (isSocketError(err)) {
+            // The endpoint's socket is down (viem reconnects it on its own): skip it for a while.
+            s.successes = 0
+            s.failures = 0
+            s.benchedUntil = now + BENCH_MS
+            this.logger("warn", "RPC socket error; transport benched", {
+              transport: s.t.name,
+              benchedMs: BENCH_MS,
+              error: String(err),
+            })
+            failed = true
+            break
+          }
           const wasMin = s.range === 1
           s.successes = 0
           s.range = Math.max(1, Math.floor(s.range / 2))

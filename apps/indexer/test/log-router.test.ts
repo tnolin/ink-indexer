@@ -1,5 +1,6 @@
+import { SocketClosedError, WebSocketRequestError } from "viem"
 import { describe, expect, it } from "vitest"
-import { LogRouter, type LogTransport, seedFor } from "../src/rpc"
+import { isSocketError, LogRouter, type LogTransport, seedFor } from "../src/rpc"
 
 function fakeClock() {
   const c = {
@@ -162,5 +163,78 @@ describe("LogRouter", () => {
     clock.t += 1_000
     await router.getLogs(21n, 30n, [])
     expect(qn.headCalls).toBe(2)
+  })
+})
+
+describe("socket errors", () => {
+  const pingError = () =>
+    new WebSocketRequestError({
+      url: "wss://ws-gel.inkonchain.com/",
+      cause: new SocketClosedError({ url: "wss://ws-gel.inkonchain.com/" }),
+    })
+
+  it("classifies socket-level errors only", () => {
+    expect(isSocketError(pingError())).toBe(true)
+    expect(isSocketError(new SocketClosedError({ url: "wss://x" }))).toBe(true)
+    expect(isSocketError({ type: "error", defaultPrevented: false })).toBe(true)
+    expect(isSocketError(new Error("Temporary internal error. Please retry"))).toBe(false)
+    expect(isSocketError(new Error("WebSocket request failed"))).toBe(false)
+  })
+
+  it("logs a socket error, benches that transport at once and leaves the others alone", async () => {
+    const logged: [string, string, Record<string, unknown> | undefined][] = []
+    const gel = transport("ws-gel.inkonchain.com", 10_000)
+    gel.getLogs = async () => {
+      throw pingError()
+    }
+    const qn = transport("qn", 1_000)
+    const router = new LogRouter([gel, qn], fakeClock(), (l, m, f) => logged.push([l, m, f]))
+    expect(await router.getLogs(1n, FAR, [])).toEqual({ logs: [], toBlock: 1_000n })
+    expect(router.ranges()).toEqual([
+      { name: "ws-gel.inkonchain.com", range: 10_000, healthy: false },
+      { name: "qn", range: 1_000, healthy: true },
+    ])
+    expect(logged).toHaveLength(1)
+    expect(logged[0]![0]).toBe("warn")
+    expect(logged[0]![2]).toMatchObject({ transport: "ws-gel.inkonchain.com" })
+    expect(String(logged[0]![2]!.error)).toMatch(/WebSocketRequestError/)
+  })
+
+  it("benches a transport whose block-number read fails on the socket", async () => {
+    const gel = transport("gel", 10_000)
+    gel.getBlockNumber = async () => {
+      throw pingError()
+    }
+    const qn = transport("qn", 1_000)
+    const router = new LogRouter([gel, qn], fakeClock(), quiet)
+    await router.getLogs(1n, 10n, [])
+    expect(router.ranges()[0]!.healthy).toBe(false)
+    expect(router.ranges()[1]!.healthy).toBe(true)
+  })
+
+  it("keeps waiting, without throwing, while every transport is benched", async () => {
+    const clock = fakeClock()
+    const gel = transport("gel", 1_000)
+    let broken = true
+    const getLogs = gel.getLogs
+    gel.getLogs = async (p) => {
+      if (broken) throw pingError()
+      return getLogs(p)
+    }
+    const sleep = clock.sleep
+    clock.sleep = async (ms) => {
+      await sleep(ms)
+      if (clock.t >= 60_000) broken = false
+    }
+    const router = new LogRouter([gel], clock, quiet)
+    expect(await router.getLogs(1n, 10n, [])).toEqual({ logs: [], toBlock: 10n })
+  })
+
+  it("still halves the range on other errors", async () => {
+    const t = transport("t", 1_000, (_f, _t, call) => call === 1)
+    const router = new LogRouter([t], fakeClock(), quiet)
+    await router.getLogs(1n, 10_000n, [])
+    expect(t.calls[1]).toEqual([1n, 500n])
+    expect(router.ranges()[0]!.healthy).toBe(true)
   })
 })

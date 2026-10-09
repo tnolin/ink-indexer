@@ -14,6 +14,7 @@ ADR 0003 orders the RPC providers dRPC, then Ink's public QuickNode and Gelato e
 - Any `getLogs` error halves that transport's range, without parsing the message. After 20 consecutive successes the range doubles, up to the ceiling.
 - Each span's end is clamped to the chosen transport's own `eth_blockNumber`, cached for one second per transport. A node that is behind the chain head can return a successful but incomplete result for blocks above its own head, so the router returns the clamped `toBlock` and the cursor never moves past blocks that transport had not seen. A transport whose head is below the start block is skipped. If every transport is benched or behind, the call backs off from 1 to 30 seconds and retries the same span.
 - A transport that fails at range 1, or 5 times in a row, is benched for 60 seconds.
+- A WebSocket-level failure (viem's `WebSocketRequestError` or `SocketClosedError`, which includes a failed keepalive ping) is logged as a warning and benches that transport for 60 seconds at once, without changing its range. Other reads (block, state and token calls) wait and retry with a 1 to 30 second backoff when every endpoint's socket is down. Any other error, such as a decode, contract or database error, stops the process with exit code 1.
 
 ## Consequences
 
