@@ -192,3 +192,13 @@ describe("Indexer", () => {
     expect(await eventTypes()).toEqual(["launchpad.launch"])
   })
 })
+
+describe("Indexer.lastHead", () => {
+  it("is undefined before the first tick and the head the tick started from after it", async () => {
+    const chain = new FakeChain(S + 5n)
+    const { idx } = await indexerFor(chain)
+    expect(idx.lastHead).toBeUndefined()
+    await idx.trigger()
+    expect(idx.lastHead).toBe(S + 5n)
+  })
+})

@@ -1,7 +1,7 @@
 # 0013. Endpoint outages: bench, retry or fail fast
 
 Date: 2026-10-09
-Status: Accepted
+Status: Superseded by ADR 0014 (reads and getLogs moved from WebSocket to HTTP with per-request timeouts; the retry rule for transport errors and the shutdown rules still apply)
 
 ## Context
 

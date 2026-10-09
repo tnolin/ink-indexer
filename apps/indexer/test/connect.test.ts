@@ -1,0 +1,125 @@
+import { HttpRequestError } from "viem"
+import { describe, expect, it } from "vitest"
+import { viemChain } from "../src/chain"
+import { connectRpc, httpUrlFor, isTransportError } from "../src/rpc"
+
+type Mode = "ok" | "hang" | "error" | "rpcError" | "revert"
+const quiet = () => {}
+const TOKEN = "0x0000000000000000000000000000000000000002" as const
+
+/** A fetch that behaves per host. "hang" never settles on its own; it only ends when viem aborts the request. */
+function fakeFetch(modes: Record<string, Mode>) {
+  const calls: { host: string; method: string }[] = []
+  const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(
+      typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+    )
+    const body = JSON.parse(String(init?.body))
+    calls.push({ host: url.hostname, method: body.method })
+    const mode = modes[url.hostname] ?? "ok"
+    const reply = (extra: object) =>
+      new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, ...extra }), {
+        headers: { "content-type": "application/json" },
+      })
+    if (mode === "hang")
+      return new Promise<Response>((_, reject) =>
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        ),
+      )
+    if (mode === "error") throw new TypeError("fetch failed")
+    if (mode === "rpcError" && body.method === "eth_call")
+      return reply({ error: { code: -32000, message: "header not found" } })
+    if (mode === "revert" && body.method === "eth_call")
+      return reply({ error: { code: 3, message: "execution reverted" } })
+    const result: Record<string, unknown> = {
+      eth_chainId: "0xdef1",
+      eth_blockNumber: "0x64",
+      net_listening: true,
+      eth_getLogs: [],
+    }
+    return reply({ result: result[body.method] ?? "0x" })
+  }) as typeof fetch
+  return { fetchFn, calls }
+}
+
+const connect = (modes: Record<string, Mode>, opts: { rank?: boolean } = { rank: false }) => {
+  const f = fakeFetch(modes)
+  return connectRpc(["wss://a.test", "wss://b.test"], quiet, {
+    fetchFn: f.fetchFn,
+    timeoutMs: 50,
+    ...opts,
+  }).then((r) => ({ ...r, ...f }))
+}
+
+describe("httpUrlFor", () => {
+  it("keeps host and path, and maps Ink's websocket-only Gelato host to its http host", () => {
+    expect(httpUrlFor("wss://ink.drpc.org")).toBe("https://ink.drpc.org/")
+    expect(httpUrlFor("wss://rpc-qnd.inkonchain.com/x")).toBe("https://rpc-qnd.inkonchain.com/x")
+    expect(httpUrlFor("wss://ws-gel.inkonchain.com")).toBe("https://rpc-gel.inkonchain.com/")
+    expect(httpUrlFor("ws://localhost:8545")).toBe("http://localhost:8545/")
+  })
+})
+
+describe("isTransportError", () => {
+  it("includes http failures but not data errors", () => {
+    expect(isTransportError(new HttpRequestError({ url: "https://a.test" }))).toBe(true)
+    expect(isTransportError(new Error("execution reverted"))).toBe(false)
+  })
+})
+
+describe("connectRpc over http", () => {
+  it("times out a request that hangs forever and answers from the next endpoint", async () => {
+    const { client, calls } = await connect({ "a.test": "hang" })
+    const started = Date.now()
+    expect(await client.getBlockNumber({ cacheTime: 0 })).toBe(100n)
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(calls.some((c) => c.host === "a.test" && c.method === "eth_blockNumber")).toBe(true)
+    expect(calls.some((c) => c.host === "b.test" && c.method === "eth_blockNumber")).toBe(true)
+  })
+
+  it("ranks a dead endpoint last once its pings have failed", async () => {
+    const { client, calls } = await connect({ "a.test": "hang" }, { rank: true })
+    await new Promise((r) => setTimeout(r, 150))
+    const before = calls.length
+    expect(await client.getBlockNumber({ cacheTime: 0 })).toBe(100n)
+    expect(calls.slice(before)).toEqual([{ host: "b.test", method: "eth_blockNumber" }])
+  })
+
+  it("fails over from an endpoint that errors", async () => {
+    const { client } = await connect({ "a.test": "error" })
+    expect(await client.getBlockNumber({ cacheTime: 0 })).toBe(100n)
+  })
+
+  it("routes getLogs away from a hanging endpoint", async () => {
+    const { router } = await connect({ "a.test": "hang" })
+    expect(await router.getLogs(1n, 50n, [])).toEqual({ logs: [], toBlock: 50n })
+  })
+
+  it("fails fast on a revert: one call, no failover, no retry", async () => {
+    const { client, router, calls } = await connect({ "a.test": "revert", "b.test": "revert" })
+    const sleeps: number[] = []
+    const chain = viemChain(client, router, {
+      logger: quiet,
+      sleep: async (ms) => void sleeps.push(ms),
+    })
+    await expect(chain.readTotalSupplies([TOKEN], 1n)).rejects.toThrow()
+    expect(calls.filter((c) => c.method === "eth_call")).toHaveLength(1)
+    expect(sleeps).toEqual([])
+  })
+
+  it("fails fast on an RPC error response from every endpoint: each tried once, not retried", async () => {
+    const { client, router, calls } = await connect({ "a.test": "rpcError", "b.test": "rpcError" })
+    const sleeps: number[] = []
+    const chain = viemChain(client, router, {
+      logger: quiet,
+      sleep: async (ms) => void sleeps.push(ms),
+    })
+    await expect(chain.readTotalSupplies([TOKEN], 1n)).rejects.toThrow()
+    expect(calls.filter((c) => c.method === "eth_call").map((c) => c.host)).toEqual([
+      "a.test",
+      "b.test",
+    ])
+    expect(sleeps).toEqual([])
+  })
+})

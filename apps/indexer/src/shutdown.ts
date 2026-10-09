@@ -29,6 +29,25 @@ export function createShutdown(deps: {
       logger("error", "indexer stopped", { error: err instanceof Error ? err.stack : String(err) })
       exit(1)
     },
+    /** Stops for a reason that should not look like a clean exit: logs it, closes the database (bounded wait) and exits 1. */
+    async abort(reason: string) {
+      if (stopping) return
+      stopping = true
+      logger("error", reason)
+      try {
+        stop()
+        let timer: ReturnType<typeof setTimeout> | undefined
+        await Promise.race([
+          end(),
+          new Promise((r) => {
+            timer = setTimeout(r, waitMs)
+          }),
+        ]).finally(() => clearTimeout(timer))
+      } catch (err) {
+        logger("error", "shutdown failed", { error: String(err) })
+      }
+      exit(1)
+    },
     async signal() {
       if (stopping) return
       stopping = true

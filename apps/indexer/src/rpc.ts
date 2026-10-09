@@ -5,6 +5,8 @@ import {
   fallback,
   type Hash,
   type Hex,
+  HttpRequestError,
+  http,
   type PublicClient,
   type RpcLog,
   SocketClosedError,
@@ -159,6 +161,7 @@ export class LogRouter {
             break
           }
           const wasMin = s.range === 1
+          const failures = s.failures + 1
           s.successes = 0
           s.range = Math.max(1, Math.floor(s.range / 2))
           if (wasMin || ++s.failures >= BENCH_AFTER) {
@@ -171,6 +174,12 @@ export class LogRouter {
             nextRange: s.range,
             error: String(err),
           })
+          if (failures >= BENCH_AFTER)
+            this.logger("error", "getLogs failed repeatedly; transport benched", {
+              transport: s.t.name,
+              failures,
+              error: String(err),
+            })
           failed = true
           break
         }
@@ -216,12 +225,46 @@ export function toChainLog(l: RpcLog): ChainLog {
   }
 }
 
-/** One WebSocket client per URL. Heads and reads use them in priority order; getLogs goes through LogRouter. */
-export async function connectRpc(urls: string[], logger: Logger = log) {
-  const transports = urls.map((u) =>
-    webSocket(u, { reconnect: true, keepAlive: true, retryCount: 3 }),
+/** Hard limit for every RPC request. */
+export const RPC_TIMEOUT_MS = 15_000
+/** Ink's websocket-only Gelato host serves its HTTP RPC on another host. */
+const HTTP_HOSTS: Record<string, string> = { "ws-gel.inkonchain.com": "rpc-gel.inkonchain.com" }
+
+/** The HTTP RPC URL for a configured WebSocket URL: same path, https for wss. */
+export function httpUrlFor(wsUrl: string): string {
+  const u = new URL(wsUrl)
+  u.protocol = u.protocol === "wss:" ? "https:" : "http:"
+  u.hostname = HTTP_HOSTS[u.hostname] ?? u.hostname
+  return u.toString()
+}
+
+/** A failure of the connection to an endpoint rather than of the request's data. Timeouts included. */
+export function isTransportError(err: unknown): boolean {
+  if (isSocketError(err) || isTimeoutError(err)) return true
+  for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
+    if (e instanceof HttpRequestError) return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
+}
+
+/**
+ * Reads and getLogs go over HTTP: every request has a hard timeout and viem's fallback moves to the
+ * next endpoint, demoting one that stops answering. The WebSocket clients are used only for the
+ * newHeads subscription, whose failures are logged by watchHeads and are not fatal.
+ * viem's WebSocket transport awaits a (re)connect with no timeout, so a half-open socket can hang a
+ * request forever; HTTP has no such state.
+ */
+export async function connectRpc(
+  urls: string[],
+  logger: Logger = log,
+  opts: { fetchFn?: typeof fetch; timeoutMs?: number; rank?: boolean } = {},
+) {
+  const { fetchFn, timeoutMs = RPC_TIMEOUT_MS, rank = true } = opts
+  const httpTransports = urls.map((u) =>
+    http(httpUrlFor(u), { timeout: timeoutMs, retryCount: 0, fetchFn }),
   )
-  const perUrl = transports.map((t) => createPublicClient({ chain: ink, transport: t }))
+  const perUrl = httpTransports.map((t) => createPublicClient({ chain: ink, transport: t }))
   for (const [i, c] of perUrl.entries()) {
     const id = await c.getChainId().catch((err) => {
       logger("warn", "RPC endpoint unreachable at startup", { url: urls[i], error: String(err) })
@@ -230,7 +273,19 @@ export async function connectRpc(urls: string[], logger: Logger = log) {
     if (id !== null && id !== INK_CHAIN_ID)
       throw new Error(`${urls[i]} serves chain ${id}, expected ${INK_CHAIN_ID}`)
   }
-  const client = createPublicClient({ chain: ink, transport: fallback(transports) })
+  const client = createPublicClient({
+    chain: ink,
+    transport: fallback(httpTransports, {
+      retryCount: 0,
+      rank: rank && { interval: 10_000, sampleCount: 5, timeout: timeoutMs },
+    }),
+  })
+  const heads = createPublicClient({
+    chain: ink,
+    transport: fallback(
+      urls.map((u) => webSocket(u, { reconnect: true, keepAlive: true, retryCount: 3 })),
+    ),
+  })
   const router = new LogRouter(
     perUrl.map((c, i) => ({
       name: new URL(urls[i]!).hostname,
@@ -249,7 +304,7 @@ export async function connectRpc(urls: string[], logger: Logger = log) {
     undefined,
     logger,
   )
-  return { client, router }
+  return { client, heads, router }
 }
 
 /** Calls onHead for every new head, and on its own when no head has arrived for `stallMs`. */
@@ -268,7 +323,10 @@ export function watchHeads(
       last = Date.now()
       onHead()
     },
-    onError: (error: Error) => logger("warn", "head subscription error", { error: String(error) }),
+    onError: (error: unknown) =>
+      logger("warn", "head subscription error", {
+        error: error instanceof Error ? String(error) : JSON.stringify(error),
+      }),
   } as unknown as WatchBlockNumberParameters)
   const timer = setInterval(() => {
     if (Date.now() - last < stallMs) return

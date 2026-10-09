@@ -64,3 +64,27 @@ describe("createShutdown", () => {
     expect(events).toEqual(["exit 1"])
   })
 })
+
+describe("createShutdown abort", () => {
+  it("stops, closes the database and exits non-zero; later signals and failures are ignored", async () => {
+    const { s, events } = setup()
+    await s.abort("indexer stalled")
+    await s.signal()
+    s.fail(new Error("late"))
+    expect(events).toEqual(["stop", "end", "exit 1"])
+  })
+
+  it("exits non-zero even if closing the database hangs", async () => {
+    const events: string[] = []
+    const s = createShutdown({
+      stop: () => events.push("stop"),
+      inFlight: () => undefined,
+      end: () => new Promise(() => {}),
+      exit: (c) => events.push(`exit ${c}`),
+      logger: () => {},
+      waitMs: 20,
+    })
+    await s.abort("stalled")
+    expect(events).toEqual(["stop", "exit 1"])
+  })
+})

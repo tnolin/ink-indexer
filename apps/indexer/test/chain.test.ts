@@ -219,3 +219,49 @@ describe("viemChain timeouts, stopping and every read", () => {
     expect(sleeps).toEqual([])
   })
 })
+
+describe("viemChain repeated failures", () => {
+  it("warns for the first four consecutive failures and logs errors from the fifth, naming call and endpoint", async () => {
+    const logged: [string, string, Record<string, unknown> | undefined][] = []
+    let calls = 0
+    const client = {
+      getBlockNumber: async () => {
+        if (++calls <= 6) throw timeoutError()
+        return 1n
+      },
+      getBlock: async () => ({}),
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const chain = viemChain(client, {} as LogRouter, {
+      logger: (l, m, f) => logged.push([l, m, f]),
+      sleep: async () => {},
+    })
+    await chain.getBlockNumber()
+    expect(logged.map(([l]) => l)).toEqual(["warn", "warn", "warn", "warn", "error", "error"])
+    expect(logged[4]![2]).toMatchObject({
+      call: "getBlockNumber",
+      failures: 5,
+      url: "wss://ws-gel.inkonchain.com/",
+    })
+    expect(logged[0]![2]).toMatchObject({ call: "getBlockNumber", failures: 1 })
+  })
+
+  it("counts consecutive failures per call, starting again after a success", async () => {
+    const levels: string[] = []
+    let calls = 0
+    const client = {
+      getBlockNumber: async () => {
+        // fail 3, succeed, fail 3, succeed
+        if (calls++ % 4 !== 3) throw timeoutError()
+        return 1n
+      },
+      getBlock: async () => ({}),
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const chain = viemChain(client, {} as LogRouter, {
+      logger: (l) => levels.push(l),
+      sleep: async () => {},
+    })
+    await chain.getBlockNumber()
+    await chain.getBlockNumber()
+    expect(levels).toEqual(Array(6).fill("warn"))
+  })
+})

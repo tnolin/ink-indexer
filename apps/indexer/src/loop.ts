@@ -10,6 +10,8 @@ export class Indexer {
   private registry = new HookRegistry([])
   private running: Promise<void> | null = null
   private again = false
+  /** The chain head the last tick started from; undefined before the first tick. */
+  lastHead: bigint | undefined
 
   constructor(private readonly deps: { chain: Chain; store: Store; logger: Logger }) {}
 
@@ -41,6 +43,7 @@ export class Indexer {
   async tick() {
     const { chain, store } = this.deps
     const head = await chain.getBlockNumber()
+    this.lastHead = head
     await this.checkReorg()
     const cursor = await store.getCursor()
     let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK

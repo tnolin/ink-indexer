@@ -260,3 +260,17 @@ describe("socket errors", () => {
     expect(router.ranges()[0]!.healthy).toBe(true)
   })
 })
+
+describe("repeated failures", () => {
+  it("logs an error when a transport has failed 5 times in a row, and not before", async () => {
+    const logged: [string, string, Record<string, unknown> | undefined][] = []
+    const t = transport("qn", 10_000, (_f, _t, call) => call <= 5)
+    const router = new LogRouter([t], fakeClock(), (l, m, f) => logged.push([l, m, f]))
+    await router.getLogs(1n, 10n, [])
+    expect(logged.filter(([l]) => l === "warn")).toHaveLength(5)
+    const errors = logged.filter(([l]) => l === "error")
+    expect(errors).toHaveLength(1)
+    expect(errors[0]![2]).toMatchObject({ transport: "qn", failures: 5 })
+    expect(logged.indexOf(errors[0]!)).toBeGreaterThanOrEqual(5)
+  })
+})

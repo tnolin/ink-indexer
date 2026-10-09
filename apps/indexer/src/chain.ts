@@ -10,7 +10,7 @@ import {
 } from "@ink-indexer/sdk"
 import { type Address, BlockNotFoundError, type Hash } from "viem"
 import { type Logger, log } from "./log"
-import { isSocketError, isTimeoutError, type LogRouter } from "./rpc"
+import { isTransportError, type LogRouter } from "./rpc"
 
 /** Everything the indexer needs from Ink. viemChain is the real one; tests use FakeChain. */
 export type Chain = {
@@ -32,27 +32,42 @@ export type BlockReader = {
 
 const sleepMs = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
+/** Consecutive failures of one call after which each further failure is logged as an error. */
+export const ERROR_AFTER_FAILURES = 5
+
+/** The url of the endpoint named in the error or its causes. */
+function errorUrl(err: unknown): string | undefined {
+  for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
+    const url = (e as { url?: unknown }).url
+    if (typeof url === "string") return url
+    e = (e as { cause?: unknown }).cause
+  }
+  return undefined
+}
+
 /**
- * Reads go through viem's fallback over every endpoint, so a socket error or request timeout only
- * surfaces here when all of them are down or stalled (for example after the host slept). That is an
- * outage, not a data error: wait and ask again, unless shutdown has begun. Every other error is
- * rethrown at once.
+ * Reads go through viem's HTTP fallback over every endpoint, each request with a hard timeout, so a
+ * transport error (socket, HTTP or timeout) only surfaces here when every endpoint failed. That is
+ * an outage, not a data error: wait and ask again, unless shutdown has begun. Every other error
+ * (revert, RPC error response, decode) is rethrown at once. From the 5th consecutive failure of a
+ * call each retry is logged as an error; it keeps trying, and the stall watchdog decides when to exit.
  */
-async function retryOnSocketError<T>(
+async function retryOnTransportError<T>(
+  call: string,
   fn: () => Promise<T>,
   logger: Logger,
   sleep: (ms: number) => Promise<void>,
   isStopping: () => boolean,
 ): Promise<T> {
-  for (let wait = 1_000; ; wait = Math.min(wait * 2, 30_000)) {
+  for (let failures = 1, wait = 1_000; ; failures++, wait = Math.min(wait * 2, 30_000)) {
     try {
       return await fn()
     } catch (err) {
-      if (!(isSocketError(err) || isTimeoutError(err)) || isStopping()) throw err
-      logger("warn", "RPC read failed on the socket; retrying", {
-        retryInMs: wait,
-        error: String(err),
-      })
+      if (!isTransportError(err) || isStopping()) throw err
+      const fields = { call, failures, url: errorUrl(err), retryInMs: wait, error: String(err) }
+      if (failures >= ERROR_AFTER_FAILURES)
+        logger("error", "RPC read failing repeatedly; still retrying", fields)
+      else logger("warn", "RPC read failed on the socket; retrying", fields)
       await sleep(wait)
     }
   }
@@ -68,12 +83,13 @@ export function viemChain(
   } = {},
 ): Chain {
   const { logger = log, sleep = sleepMs, isStopping = () => false } = opts
-  const retry = <T>(fn: () => Promise<T>) => retryOnSocketError(fn, logger, sleep, isStopping)
+  const retry = <T>(call: string, fn: () => Promise<T>) =>
+    retryOnTransportError(call, fn, logger, sleep, isStopping)
   return {
-    getBlockNumber: () => retry(() => client.getBlockNumber({ cacheTime: 0 })),
+    getBlockNumber: () => retry("getBlockNumber", () => client.getBlockNumber({ cacheTime: 0 })),
     async getBlock(n) {
       try {
-        const b = await retry(() => client.getBlock({ blockNumber: n }))
+        const b = await retry("getBlock", () => client.getBlock({ blockNumber: n }))
         return b.hash ? { hash: b.hash.toLowerCase() as Hash, timestamp: b.timestamp } : null
       } catch (err) {
         if (err instanceof BlockNotFoundError) return null
@@ -81,8 +97,10 @@ export function viemChain(
       }
     },
     getLogs: (from, to) => router.getLogs(from, to, LOG_TOPICS),
-    readLaunchStates: (keys, block) => retry(() => readLaunchStates(client, keys, block)),
-    readTotalSupplies: (tokens, block) => retry(() => readTotalSupplies(client, tokens, block)),
-    readErc20Meta: (token) => retry(() => readErc20Meta(client, token)),
+    readLaunchStates: (keys, block) =>
+      retry("readLaunchStates", () => readLaunchStates(client, keys, block)),
+    readTotalSupplies: (tokens, block) =>
+      retry("readTotalSupplies", () => readTotalSupplies(client, tokens, block)),
+    readErc20Meta: (token) => retry("readErc20Meta", () => readErc20Meta(client, token)),
   }
 }
