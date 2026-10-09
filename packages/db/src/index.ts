@@ -5,3 +5,4 @@ export function connect(url: string) {
 }
 
 export type Sql = ReturnType<typeof connect>
+export { migrate } from "./migrate"
