@@ -1,0 +1,12 @@
+{
+  "name": "@ink-indexer/sdk",
+  "version": "0.0.0",
+  "description": "Decoders and curve math for Ink launchpads",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@ink-indexer/events": "workspace:*",
+    "viem": "^2.57.4"
+  }
+}

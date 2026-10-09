@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+  - apps/*
+allowBuilds:
+  '@embedded-postgres/darwin-arm64': true
+  esbuild: true

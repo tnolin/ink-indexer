@@ -1,0 +1,14 @@
+{
+  "name": "@ink-indexer/db",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "dependencies": {
+    "postgres": "^3.4.9"
+  }
+}

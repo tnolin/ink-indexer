@@ -1,0 +1,14 @@
+{
+  "name": "@ink-indexer/indexer",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "dependencies": {
+    "@ink-indexer/db": "workspace:*",
+    "@ink-indexer/events": "workspace:*",
+    "@ink-indexer/sdk": "workspace:*",
+    "postgres": "^3.4.9",
+    "viem": "^2.57.4"
+  }
+}
