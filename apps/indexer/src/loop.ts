@@ -3,7 +3,7 @@ import type { Hash } from "viem"
 import type { Chain } from "./chain"
 import type { Logger } from "./log"
 import { HookRegistry, nativeHookRows } from "./sources/inkypump/hooks"
-import { type CurveRow, curveMarketCap, processLogs } from "./sources/inkypump/index"
+import { type Batch, type CurveRow, curveMarketCap, processLogs } from "./sources/inkypump/index"
 import type { Cursor, Store } from "./store"
 
 export class Indexer {
@@ -62,19 +62,26 @@ export class Indexer {
   ): Promise<bigint> {
     const { chain, store, logger } = this.deps
     const { logs, toBlock } = await chain.getLogs(from, to)
-    const batch = await processLogs(logs, {
-      chain,
-      registry: this.registry,
-      logger,
-      loadLaunches: (keys) => store.loadLaunches(keys),
-    })
-    let cursor: Cursor | null = null
-    if (moveCursor) {
-      const end = await chain.getBlock(toBlock)
-      if (!end) throw new Error(`block ${toBlock} not found`)
-      cursor = { block: toBlock, hash: end.hash }
+    let batch: Batch
+    try {
+      batch = await processLogs(logs, {
+        chain,
+        registry: this.registry,
+        logger,
+        loadLaunches: (keys) => store.loadLaunches(keys),
+      })
+      let cursor: Cursor | null = null
+      if (moveCursor) {
+        const end = await chain.getBlock(toBlock)
+        if (!end) throw new Error(`block ${toBlock} not found`)
+        cursor = { block: toBlock, hash: end.hash }
+      }
+      await store.writeBatch(batch, { cursor, head })
+    } catch (err) {
+      // processLogs registers new hooks in memory before they are persisted; drop that state.
+      await this.reloadHooks()
+      throw err
     }
-    await store.writeBatch(batch, { cursor, head })
     if (batch.events.length > 0)
       logger("info", "ingested", { from, to: toBlock, events: batch.events.length })
     return toBlock

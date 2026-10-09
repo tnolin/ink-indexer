@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import { Indexer } from "../src/loop"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
-import { bond, HOOK, launch, launchIdOf, stateFor, tokenOf, trade } from "./scenario"
+import { bond, HOOK, launch, launchIdOf, stateFor, tokenOf, trade, xstocksHook } from "./scenario"
 
 let sql: Sql
 let store: Store
@@ -163,5 +163,32 @@ describe("Indexer", () => {
     await idx.trigger()
     chain.reorg(S)
     await expect(idx.trigger()).rejects.toThrow(/refusing to guess/)
+  })
+
+  it("reloads the hook registry when a batch write fails, so the retry persists the new hook", async () => {
+    const XHOOK = "0x799def4ec4a0a293a59b53a6479afc5a9df76ac4" as const
+    const WRAPPER = "0xc3fdbe3a68ee5de461d30415a8165cf9aefe1171" as const
+    const chain = new FakeChain(S + 100n)
+    chain.erc20.set(WRAPPER, { decimals: 18, symbol: "TSLAx" })
+    xstocksHook(chain, { block: S + 10n, hook: XHOOK, wrapper: WRAPPER })
+    launch(chain, { n: 1, block: S + 20n, hook: XHOOK })
+    let failed = false
+    const flaky: Store = {
+      ...store,
+      writeBatch: async (...args) => {
+        if (!failed) {
+          failed = true
+          throw new Error("db down")
+        }
+        return store.writeBatch(...args)
+      },
+    }
+    const idx = new Indexer({ chain, store: flaky, logger: () => {} })
+    await idx.init()
+    await expect(idx.trigger()).rejects.toThrow("db down")
+    await idx.trigger()
+
+    expect((await sql`select address from indexer.hooks where address = ${XHOOK}`).length).toBe(1)
+    expect(await eventTypes()).toEqual(["launchpad.launch"])
   })
 })
