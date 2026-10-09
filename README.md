@@ -22,6 +22,43 @@ ink-indexer watches the Ink blockchain for new memecoin launches, trades and bon
 | [`packages/db`](packages/db) | AGPL-3.0 | Postgres schema and migrations |
 | [`apps/indexer`](apps/indexer) | AGPL-3.0 | Follows Ink and writes normalized events to Postgres |
 
+## Usage
+
+Decode InkyPump V2 events with the SDK and any viem client:
+
+```ts
+import { decodeLog } from "@ink-indexer/sdk"
+
+const event = decodeLog(log)
+if (event?.kind === "trade") console.log(event.side, event.sold)
+```
+
+Run the example: `pnpm tsx examples/decode-launches.ts`. Curve math (`curveValue`, `curvePrice`, `progressBps`) is described in the [SDK README](packages/sdk/README.md).
+
+Read normalized events from the indexer's database:
+
+```sql
+select id, type, payload from indexer.events where id > $1 order by id limit 500;
+```
+
+Event shapes are documented in [`packages/events`](packages/events/README.md).
+
+## How it works
+
+```text
+ Ink RPC (WebSocket) ── new head ──► tick
+        ▲                              │
+        └──── eth_getLogs from cursor ◄┘   (routed to the provider with the widest range,
+                       │                     clamped to that provider's own head)
+                       ▼
+     decode → trusted hooks only → curve progress → rows
+                       │
+                       ▼
+     Postgres `indexer` schema: hooks · tokens · curve_state · trades · events · cursors · recent_blocks
+```
+
+Each new block triggers a catch-up from the last saved block, so backfill, live indexing and reconnects follow one path. Events are written unconfirmed and confirmed one block later; a reorg rolls back to the last matching block and re-ingests. Decisions are recorded in [`docs/adr`](docs/adr).
+
 ## Contributing, security and license
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Licensing is per package; see [LICENSE](LICENSE).
