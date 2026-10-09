@@ -4,6 +4,7 @@ import { viemChain } from "./chain"
 import { log } from "./log"
 import { Indexer } from "./loop"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
+import { createShutdown } from "./shutdown"
 import { createStore } from "./store"
 
 const USAGE = "usage: main.ts start | backfill --from <block> [--to <block>]"
@@ -47,18 +48,17 @@ if (command === "backfill") {
   process.exit(0)
 }
 
-const fail = (err: unknown) => {
-  log("error", "indexer stopped", { error: err instanceof Error ? err.stack : String(err) })
-  process.exit(1)
-}
-const stopHeads = watchHeads(client, () => {
-  indexer.trigger().catch(fail)
+let current: Promise<void> | undefined
+const shutdown = createShutdown({
+  stop: () => stopHeads(),
+  inFlight: () => current,
+  end: () => sql.end({ timeout: 5 }),
+  exit: (code) => process.exit(code),
+  logger: log,
 })
-const shutdown = async () => {
-  stopHeads()
-  await sql.end({ timeout: 5 })
-  process.exit(0)
-}
-process.on("SIGINT", shutdown)
-process.on("SIGTERM", shutdown)
+const stopHeads = watchHeads(client, () => {
+  current = indexer.trigger().catch(shutdown.fail)
+})
+process.on("SIGINT", () => void shutdown.signal())
+process.on("SIGTERM", () => void shutdown.signal())
 log("info", "indexer started", { transports: router.ranges() })
