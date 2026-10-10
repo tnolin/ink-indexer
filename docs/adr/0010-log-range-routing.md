@@ -1,7 +1,9 @@
 # 0010. getLogs routing by learned range
 
 Date: 2026-10-08
-Status: Accepted
+Status: Accepted. Amended by ADR 0014.
+
+Amended by ADR 0014: reads other than `eth_getLogs` now go over HTTP through a fallback ranked by recent success and latency, so "All other calls keep that order" and "keeps dRPC first for everything else" no longer hold. Log routing by range, as described here, stays.
 
 ## Context
 

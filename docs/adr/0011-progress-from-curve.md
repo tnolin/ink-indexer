@@ -24,3 +24,13 @@ The `Trade` event's `price` is the cost of the next whole token, `curveValue(sol
 - Progress means the same thing on every hook family and reaches 10,000 exactly at bond.
 - `curveValue` differs from the contract's `raised` on newer hooks and after capped legacy sells. The events README documents this.
 - The same price formula and a 1 wei test tolerance apply to all families.
+
+## Amendment 2026-10-10: soldBps
+
+`TradeEvent` v1 gains `soldBps`: tokens sold over the sale supply in basis points, floored and capped at 10,000, and 0 when the sale supply is 0. It sits beside `progressBpsBefore` and `progressBpsAfter`, which are unchanged.
+
+- Why: on curve tokens the launchpad's own site shows sold over sale supply, so `soldBps` matches the number users see. `progressBpsAfter` measures value raised on the curve, a different quantity.
+- Both reach 10,000 at bond, because bonding happens when `sold` reaches `saleSupply`.
+- `sold` is already in the `Trade` event and `saleSupply` is a stored launch parameter, so this adds no state reads.
+- It is added to v1 before any consumer depends on the schema, so the schema version stays 1 and there is no migration. Events written before this change lack the field and need re-indexing.
+

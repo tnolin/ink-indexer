@@ -48,6 +48,8 @@ export type TradeEvent = Base & {
   target: string
   progressBpsBefore: number
   progressBpsAfter: number
+  /** Tokens sold over the sale supply in basis points, floored and capped at 10,000. */
+  soldBps: number
   marketCap: string
   quoteAsset: Address
 }

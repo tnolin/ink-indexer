@@ -34,6 +34,16 @@ export function progressBps(value: bigint, target: bigint): number {
   return bps > 10_000n ? 10_000 : Number(bps)
 }
 
+/**
+ * Tokens sold over the sale supply in basis points: floor(sold × 10,000 / saleSupply), capped at
+ * 10,000. 0 when the sale supply or `sold` is not positive.
+ */
+export function soldBps(sold: bigint, saleSupply: bigint): number {
+  if (sold <= 0n || saleSupply <= 0n) return 0
+  const bps = (sold * 10_000n) / saleSupply
+  return bps > 10_000n ? 10_000 : Number(bps)
+}
+
 /** Market cap in quote base units from a per-whole-token price. */
 export function marketCap(price: bigint, totalSupply: bigint): bigint {
   return (price * totalSupply) / WHOLE_TOKEN

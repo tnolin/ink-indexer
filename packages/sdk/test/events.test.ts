@@ -118,9 +118,47 @@ describe("event builders", () => {
       target: "1000000000000000000",
       progressBpsBefore: 1234,
       progressBpsAfter: 5000,
+      soldBps: 5000,
       marketCap: "1000000000000",
       quoteAsset: ETH,
     })
+  })
+
+  it("reports soldBps from sold over the launch's sale supply, independent of curve progress", () => {
+    const trade = {
+      kind: "trade",
+      launchId: LAUNCH_ID,
+      trader: "0x00000000000000000000000000000000000000e1",
+      side: "buy",
+      price: 1000n,
+      sold: 4n * 10n ** 26n,
+      timestamp: 1_790_000_000,
+      tokenAmount: 7n,
+      quoteAmount: 9n,
+      refund: 0n,
+    } as const
+    const ctx = {
+      token: TOKEN,
+      params: { targetRaise: 10n ** 18n, saleSupply: 10n ** 27n, gainBps: 0 },
+      totalSupply: 10n ** 27n,
+      quoteAsset: ETH,
+      progressBpsBefore: 0,
+    } as const
+    const e = tradeEvent(trade, ctx, META)
+    expect([e.soldBps, e.progressBpsAfter]).toEqual([4000, 4000])
+    const full = tradeEvent({ ...trade, sold: 10n ** 27n }, ctx, META)
+    expect([full.soldBps, full.progressBpsAfter]).toEqual([10_000, 10_000])
+    const over = tradeEvent({ ...trade, sold: 2n * 10n ** 27n }, ctx, META)
+    expect(over.soldBps).toBe(10_000)
+    const none = tradeEvent(trade, { ...ctx, params: { ...ctx.params, saleSupply: 0n } }, META)
+    expect(none.soldBps).toBe(0)
+    // A steep curve is only partly raised while most tokens are sold.
+    const steep = tradeEvent(
+      trade,
+      { ...ctx, params: { targetRaise: 10n ** 18n, saleSupply: 10n ** 27n, gainBps: 50_000 } },
+      META,
+    )
+    expect([steep.soldBps, steep.progressBpsAfter]).toEqual([4000, 2285])
   })
 
   it("builds a bond event", () => {

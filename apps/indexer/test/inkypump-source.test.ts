@@ -182,4 +182,14 @@ describe("processLogs", () => {
     chain.nullOnce.add(B)
     await expect(run()).rejects.toBeInstanceOf(BlockNotServedError)
   })
+
+  it("carries soldBps from the trade's sold over the launch's sale supply", async () => {
+    const { chain, run } = setup([knownLaunch(2, 0)])
+    trade(chain, { n: 2, block: B, sold: 2n * 10n ** 26n, logIndex: 0 })
+    trade(chain, { n: 2, block: B, sold: PARAMS.saleSupply, logIndex: 1 })
+    const batch = await run()
+    expect(batch.events.map((e) => (e.event as { soldBps: number }).soldBps)).toEqual([
+      2500, 10_000,
+    ])
+  })
 })

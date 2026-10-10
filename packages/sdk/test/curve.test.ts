@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { curvePrice, curveValue, marketCap, progressBps } from "../src/index"
+import { curvePrice, curveValue, marketCap, progressBps, soldBps } from "../src/index"
 
 const LEGACY = {
   targetRaise: 3n * 10n ** 18n,
@@ -49,6 +49,18 @@ describe("curve math", () => {
     expect(progressBps(10n ** 18n, 0n)).toBe(0)
     expect(progressBps(0n, 0n)).toBe(0)
     expect(progressBps(10n ** 18n, -1n)).toBe(0)
+  })
+
+  it("turns tokens sold into basis points of the sale supply, floored and capped at 10,000", () => {
+    const supply = 10n ** 27n
+    expect(soldBps(4n * 10n ** 26n, supply)).toBe(4000)
+    expect(soldBps(0n, supply)).toBe(0)
+    expect(soldBps(supply, supply)).toBe(10_000)
+    expect(soldBps(supply + 1n, supply)).toBe(10_000)
+    expect(soldBps(supply - 1n, supply)).toBe(9_999)
+    expect(soldBps(1n, supply)).toBe(0)
+    expect(soldBps(5n, 0n)).toBe(0)
+    expect(soldBps(-1n, supply)).toBe(0)
   })
 
   it("computes market cap from price per whole token and total supply", () => {

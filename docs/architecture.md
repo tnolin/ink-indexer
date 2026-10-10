@@ -18,7 +18,8 @@ All sources are on Ink mainnet (chain ID 57073).
 ## Flow
 
 ```text
- Ink RPC (WebSocket)        Marketplace APIs  
+ Ink RPC (HTTP reads,        Marketplace APIs
+ WebSocket heads)
         │                          │
         ▼                          ▼
  ┌───────────────────────────────────────┐
@@ -69,11 +70,11 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | Table | Key fields |
 | --- | --- |
 | `tokens` | address, launchpad, name, ticker, creator, created_at, phase, quote_asset, paired_stock |
-| `curve_state` | token, progress_pct, raised, target, market_cap, updated_block |
+| `curve_state` | token, progress_bps, curve_value, target, market_cap, updated_block |
 | `trades` | tx_hash, log_index, token, side, trader, amount_in, amount_out, block, venue |
-| `collections` | address, name, slug, floor, supply, traits_indexed |
-| `nft_events` | collection, token_id, type (sale, listing), price, from, to, block_or_ts |
-| `wallets` | address, first_seen, funded_by, linked_group, launches_count, bonded_count, labels |
+| `collections` (planned) | address, name, slug, floor, supply, traits_indexed |
+| `nft_events` (planned) | collection, token_id, type (sale, listing), price, from, to, block_or_ts |
+| `wallets` (planned) | address, first_seen, funded_by, linked_group, launches_count, bonded_count, labels |
 | `events` | id, type, entity, payload (normalized JSON), block, confirmed |
 
 `events` is the contract between the indexer and anything that reads from it. Consumers read normalized, typed events there and never touch source-specific tables. Its payload shapes are defined in `packages/events` and versioned with it.
@@ -83,8 +84,8 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 - A WebSocket subscription announces new heads and reconnects automatically; the loop backfills from the last processed block.
 - Events are written unconfirmed and marked confirmed after 1 block, so consumers can choose how to handle reorgs.
 - RPC: dRPC, Ink's public QuickNode and Gelato endpoints over HTTP with a 15 second request limit. Reads go to the endpoint with the best recent success and latency and fail over on error. See ADR 0014 and [Ink RPC docs](https://docs.inkonchain.com/tools/rpc).
-- A heartbeat alerts the operator after 10 minutes with no processed events.
-- Errors go to Sentry from the first deploy.
+- Planned: a heartbeat that alerts the operator after 10 minutes with no processed events. Not built yet.
+- Planned: error reporting to Sentry. Not built yet. Errors are logged as JSON today.
 
 ## Agent-native docs
 

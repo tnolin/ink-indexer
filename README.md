@@ -38,15 +38,19 @@ Run the example: `pnpm tsx examples/decode-launches.ts`. Curve math (`curveValue
 Read normalized events from the indexer's database:
 
 ```sql
-select id, type, payload from indexer.events where id > $1 order by id limit 500;
+select id, type, payload from indexer.events
+where confirmed and id > $1
+order by id limit 500;
 ```
+
+`(txHash, logIndex)` in each payload is the stable event identity. `id` can change after a reorg rollback, so dedupe on `(txHash, logIndex)`. Drop `confirmed` to also read events from the newest block, which a reorg can still remove.
 
 Event shapes are documented in [`packages/events`](packages/events/README.md).
 
 ## How it works
 
 ```text
- Ink RPC (WebSocket) ── new head ──► tick
+ Ink RPC (WebSocket heads) ── new head ──► tick
         ▲                              │
         └──── eth_getLogs from cursor ◄┘   (routed to the provider with the widest range,
                        │                     clamped to that provider's own head)

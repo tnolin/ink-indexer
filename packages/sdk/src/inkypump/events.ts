@@ -5,7 +5,7 @@ import {
   type TradeEvent,
 } from "@ink-indexer/events"
 import type { Address, Hash } from "viem"
-import { type CurveParams, curveValue, marketCap, progressBps } from "./curve"
+import { type CurveParams, curveValue, marketCap, progressBps, soldBps } from "./curve"
 import type { LaunchCreated, LaunchFinalized, LaunchMetadata, Trade } from "./decode"
 
 export type LogMeta = {
@@ -79,6 +79,7 @@ export function tradeEvent(
     target: ctx.params.targetRaise.toString(),
     progressBpsBefore: ctx.progressBpsBefore,
     progressBpsAfter: progressBps(value, ctx.params.targetRaise),
+    soldBps: soldBps(trade.sold, ctx.params.saleSupply),
     marketCap: marketCap(trade.price, ctx.totalSupply).toString(),
     quoteAsset: ctx.quoteAsset,
   }
