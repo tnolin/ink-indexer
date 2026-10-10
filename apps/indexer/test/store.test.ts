@@ -146,4 +146,37 @@ describe("store", () => {
     expect(await store.getCursor()).toEqual({ block: B + 4n, hash: chain.hashOf(B + 4n) })
     expect((await store.recentBlocks()).every((b) => b.number <= B + 4n)).toBe(true)
   })
+
+  it("writes a span larger than one statement's parameter limit, idempotently", async () => {
+    const chain = new FakeChain(B + 10n)
+    launch(chain, { n: 1, block: B })
+    trade(chain, { n: 1, block: B + 10n, sold: 1n })
+    const base = await batchFrom(chain)
+    const tx = (i: number) => pad(toHex(i + 1), { size: 32 }) as Hash
+    const addr = (i: number) => pad(toHex(i + 1000), { size: 20 }) as `0x${string}`
+    const trade0 = base.trades[0]!
+    const launchEvent = base.events[0]!
+    const batch: Batch = {
+      ...base,
+      tokens: [
+        ...base.tokens,
+        ...Array.from({ length: 4_500 }, (_, i) => ({
+          ...base.tokens[0]!,
+          address: addr(i),
+          launchId: tx(i + 100_000),
+        })),
+      ],
+      trades: Array.from({ length: 7_500 }, (_, i) => ({ ...trade0, txHash: tx(i), logIndex: i })),
+      events: Array.from({ length: 8_500 }, (_, i) => ({
+        ...launchEvent,
+        event: { ...launchEvent.event, txHash: tx(i), logIndex: i },
+      })),
+    }
+    const cursor = { block: B + 10n, hash: chain.hashOf(B + 10n) }
+    await store.writeBatch(batch, { cursor, head: B + 10n })
+    await store.writeBatch(batch, { cursor, head: B + 10n })
+    expect([await count("tokens"), await count("trades"), await count("events")]).toEqual([
+      4_501, 7_500, 8_500,
+    ])
+  })
 })

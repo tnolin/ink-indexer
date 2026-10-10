@@ -10,6 +10,11 @@ export type Cursor = { block: bigint; hash: Hash }
 const SOURCE = "inkypump"
 const RECENT_BLOCKS = 128
 const s = (x: bigint) => x.toString()
+/** Rows per multi-row insert: Postgres allows 65,534 parameters per statement, so 1,000 rows leaves room for 65 columns. */
+const CHUNK = 1_000
+function* chunks<T>(rows: T[]): Generator<T[]> {
+  for (let i = 0; i < rows.length; i += CHUNK) yield rows.slice(i, i + CHUNK)
+}
 
 type HookRecord = {
   address: Address
@@ -124,10 +129,10 @@ export function createStore(sql: Sql) {
     /** One transaction. With `cursor: null` (backfill) the live cursor and recent hashes are left alone. */
     async writeBatch(batch: Batch, opts: { cursor: Cursor | null; head: bigint }) {
       await sql.begin(async (tx) => {
-        if (batch.hooks.length > 0) {
-          await tx`insert into indexer.hooks ${tx(batch.hooks.map(hookRecord))} on conflict (address) do nothing`
+        for (const part of chunks(batch.hooks.map(hookRecord))) {
+          await tx`insert into indexer.hooks ${tx(part)} on conflict (address) do nothing`
         }
-        if (batch.tokens.length > 0) {
+        {
           const rows = batch.tokens.map((t) => ({
             address: t.address,
             launchpad: SOURCE,
@@ -145,20 +150,21 @@ export function createStore(sql: Sql) {
             sale_supply: s(t.saleSupply),
             gain_bps: t.gainBps,
           }))
-          await tx`insert into indexer.tokens ${tx(rows)} on conflict (address) do nothing`
+          for (const part of chunks(rows))
+            await tx`insert into indexer.tokens ${tx(part)} on conflict (address) do nothing`
         }
         for (const b of batch.bonds) {
           await tx`update indexer.tokens set phase = 'bonded', bonded_block = ${s(b.block)} where address = ${b.token}`
         }
-        if (batch.curve.length > 0) {
+        for (const part of chunks(batch.curve.map(curveRecord))) {
           await tx`
-            insert into indexer.curve_state ${tx(batch.curve.map(curveRecord))}
+            insert into indexer.curve_state ${tx(part)}
             on conflict (token) do update set
               progress_bps = excluded.progress_bps, curve_value = excluded.curve_value, target = excluded.target,
               market_cap = excluded.market_cap, updated_block = excluded.updated_block
             where indexer.curve_state.updated_block <= excluded.updated_block`
         }
-        if (batch.trades.length > 0) {
+        {
           const rows = batch.trades.map((t) => ({
             tx_hash: t.txHash,
             log_index: t.logIndex,
@@ -170,9 +176,10 @@ export function createStore(sql: Sql) {
             block: s(t.block),
             venue: "curve",
           }))
-          await tx`insert into indexer.trades ${tx(rows)} on conflict do nothing`
+          for (const part of chunks(rows))
+            await tx`insert into indexer.trades ${tx(part)} on conflict do nothing`
         }
-        if (batch.events.length > 0) {
+        {
           const rows = batch.events.map((e) => ({
             type: e.event.type,
             entity: e.event.token,
@@ -183,13 +190,15 @@ export function createStore(sql: Sql) {
             log_index: e.event.logIndex,
             confirmed: e.block <= opts.head - 1n,
           }))
-          await tx`insert into indexer.events ${tx(rows)} on conflict (tx_hash, log_index) do nothing`
+          for (const part of chunks(rows))
+            await tx`insert into indexer.events ${tx(part)} on conflict (tx_hash, log_index) do nothing`
         }
         if (opts.cursor) {
           const blocks = new Map(batch.blocks.map((b) => [b.number, b.hash]))
           blocks.set(opts.cursor.block, opts.cursor.hash)
           const rows = [...blocks].map(([number, hash]) => ({ number: s(number), hash }))
-          await tx`insert into indexer.recent_blocks ${tx(rows)} on conflict (number) do update set hash = excluded.hash`
+          for (const part of chunks(rows))
+            await tx`insert into indexer.recent_blocks ${tx(part)} on conflict (number) do update set hash = excluded.hash`
           await tx`
             delete from indexer.recent_blocks where number not in
               (select number from indexer.recent_blocks order by number desc limit ${RECENT_BLOCKS})`

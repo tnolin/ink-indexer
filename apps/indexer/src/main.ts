@@ -1,6 +1,6 @@
-import { parseArgs } from "node:util"
 import { connect, migrate } from "@ink-indexer/db"
 import { viemChain } from "./chain"
+import { parseCli } from "./cli"
 import { log } from "./log"
 import { Indexer } from "./loop"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
@@ -8,18 +8,9 @@ import { createShutdown } from "./shutdown"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 
-const USAGE = "usage: main.ts start | backfill --from <block> [--to <block>]"
-const { positionals, values } = parseArgs({
-  allowPositionals: true,
-  options: { from: { type: "string" }, to: { type: "string" } },
-})
-const [command] = positionals
-if (command !== "start" && command !== "backfill") {
-  console.error(USAGE)
-  process.exit(2)
-}
-if (command === "backfill" && !values.from) {
-  console.error(USAGE)
+const cli = parseCli(process.argv.slice(2))
+if (!cli.ok) {
+  console.error(`${cli.reason}\n${cli.usage}`)
   process.exit(2)
 }
 const databaseUrl = process.env.DATABASE_URL
@@ -45,20 +36,29 @@ const shutdown = createShutdown({
   exit: (code) => process.exit(code),
   logger: log,
 })
-await migrate(sql)
-const { client, heads, pollHeads, router } = await connectRpc(
-  urls.length > 0 ? urls : DEFAULT_WS_URLS,
-)
-const indexer = new Indexer({
-  chain: viemChain(client, router, { isStopping: shutdown.isStopping }),
-  store,
-  logger: log,
-})
-await indexer.init()
+let rpc: Awaited<ReturnType<typeof connectRpc>>
+let indexer: Indexer
+try {
+  await migrate(sql)
+  rpc = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
+  indexer = new Indexer({
+    chain: viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping }),
+    store,
+    logger: log,
+  })
+  await indexer.init()
+} catch (err) {
+  log("error", "startup failed", {
+    error: err instanceof Error ? (err.stack ?? String(err)) : String(err),
+  })
+  await sql.end({ timeout: 5 }).catch(() => {})
+  process.exit(1)
+}
+const { heads, pollHeads, router } = rpc
 
-if (command === "backfill") {
-  await indexer.backfill(BigInt(values.from!), values.to ? BigInt(values.to) : undefined)
-  log("info", "backfill done", { from: values.from, to: values.to ?? "head" })
+if (cli.command === "backfill") {
+  await indexer.backfill(cli.from, cli.to)
+  log("info", "backfill done", { from: cli.from, to: cli.to ?? "head" })
   await sql.end()
   process.exit(0)
 }
