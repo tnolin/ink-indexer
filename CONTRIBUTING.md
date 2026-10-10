@@ -5,7 +5,7 @@ Outside pull requests open once our contributor license agreement (CLA) is in pl
 ## Development
 
 - Node 22.12 or later and pnpm 12.
-- `pnpm install`, then `pnpm test`. Tests start a throwaway Postgres automatically, or use `DATABASE_URL` if set.
+- `pnpm install`, then `pnpm test`. Tests start a throwaway Postgres automatically, or use `TEST_DATABASE_URL` if set. The tests drop the `indexer` schema of that database, and `DATABASE_URL` is never used for tests.
 - `pnpm lint`, `pnpm typecheck` and `pnpm format`.
 
 ## Rules

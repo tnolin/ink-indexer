@@ -10,7 +10,7 @@ The monorepo needs lint, format, tests against a real Postgres, and schema migra
 ## Decision
 
 - Biome for lint and format, Vitest for tests, `tsc --noEmit` over one root `tsconfig.json` for typechecking. Workspace packages export TypeScript source until they are published to npm.
-- Tests and local runs use `embedded-postgres`. CI uses a `postgres:18` service container through `DATABASE_URL`.
+- Tests and local runs use `embedded-postgres`. CI uses a `postgres:18` service container through `TEST_DATABASE_URL`.
 - Migrations are numbered `.sql` files in `packages/db/migrations`, applied in order by a small runner that records them in `indexer.migrations`. Queries use postgres.js.
 
 ## Consequences

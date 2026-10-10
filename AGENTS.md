@@ -10,7 +10,7 @@
 
 ## Commands
 
-- `pnpm test`: all tests. A throwaway Postgres starts automatically unless `DATABASE_URL` is set.
+- `pnpm test`: all tests. A throwaway Postgres starts automatically unless `TEST_DATABASE_URL` is set (the tests drop its `indexer` schema; `DATABASE_URL` is never used for tests).
 - `pnpm lint`, `pnpm typecheck`, `pnpm format`.
 - `pnpm db:dev`: persistent local Postgres in `.data/postgres`.
 - `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>]`.

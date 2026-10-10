@@ -28,7 +28,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://ink:ink@localhost:5432/ink_test
+      TEST_DATABASE_URL: postgres://ink:ink@localhost:5432/ink_test
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

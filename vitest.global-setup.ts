@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import EmbeddedPostgres from "embedded-postgres"
 import type { TestProject } from "vitest/node"
+import { testDatabaseUrl } from "./packages/db/src/testing"
 
 declare module "vitest" {
   export interface ProvidedContext {
@@ -10,10 +11,12 @@ declare module "vitest" {
   }
 }
 
-// CI sets DATABASE_URL (postgres service container). Locally we start a throwaway Postgres.
+// CI sets TEST_DATABASE_URL (postgres service container). Locally we start a throwaway Postgres.
+// DATABASE_URL is the runtime database and is never used here: the tests drop the `indexer` schema.
 export default async function setup(project: TestProject) {
-  if (process.env.DATABASE_URL) {
-    project.provide("databaseUrl", process.env.DATABASE_URL)
+  const url = testDatabaseUrl(process.env)
+  if (url) {
+    project.provide("databaseUrl", url)
     return
   }
   const port = 54329
