@@ -193,6 +193,104 @@ describe("Indexer", () => {
   })
 })
 
+describe("Indexer with a lagging block endpoint", () => {
+  const NOT_SERVED = "block not yet served; retrying on next head"
+  const ids = async () =>
+    (await sql<{ id: string }[]>`select id from indexer.events order by id`).map((r) => r.id)
+
+  it("does not fail the tick when the end block of a span is not served, and loses or duplicates nothing", async () => {
+    const chain = new FakeChain(S + 20n)
+    launch(chain, { n: 1, block: S + 10n })
+    trade(chain, { n: 1, block: S + 15n, sold: 1n })
+    const { idx, warnings } = await indexerFor(chain)
+    chain.nullOnce.add(S + 20n)
+    await idx.trigger()
+    expect(warnings).toContain(NOT_SERVED)
+    expect(await store.getCursor()).toBeNull()
+    expect(idx.cursorBlock).toBeNull()
+    expect(await count("events")).toBe(0)
+
+    await idx.trigger()
+    expect(await eventTypes()).toEqual(["launchpad.launch", "launchpad.trade"])
+    expect(await store.getCursor()).toEqual({ block: S + 20n, hash: chain.hashOf(S + 20n) })
+  })
+
+  it("does not roll back when the cursor block is not served", async () => {
+    const chain = new FakeChain(S + 100n)
+    launch(chain, { n: 1, block: S + 10n })
+    trade(chain, { n: 1, block: S + 50n, sold: 1n })
+    const { idx, warnings } = await indexerFor(chain)
+    await idx.trigger()
+    const before = await ids()
+
+    chain.head = S + 101n
+    trade(chain, { n: 1, block: S + 101n, sold: 2n })
+    chain.nullOnce.add(S + 100n)
+    await idx.trigger()
+    expect(warnings).toContain(NOT_SERVED)
+    expect(warnings).not.toContain("reorg: rolled back to fork block")
+    expect(await ids()).toEqual(before)
+    expect(await store.getCursor()).toEqual({ block: S + 100n, hash: chain.hashOf(S + 100n) })
+
+    await idx.trigger()
+    expect(warnings).not.toContain("reorg: rolled back to fork block")
+    expect((await ids()).slice(0, before.length)).toEqual(before)
+    expect(await eventTypes()).toEqual(["launchpad.launch", "launchpad.trade", "launchpad.trade"])
+    expect(await store.getCursor()).toEqual({ block: S + 101n, hash: chain.hashOf(S + 101n) })
+  })
+
+  it("does not roll back when a block in the recent-blocks walk is not served", async () => {
+    const chain = new FakeChain(S + 100n)
+    launch(chain, { n: 1, block: S + 10n })
+    trade(chain, { n: 1, block: S + 50n, sold: 1n })
+    const { idx, warnings } = await indexerFor(chain)
+    await idx.trigger()
+    const before = await ids()
+    const cursorBefore = await store.getCursor()
+
+    chain.reorg(S + 100n) // the cursor block's hash now differs, so the walk starts
+    chain.nullOnce.add(S + 50n)
+    await idx.trigger()
+    expect(warnings).toContain(NOT_SERVED)
+    expect(warnings).not.toContain("reorg: rolled back to fork block")
+    expect(await ids()).toEqual(before)
+    expect(await store.getCursor()).toEqual(cursorBefore)
+  })
+})
+
+describe("Indexer log and block endpoints disagreeing", () => {
+  it("writes nothing when the newest log block was reorged away between getLogs and getBlock", async () => {
+    const chain = new FakeChain(S + 20n)
+    launch(chain, { n: 1, block: S + 10n })
+    trade(chain, { n: 1, block: S + 15n, sold: 1n })
+    const warnings: string[] = []
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: (level, msg) => {
+        if (level === "warn") warnings.push(msg)
+      },
+    })
+    await idx.init()
+    const getLogs = chain.getLogs.bind(chain)
+    chain.getLogs = async (from, to) => {
+      const r = await getLogs(from, to)
+      chain.reorg(S + 15n) // the block endpoint now sees the other fork
+      return r
+    }
+    await idx.trigger()
+    expect(warnings).toContain("block not yet served; retrying on next head")
+    expect([await count("events"), await count("trades")]).toEqual([0, 0])
+    expect(await store.getCursor()).toBeNull()
+
+    chain.getLogs = getLogs
+    trade(chain, { n: 1, block: S + 16n, sold: 2n })
+    await idx.trigger()
+    expect(await eventTypes()).toEqual(["launchpad.launch", "launchpad.trade"])
+    expect(await store.getCursor()).toEqual({ block: S + 20n, hash: chain.hashOf(S + 20n) })
+  })
+})
+
 describe("Indexer.lastHead", () => {
   it("is undefined before the first tick and the head the tick started from after it", async () => {
     const chain = new FakeChain(S + 5n)

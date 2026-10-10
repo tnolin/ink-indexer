@@ -1,6 +1,7 @@
 import { curveValue, INKYPUMP_START_BLOCK, progressBps } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import type { Chain } from "./chain"
+import { BlockNotServedError } from "./errors"
 import type { Logger } from "./log"
 import { HookRegistry, nativeHookRows } from "./sources/inkypump/hooks"
 import { type Batch, type CurveRow, curveMarketCap, processLogs } from "./sources/inkypump/index"
@@ -50,11 +51,16 @@ export class Indexer {
     const head = await chain.getBlockNumber()
     this.lastHead = head
     this.headFetches++
-    await this.checkReorg()
-    const cursor = await store.getCursor()
-    let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
-    while (from <= head) from = (await this.ingest(from, head, head, true)) + 1n
-    await store.confirm(head)
+    try {
+      await this.checkReorg()
+      const cursor = await store.getCursor()
+      let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
+      while (from <= head) from = (await this.ingest(from, head, head, true)) + 1n
+      await store.confirm(head)
+    } catch (err) {
+      if (!(err instanceof BlockNotServedError)) throw err
+      this.deps.logger("warn", "block not yet served; retrying on next head", { block: err.block })
+    }
   }
 
   /** Re-scans [from, to] idempotently without moving the live cursor. Stop `start` before running it. */
@@ -82,7 +88,15 @@ export class Indexer {
       let cursor: Cursor | null = null
       if (moveCursor) {
         const end = await chain.getBlock(toBlock)
-        if (!end) throw new Error(`block ${toBlock} not found`)
+        if (!end) throw new BlockNotServedError(toBlock)
+        // The logs and the block hash may come from different endpoints. If the newest log block
+        // no longer has the hash its logs reported, a reorg landed between the two calls.
+        const newest = batch.blocks.reduce<Batch["blocks"][number] | undefined>(
+          (a, b) => (!a || b.number > a.number ? b : a),
+          undefined,
+        )
+        if (newest && (await this.blockHash(newest.number)) !== newest.hash)
+          throw new BlockNotServedError(newest.number)
         cursor = { block: toBlock, hash: end.hash }
       }
       await store.writeBatch(batch, { cursor, head })
@@ -98,12 +112,12 @@ export class Indexer {
   }
 
   private async checkReorg() {
-    const { chain, store } = this.deps
+    const { store } = this.deps
     const cursor = await store.getCursor()
     if (!cursor) return
-    if ((await chain.getBlock(cursor.block))?.hash === cursor.hash) return
+    if ((await this.blockHash(cursor.block)) === cursor.hash) return
     for (const b of await store.recentBlocks()) {
-      if ((await chain.getBlock(b.number))?.hash === b.hash) {
+      if ((await this.blockHash(b.number)) === b.hash) {
         await this.rollback(b.number, b.hash)
         return
       }
@@ -111,6 +125,13 @@ export class Indexer {
     throw new Error(
       `reorg below every stored block hash (cursor ${cursor.block}); refusing to guess the fork point`,
     )
+  }
+
+  /** The endpoint's hash for a block. A null block is unknown, never a mismatch. */
+  private async blockHash(n: bigint): Promise<Hash> {
+    const block = await this.deps.chain.getBlock(n)
+    if (!block) throw new BlockNotServedError(n)
+    return block.hash
   }
 
   private async rollback(fork: bigint, forkHash: Hash) {

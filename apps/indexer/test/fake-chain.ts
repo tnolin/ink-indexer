@@ -15,6 +15,8 @@ export class FakeChain implements Chain {
   getBlockNumberCalls = 0
   /** The log transport is this many blocks behind head. */
   logLag = 0n
+  /** Blocks for which getBlock answers null once (a lagging node that has not seen them yet). */
+  nullOnce = new Set<bigint>()
   private forks: { from: bigint; id: number }[] = []
 
   constructor(head: bigint) {
@@ -48,6 +50,7 @@ export class FakeChain implements Chain {
   }
 
   async getBlock(n: bigint) {
+    if (this.nullOnce.delete(n)) return null
     return n > this.head ? null : { hash: this.hashOf(n), timestamp: n }
   }
 

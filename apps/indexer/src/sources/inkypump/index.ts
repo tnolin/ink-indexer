@@ -19,6 +19,7 @@ import {
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Chain } from "../../chain"
+import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { HookRegistry, HookRow } from "./hooks"
 
@@ -343,6 +344,6 @@ function groupByBlock(items: Item[]): Map<bigint, Item[]> {
 async function blockTimestamp(items: Item[], n: bigint, deps: SourceDeps): Promise<number> {
   for (const i of items) if (i.d.kind === "trade") return i.d.timestamp
   const block = await deps.chain.getBlock(n)
-  if (!block) throw new Error(`block ${n} not found`)
+  if (!block) throw new BlockNotServedError(n)
   return Number(block.timestamp)
 }

@@ -1,6 +1,7 @@
 import { NATIVE_QUOTE_ASSET } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import { describe, expect, it } from "vitest"
+import { BlockNotServedError } from "../src/errors"
 import type { Logger } from "../src/log"
 import { HookRegistry, nativeHookRows } from "../src/sources/inkypump/hooks"
 import { type KnownLaunch, processLogs } from "../src/sources/inkypump/index"
@@ -173,5 +174,12 @@ describe("processLogs", () => {
     const { chain, run } = setup()
     trade(chain, { n: 6, block: B, sold: 1n })
     await expect(run()).rejects.toThrow(/unknown launch/)
+  })
+
+  it("throws BlockNotServedError when the block of a trade-less event is not served", async () => {
+    const { chain, run } = setup([knownLaunch(1, 0)])
+    bond(chain, { n: 1, block: B })
+    chain.nullOnce.add(B)
+    await expect(run()).rejects.toBeInstanceOf(BlockNotServedError)
   })
 })
