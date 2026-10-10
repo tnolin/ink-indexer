@@ -5,6 +5,8 @@ Follows Ink mainnet and writes InkyPump V2 launches, curve trades and bonds into
     pnpm start                                  # backfill to head, then follow new blocks
     pnpm backfill --from <block> [--to <block>] # re-scan a range; safe to repeat
 
+Run `backfill` with `start` stopped: two writers break the guarantee that event `id` order matches commit order, which readers of `where confirmed and id > $1` rely on.
+
 Under a supervisor (systemd, launchd, a container) run the entry point directly, from the repository root, so signals reach the process and the exit code is the process's own. `--env-file` fails if `.env` is missing (`pnpm start` tolerates that):
 
     node --env-file=.env --import tsx apps/indexer/src/main.ts start

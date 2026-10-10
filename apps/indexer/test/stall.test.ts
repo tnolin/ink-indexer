@@ -253,7 +253,7 @@ describe("createStallWatchdog with tick successes", () => {
     expect(stalled()).toBe(0)
     await advance(60_000, "fail")
     expect(stalled()).toBe(1)
-    expect(logs[0]![1]).toMatch(/no tick has completed successfully for 300 s/)
+    expect(logs[0]![1]).toMatch(/no successful tick and cursor static for 300 s/)
   })
 
   it("does not exit on an idle chain whose ticks keep completing", async () => {
@@ -281,6 +281,39 @@ describe("createStallWatchdog with tick successes", () => {
       await advance(60_000, "fail")
     }
     expect(stalled()).toBe(0)
+  })
+})
+
+describe("createStallWatchdog tick failures need a cursor static for the full window", () => {
+  it("does not exit when the cursor moved within the last 5 minutes but not since the previous check", async () => {
+    const { state, advance, stalled } = withTicks()
+    state.head = 100_000n
+    state.cursor = 100n
+    await advance(0, "fail")
+    for (let i = 0; i < 7; i++) {
+      state.cursor = state.cursor! + 1_000n
+      await advance(60_000, "fail") // one long tick: the cursor moves, no tick completes
+    }
+    await advance(30_000, "fail") // first check without movement, 390 s since the last success
+    expect(stalled()).toBe(0)
+    await advance(200_000, "fail")
+    expect(stalled()).toBe(0)
+  })
+
+  it("exits once the cursor has been static for 5 minutes and no tick has completed for 5 minutes", async () => {
+    const { state, advance, stalled, logs } = withTicks()
+    state.head = 100_000n
+    state.cursor = 100n
+    await advance(0, "fail")
+    for (let i = 0; i < 7; i++) {
+      state.cursor = state.cursor! + 1_000n
+      await advance(60_000, "fail")
+    }
+    await advance(240_000, "fail")
+    expect(stalled()).toBe(0)
+    await advance(60_000, "fail")
+    expect(stalled()).toBe(1)
+    expect(logs[0]![1]).toMatch(/no successful tick and cursor static for 300 s/)
   })
 })
 

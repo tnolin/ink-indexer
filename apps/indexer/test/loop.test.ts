@@ -305,13 +305,21 @@ describe("Indexer confirmation is atomic with inserts", () => {
       where not u.confirmed and u.block <= ${(head - 1n).toString()}`
   }
 
+  /** Stronger form: no unconfirmed event has a confirmed event of higher id, whatever the block. */
+  async function orderViolations() {
+    return sql`
+      select u.id as unconfirmed_id, c.id as confirmed_id
+      from indexer.events u join indexer.events c on c.id > u.id and c.confirmed
+      where not u.confirmed`
+  }
+
   function watched() {
     const seen: unknown[] = []
     const checking: Store = {
       ...store,
       writeBatch: async (batch, opts) => {
         await store.writeBatch(batch, opts)
-        seen.push(...(await violations(opts.head)))
+        seen.push(...(await violations(opts.head)), ...(await orderViolations()))
       },
     }
     return { checking, seen }

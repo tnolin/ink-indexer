@@ -38,6 +38,8 @@ export function createStallWatchdog(deps: {
   } = deps
   let last: bigint | null | undefined
   let movedAt = now()
+  /** When the cursor last actually moved; unlike movedAt, an idle chain does not refresh it. */
+  let cursorMovedAt = movedAt
   let fetches = getHeadFetches?.() ?? 0
   let fetchedAt = movedAt
   let successes = getTickSuccesses?.() ?? 0
@@ -62,7 +64,8 @@ export function createStallWatchdog(deps: {
           successAt = t
         }
       }
-      const failing = getTickSuccesses !== undefined && t - successAt >= stallMs
+      const failing =
+        getTickSuccesses !== undefined && t - successAt >= stallMs && t - cursorMovedAt >= stallMs
       const headKnown = head !== undefined
       const stale = getHeadFetches !== undefined && t - fetchedAt >= stallMs
       const behind = headKnown && (cursor === null || cursor < head)
@@ -70,6 +73,7 @@ export function createStallWatchdog(deps: {
       if (cursor !== last) {
         last = cursor
         movedAt = t
+        cursorMovedAt = t
         return
       }
       if (idle && !failing) {
@@ -79,11 +83,11 @@ export function createStallWatchdog(deps: {
       }
       if (fired || (!failing && t - movedAt < stallMs)) return
       fired = true
-      const secs = Math.round((t - (failing ? successAt : movedAt)) / 1000)
+      const secs = Math.round((t - (failing ? cursorMovedAt : movedAt)) / 1000)
       logger(
         "error",
-        failing && !behind && !stale
-          ? `indexer stalled: no tick has completed successfully for ${secs} s (cursor ${cursor ?? "none"}, head ${head})`
+        failing
+          ? `indexer stalled: no successful tick and cursor static for ${secs} s (cursor ${cursor ?? "none"}, head ${head})`
           : behind
             ? `indexer stalled: cursor ${cursor ?? "none"} behind head ${head} for ${secs} s`
             : `indexer stalled: cursor ${cursor ?? "none"} not moving and no chain head fetched for ${secs} s`,
