@@ -262,11 +262,19 @@ export function httpUrlFor(url: string): string {
   return u.toString()
 }
 
-/** A failure of the connection to an endpoint rather than of the request's data. Timeouts included. */
+/** JSON-RPC codes that mean "slow down" rather than "your request is wrong": -32005 (limit exceeded), 429 and QuickNode's -32007. */
+const RATE_LIMIT_CODES = new Set([-32005, 429, -32007])
+
+/**
+ * A failure of the endpoint rather than of the request's data: a connection failure, a timeout, an
+ * HTTP error status, or a rate-limit RPC error. Retrying later can succeed. Reverts and other RPC
+ * error responses are data errors and are not included.
+ */
 export function isTransportError(err: unknown): boolean {
   if (isSocketError(err) || isTimeoutError(err)) return true
   for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
     if (e instanceof HttpRequestError) return true
+    if (RATE_LIMIT_CODES.has((e as { code?: unknown }).code as number)) return true
     e = (e as { cause?: unknown }).cause
   }
   return false
@@ -287,13 +295,22 @@ export async function connectRpc(
   const { timeoutMs = RPC_TIMEOUT_MS, rank = true } = opts
   const baseFetch = opts.fetchFn ?? fetch
   // viem's own timer stops once the response headers arrive; this bounds the body read too.
-  const fetchFn: typeof fetch = (input, init) =>
-    baseFetch(input, {
+  const fetchFn: typeof fetch = async (input, init) => {
+    const res = await baseFetch(input, {
       ...init,
       signal: init?.signal
         ? AbortSignal.any([init.signal, AbortSignal.timeout(timeoutMs)])
         : AbortSignal.timeout(timeoutMs),
     })
+    if (res.status !== 429 && res.status < 500) return res
+    // viem returns a JSON-RPC error body from a non-2xx response as data and drops the status. Hand
+    // it a body that is not JSON-RPC so it raises an HttpRequestError that keeps the 429 or 5xx status.
+    return new Response(`HTTP ${res.status}: ${await res.text()}`, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: { "content-type": "text/plain" },
+    })
+  }
   const httpTransports = urls.map((u) =>
     http(httpUrlFor(u), { timeout: timeoutMs, retryCount: 0, fetchFn }),
   )
@@ -322,7 +339,7 @@ export async function connectRpc(
   const wsUrls = urls.filter((u) => /^wss?:/i.test(u))
   const pollHeads = wsUrls.length === 0
   if (pollHeads)
-    logger("warn", "no ws:// or wss:// URL configured; polling for new heads every 4 s")
+    logger("warn", "no ws:// or wss:// URL configured; polling for new heads every 1 s")
   const heads = pollHeads
     ? client
     : createPublicClient({

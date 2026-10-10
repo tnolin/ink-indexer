@@ -1,4 +1,4 @@
-import { HttpRequestError } from "viem"
+import { HttpRequestError, LimitExceededRpcError, RpcRequestError } from "viem"
 import { describe, expect, it } from "vitest"
 import { viemChain } from "../src/chain"
 import { connectRpc, httpUrlFor, isTransportError } from "../src/rpc"
@@ -193,4 +193,56 @@ describe("connectRpc hardening", () => {
     const both = await connect({})
     expect(both.pollHeads).toBe(false)
   })
+})
+
+describe("rate-limited reads", () => {
+  const rpcError = (code: number, message = "limit") =>
+    new RpcRequestError({ body: {}, error: { code, message }, url: "https://a.test" })
+
+  it("treats rate-limit and server-busy RPC errors as transport errors, and reverts as data errors", () => {
+    expect(isTransportError(new LimitExceededRpcError(rpcError(-32005)))).toBe(true)
+    expect(isTransportError(rpcError(-32005))).toBe(true)
+    expect(isTransportError(rpcError(429))).toBe(true)
+    expect(isTransportError(new Error("wrapped", { cause: rpcError(429) }))).toBe(true)
+    expect(isTransportError(rpcError(3, "execution reverted"))).toBe(false)
+    expect(isTransportError(rpcError(-32000, "header not found"))).toBe(false)
+  })
+
+  const cases = [
+    { name: "HTTP 429 with a -32005 body", status: 429, code: -32005 },
+    { name: "HTTP 429 with a -32000 body", status: 429, code: -32000 },
+    { name: "HTTP 503 with a -32000 body", status: 503, code: -32000 },
+    { name: "HTTP 200 with a code 429 body", status: 200, code: 429 },
+  ]
+  for (const c of cases) {
+    it(`retries a read that every endpoint answers with ${c.name}, then succeeds`, async () => {
+      let blockNumberCalls = 0
+      const fetchFn = (async (_input: string | URL | Request, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body))
+        const reply = (status: number, extra: object) =>
+          new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, ...extra }), {
+            status,
+            headers: { "content-type": "application/json" },
+          })
+        if (body.method === "eth_chainId") return reply(200, { result: "0xdef1" })
+        if (body.method === "eth_blockNumber" && ++blockNumberCalls <= 12)
+          return reply(c.status, { error: { code: c.code, message: "rate limited" } })
+        return reply(200, { result: "0x64" })
+      }) as typeof fetch
+      const logged: [string, string][] = []
+      const sleeps: number[] = []
+      const { client, router } = await connectRpc(["wss://a.test", "wss://b.test"], quiet, {
+        fetchFn,
+        timeoutMs: 50,
+        rank: false,
+      })
+      const chain = viemChain(client, router, {
+        logger: (l, m) => logged.push([l, m]),
+        sleep: async (ms) => void sleeps.push(ms),
+      })
+      expect(await chain.getBlockNumber()).toBe(100n)
+      expect(sleeps).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000])
+      expect(logged.map(([l]) => l)).toEqual(["warn", "warn", "warn", "warn", "error", "error"])
+    })
+  }
 })
