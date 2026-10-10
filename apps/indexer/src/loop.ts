@@ -15,6 +15,8 @@ export class Indexer {
   lastHead: bigint | undefined
   /** How many head fetches have succeeded. */
   headFetches = 0
+  /** How many ticks have completed without error, for the stall watchdog. */
+  tickSuccesses = 0
   /** The stored cursor block, kept in memory so liveness checks never wait on the database. */
   cursorBlock: bigint | null | undefined
 
@@ -57,6 +59,7 @@ export class Indexer {
       let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
       while (from <= head) from = (await this.ingest(from, head, head, true)) + 1n
       await store.confirm(head)
+      this.tickSuccesses++
     } catch (err) {
       if (!(err instanceof BlockNotServedError)) throw err
       this.deps.logger("warn", "block not yet served; retrying on next head", { block: err.block })

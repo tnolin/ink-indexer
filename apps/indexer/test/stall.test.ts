@@ -214,3 +214,102 @@ describe("startStallWatch", () => {
     clearInterval(timer)
   })
 })
+
+function withTicks() {
+  const state = {
+    t: 0,
+    cursor: 200n as bigint | null,
+    head: 200n as bigint | undefined,
+    fetches: 0,
+    successes: 0,
+  }
+  const logs: [string, string][] = []
+  let stalled = 0
+  const w = createStallWatchdog({
+    getCursor: async () => state.cursor,
+    getHead: () => state.head,
+    getHeadFetches: () => state.fetches,
+    getTickSuccesses: () => state.successes,
+    now: () => state.t,
+    logger: (l, m) => logs.push([l, m]),
+    onStall: () => {
+      stalled++
+    },
+  })
+  const advance = async (ms: number, tick: "ok" | "fail" | "none") => {
+    state.t += ms
+    state.fetches++ // a fresh head every time
+    if (tick === "ok") state.successes++
+    await w.check()
+  }
+  return { state, logs, advance, stalled: () => stalled }
+}
+
+describe("createStallWatchdog with tick successes", () => {
+  it("exits when fresh heads keep arriving but no tick completes for 5 minutes, cursor at head", async () => {
+    const { advance, stalled, logs } = withTicks()
+    await advance(0, "fail")
+    for (let i = 0; i < 4; i++) await advance(60_000, "fail")
+    expect(stalled()).toBe(0)
+    await advance(60_000, "fail")
+    expect(stalled()).toBe(1)
+    expect(logs[0]![1]).toMatch(/no tick has completed successfully for 300 s/)
+  })
+
+  it("does not exit on an idle chain whose ticks keep completing", async () => {
+    const { advance, stalled } = withTicks()
+    for (let i = 0; i < 60; i++) await advance(60_000, "ok")
+    expect(stalled()).toBe(0)
+  })
+
+  it("resets on a successful tick", async () => {
+    const { advance, stalled } = withTicks()
+    await advance(0, "fail")
+    for (let i = 0; i < 4; i++) await advance(60_000, "fail")
+    await advance(60_000, "ok")
+    for (let i = 0; i < 4; i++) await advance(60_000, "fail")
+    expect(stalled()).toBe(0)
+    await advance(60_000, "fail")
+    expect(stalled()).toBe(1)
+  })
+
+  it("does not exit while the cursor advances even if ticks keep aborting after progress", async () => {
+    const { state, advance, stalled } = withTicks()
+    state.head = 10_000n
+    for (let i = 0; i < 30; i++) {
+      state.cursor = state.cursor! + 1n
+      await advance(60_000, "fail")
+    }
+    expect(stalled()).toBe(0)
+  })
+})
+
+describe("startStallWatch with tick successes", () => {
+  it("aborts when the indexer's tick successes stop while heads stay fresh", async () => {
+    vi.useFakeTimers()
+    const abort = vi.fn(async () => {})
+    const indexer = {
+      cursorBlock: 200n as bigint | null,
+      lastHead: 200n as bigint | undefined,
+      headFetches: 0,
+      tickSuccesses: 0,
+    }
+    const timer = startStallWatch({
+      indexer,
+      shutdown: { abort },
+      logger: () => {},
+      now: () => Date.now(),
+    })
+    for (let i = 0; i < 9; i++) {
+      indexer.headFetches++
+      await vi.advanceTimersByTimeAsync(30_000)
+    }
+    expect(abort).not.toHaveBeenCalled()
+    for (let i = 0; i < 2; i++) {
+      indexer.headFetches++
+      await vi.advanceTimersByTimeAsync(30_000)
+    }
+    expect(abort).toHaveBeenCalledTimes(1)
+    clearInterval(timer)
+  })
+})

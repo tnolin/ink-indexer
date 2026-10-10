@@ -18,17 +18,30 @@ export function createStallWatchdog(deps: {
   getHead: () => bigint | undefined
   /** A counter of successful head fetches, to tell a fresh head from a stale one. */
   getHeadFetches?: () => number
+  /** A counter of ticks that completed without error. Trips the watchdog when it stops moving for `stallMs`, unless the cursor moves. */
+  getTickSuccesses?: () => number
   /** Monotonic: it must not advance while the machine sleeps. */
   now: () => number
   stallMs?: number
   logger: Logger
   onStall: () => void
 }) {
-  const { getCursor, getHead, getHeadFetches, now, stallMs = STALL_MS, logger, onStall } = deps
+  const {
+    getCursor,
+    getHead,
+    getHeadFetches,
+    getTickSuccesses,
+    now,
+    stallMs = STALL_MS,
+    logger,
+    onStall,
+  } = deps
   let last: bigint | null | undefined
   let movedAt = now()
   let fetches = getHeadFetches?.() ?? 0
   let fetchedAt = movedAt
+  let successes = getTickSuccesses?.() ?? 0
+  let successAt = movedAt
   let fired = false
   return {
     async check() {
@@ -42,6 +55,14 @@ export function createStallWatchdog(deps: {
           fetchedAt = t
         }
       }
+      if (getTickSuccesses) {
+        const n = getTickSuccesses()
+        if (n !== successes) {
+          successes = n
+          successAt = t
+        }
+      }
+      const failing = getTickSuccesses !== undefined && t - successAt >= stallMs
       const headKnown = head !== undefined
       const stale = getHeadFetches !== undefined && t - fetchedAt >= stallMs
       const behind = headKnown && (cursor === null || cursor < head)
@@ -51,19 +72,21 @@ export function createStallWatchdog(deps: {
         movedAt = t
         return
       }
-      if (idle) {
+      if (idle && !failing) {
         // Idle at head counts as progress up to the moment that head was observed.
         movedAt = getHeadFetches ? Math.max(movedAt, fetchedAt) : t
         return
       }
-      if (fired || t - movedAt < stallMs) return
+      if (fired || (!failing && t - movedAt < stallMs)) return
       fired = true
-      const secs = Math.round((t - movedAt) / 1000)
+      const secs = Math.round((t - (failing ? successAt : movedAt)) / 1000)
       logger(
         "error",
-        behind
-          ? `indexer stalled: cursor ${cursor ?? "none"} behind head ${head} for ${secs} s`
-          : `indexer stalled: cursor ${cursor ?? "none"} not moving and no chain head fetched for ${secs} s`,
+        failing && !behind && !stale
+          ? `indexer stalled: no tick has completed successfully for ${secs} s (cursor ${cursor ?? "none"}, head ${head})`
+          : behind
+            ? `indexer stalled: cursor ${cursor ?? "none"} behind head ${head} for ${secs} s`
+            : `indexer stalled: cursor ${cursor ?? "none"} not moving and no chain head fetched for ${secs} s`,
       )
       onStall()
     },
@@ -76,6 +99,7 @@ export function startStallWatch(deps: {
     cursorBlock: bigint | null | undefined
     lastHead: bigint | undefined
     headFetches: number
+    tickSuccesses?: number
   }
   shutdown: { abort(reason: string): Promise<void> }
   logger: Logger
@@ -93,6 +117,7 @@ export function startStallWatch(deps: {
     getCursor: () => indexer.cursorBlock ?? null,
     getHead: () => indexer.lastHead,
     getHeadFetches: () => indexer.headFetches,
+    getTickSuccesses: "tickSuccesses" in indexer ? () => indexer.tickSuccesses ?? 0 : undefined,
     now,
     logger,
     onStall: () =>

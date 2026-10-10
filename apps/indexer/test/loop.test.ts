@@ -291,6 +291,108 @@ describe("Indexer log and block endpoints disagreeing", () => {
   })
 })
 
+describe("Indexer confirmation is atomic with inserts", () => {
+  /**
+   * Invariant for a consumer polling `where confirmed and id > $1`: whenever a state is committed
+   * with head H, no event with block <= H-1 is unconfirmed while a higher-id event is confirmed.
+   * Equivalently: every unconfirmed event that is old enough to be confirmed has no confirmed
+   * event above it.
+   */
+  async function violations(head: bigint) {
+    return sql`
+      select u.id as unconfirmed_id, c.id as confirmed_id
+      from indexer.events u join indexer.events c on c.id > u.id and c.confirmed
+      where not u.confirmed and u.block <= ${(head - 1n).toString()}`
+  }
+
+  function watched() {
+    const seen: unknown[] = []
+    const checking: Store = {
+      ...store,
+      writeBatch: async (batch, opts) => {
+        await store.writeBatch(batch, opts)
+        seen.push(...(await violations(opts.head)))
+      },
+    }
+    return { checking, seen }
+  }
+
+  it("never commits a confirmed event above an old-enough unconfirmed one across a multi-span catch-up", async () => {
+    const chain = new FakeChain(S + 100n)
+    launch(chain, { n: 1, block: S + 10n })
+    trade(chain, { n: 1, block: S + 100n, sold: 1n }) // tip row, unconfirmed at head S+100
+    const first = watched()
+    const idx1 = new Indexer({ chain, store: first.checking, logger: () => {} })
+    await idx1.init()
+    await idx1.trigger()
+    expect(
+      (await sql`select confirmed from indexer.events order by id`).map((r) => r.confirmed),
+    ).toEqual([true, false])
+
+    chain.maxSpan = 2n
+    chain.head = S + 106n
+    trade(chain, { n: 1, block: S + 102n, sold: 2n })
+    trade(chain, { n: 1, block: S + 104n, sold: 3n })
+    trade(chain, { n: 1, block: S + 106n, sold: 4n })
+    const second = watched()
+    const idx2 = new Indexer({ chain, store: second.checking, logger: () => {} })
+    await idx2.init()
+    await idx2.trigger()
+    expect(second.seen).toEqual([])
+    expect(await violations(S + 106n)).toEqual([])
+  })
+
+  it("holds after a tick aborted by a block that is not served after some spans were written", async () => {
+    const chain = new FakeChain(S + 100n)
+    launch(chain, { n: 1, block: S + 10n })
+    trade(chain, { n: 1, block: S + 100n, sold: 1n })
+    const warm = watched()
+    const idx0 = new Indexer({ chain, store: warm.checking, logger: () => {} })
+    await idx0.init()
+    await idx0.trigger()
+
+    chain.maxSpan = 2n
+    chain.head = S + 110n
+    trade(chain, { n: 1, block: S + 102n, sold: 2n })
+    trade(chain, { n: 1, block: S + 108n, sold: 3n })
+    chain.nullOnce.add(S + 106n) // the third span's end block is not served
+    const w = watched()
+    const idx = new Indexer({ chain, store: w.checking, logger: () => {} })
+    await idx.init()
+    await idx.trigger() // aborted mid-way: earlier spans committed, no store.confirm ran
+    expect(await store.getCursor()).toEqual({ block: S + 104n, hash: chain.hashOf(S + 104n) })
+    expect(w.seen).toEqual([])
+    expect(await violations(S + 110n)).toEqual([])
+    await idx.trigger()
+    expect(await violations(S + 110n)).toEqual([])
+  })
+})
+
+describe("Indexer.tickSuccesses", () => {
+  it("counts ticks that complete, not ticks aborted by a block that is not served", async () => {
+    const chain = new FakeChain(S + 20n)
+    const { idx } = await indexerFor(chain)
+    expect(idx.tickSuccesses).toBe(0)
+    chain.nullOnce.add(S + 20n)
+    await idx.trigger()
+    expect(idx.tickSuccesses).toBe(0)
+    await idx.trigger()
+    expect(idx.tickSuccesses).toBe(1)
+    await idx.trigger()
+    expect(idx.tickSuccesses).toBe(2)
+  })
+
+  it("does not count a tick that throws", async () => {
+    const chain = new FakeChain(S + 100n)
+    launch(chain, { n: 1, block: S + 10n })
+    const { idx } = await indexerFor(chain)
+    await idx.trigger()
+    chain.reorg(S)
+    await expect(idx.trigger()).rejects.toThrow(/refusing to guess/)
+    expect(idx.tickSuccesses).toBe(1)
+  })
+})
+
 describe("Indexer.lastHead", () => {
   it("is undefined before the first tick and the head the tick started from after it", async () => {
     const chain = new FakeChain(S + 5n)

@@ -129,6 +129,9 @@ export function createStore(sql: Sql) {
     /** One transaction. With `cursor: null` (backfill) the live cursor and recent hashes are left alone. */
     async writeBatch(batch: Batch, opts: { cursor: Cursor | null; head: bigint }) {
       await sql.begin(async (tx) => {
+        // Confirm older rows in the same commit that adds newer confirmed ones, so a reader of
+        // `confirmed and id > $1` can never pass an unconfirmed row that is old enough to confirm.
+        await tx`update indexer.events set confirmed = true where not confirmed and block <= ${s(opts.head - 1n)}`
         for (const part of chunks(batch.hooks.map(hookRecord))) {
           await tx`insert into indexer.hooks ${tx(part)} on conflict (address) do nothing`
         }

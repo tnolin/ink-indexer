@@ -43,7 +43,7 @@ where confirmed and id > $1
 order by id limit 500;
 ```
 
-`(txHash, logIndex)` in each payload is the stable event identity. `id` can change after a reorg rollback, so dedupe on `(txHash, logIndex)`. Drop `confirmed` to also read events from the newest block, which a reorg can still remove.
+`confirmed` is set one block after an event's block, in the same commit that writes newer confirmed events, so this query never skips an older row. It does not mean final: a reorg rollback deletes every row above the fork point, up to 128 blocks back, confirmed rows included, and re-inserts the new fork's events with new ids. `(txHash, logIndex)` in each payload is the stable event identity, so dedupe on it, and treat events within the last 128 blocks of the chain head as revisable. Drop `confirmed` to also read events from the newest block.
 
 Event shapes are documented in [`packages/events`](packages/events/README.md).
 
