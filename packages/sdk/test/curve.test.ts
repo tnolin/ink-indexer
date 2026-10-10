@@ -43,6 +43,14 @@ describe("curve math", () => {
     expect(progressBps(0n, 3n * 10n ** 18n)).toBe(0)
   })
 
+  it("returns 0 instead of dividing by zero when the sale supply or the target is zero", () => {
+    expect(curveValue({ ...LEGACY, saleSupply: 0n }, 0n)).toBe(0n)
+    expect(curveValue({ ...LEGACY, saleSupply: 0n }, 10n ** 18n)).toBe(0n)
+    expect(progressBps(10n ** 18n, 0n)).toBe(0)
+    expect(progressBps(0n, 0n)).toBe(0)
+    expect(progressBps(10n ** 18n, -1n)).toBe(0)
+  })
+
   it("computes market cap from price per whole token and total supply", () => {
     expect(marketCap(1463554654n, 10n ** 27n)).toBe(1463554654n * 10n ** 9n)
   })
