@@ -7,7 +7,7 @@ import { HookRegistry, nativeHookRows } from "../src/sources/inkypump/hooks"
 import { type Batch, processLogs } from "../src/sources/inkypump/index"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
-import { bond, HOOK, launch, launchIdOf, PARAMS, tokenOf, trade } from "./scenario"
+import { bond, HOOK, launch, launchIdOf, PARAMS, tokenOf, trade, xstocksHook } from "./scenario"
 
 const B = 45_290_000n
 let sql: Sql
@@ -178,5 +178,71 @@ describe("store", () => {
     expect([await count("tokens"), await count("trades"), await count("events")]).toEqual([
       4_501, 7_500, 8_500,
     ])
+  })
+
+  it("leaves the cursor and recent block hashes alone when written without a cursor", async () => {
+    const chain = new FakeChain(B + 10n)
+    launch(chain, { n: 1, block: B })
+    trade(chain, { n: 1, block: B + 10n, sold: 1n })
+    const batch = await batchFrom(chain)
+    expect(batch.blocks).toHaveLength(2) // the batch does carry block hashes
+    await store.writeBatch(batch, { cursor: null, head: B + 10n })
+    expect(await store.getCursor()).toBeNull()
+    expect(await store.recentBlocks()).toEqual([])
+
+    const cursor = { block: B + 3n, hash: chain.hashOf(B + 3n) }
+    await store.writeBatch(emptyBatch(), { cursor, head: B + 3n })
+    const recent = await store.recentBlocks()
+    expect(recent).toEqual([{ number: B + 3n, hash: chain.hashOf(B + 3n) }])
+    await store.writeBatch(batch, { cursor: null, head: B + 10n })
+    expect(await store.getCursor()).toEqual(cursor)
+    expect(await store.recentBlocks()).toEqual(recent)
+  })
+
+  it("rollback removes later tokens and xStocks hooks, and keeps native hooks and earlier rows", async () => {
+    const WRAPPER_A = "0xc3fdbe3a68ee5de461d30415a8165cf9aefe1171" as const
+    const WRAPPER_B = "0xc3fdbe3a68ee5de461d30415a8165cf9aefe1172" as const
+    const XHOOK_A = "0x799def4ec4a0a293a59b53a6479afc5a9df76ac4" as const
+    const XHOOK_B = "0x799def4ec4a0a293a59b53a6479afc5a9df76ac5" as const
+    const chain = new FakeChain(B + 8n)
+    chain.erc20.set(WRAPPER_A, { decimals: 18, symbol: "AAAx" })
+    chain.erc20.set(WRAPPER_B, { decimals: 18, symbol: "BBBx" })
+    launch(chain, { n: 1, block: B })
+    trade(chain, { n: 1, block: B + 2n, sold: 1n })
+    xstocksHook(chain, { block: B + 3n, hook: XHOOK_A, wrapper: WRAPPER_A })
+    launch(chain, { n: 2, block: B + 6n })
+    xstocksHook(chain, { block: B + 7n, hook: XHOOK_B, wrapper: WRAPPER_B })
+    trade(chain, { n: 1, block: B + 8n, sold: 2n })
+    await store.writeBatch(await batchFrom(chain), {
+      cursor: { block: B + 8n, hash: chain.hashOf(B + 8n) },
+      head: B + 8n,
+    })
+    expect((await store.recentBlocks()).map((b) => b.number)).toEqual([B + 8n, B + 6n, B + 2n, B])
+
+    const fork = B + 4n
+    await store.rollback(fork, chain.hashOf(fork), [])
+
+    expect((await sql`select address from indexer.tokens`).map((r) => r.address)).toEqual([
+      tokenOf(1),
+    ])
+    expect(
+      (await sql`select address, kind from indexer.hooks order by address`).map(
+        (r) => `${r.kind}:${r.address}`,
+      ),
+    ).toEqual([
+      "native:0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
+      `xstocks:${XHOOK_A}`,
+      "native:0x893183da2411c7df81f103bfef09e4e46c326ac4",
+    ])
+    expect(await sql`select type, block from indexer.events order by id`).toEqual([
+      { type: "launchpad.launch", block: B },
+      { type: "launchpad.trade", block: B + 2n },
+    ])
+    expect(await sql`select block from indexer.trades`).toEqual([{ block: B + 2n }])
+    expect(await store.recentBlocks()).toEqual([
+      { number: B + 2n, hash: chain.hashOf(B + 2n) },
+      { number: B, hash: chain.hashOf(B) },
+    ])
+    expect(await store.getCursor()).toEqual({ block: fork, hash: chain.hashOf(fork) })
   })
 })

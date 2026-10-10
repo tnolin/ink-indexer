@@ -1,6 +1,7 @@
 import { NATIVE_QUOTE_ASSET } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import { describe, expect, it } from "vitest"
+import { tradeLog } from "../../../packages/sdk/test/builders"
 import { BlockNotServedError } from "../src/errors"
 import type { Logger } from "../src/log"
 import { HookRegistry, nativeHookRows } from "../src/sources/inkypump/hooks"
@@ -190,6 +191,32 @@ describe("processLogs", () => {
     const batch = await run()
     expect(batch.events.map((e) => (e.event as { soldBps: number }).soldBps)).toEqual([
       2500, 10_000,
+    ])
+  })
+
+  it("maps a sell to amountIn = tokenAmount and amountOut = quoteAmount, and a buy the other way", async () => {
+    const { chain, run } = setup([knownLaunch(2, 5000)])
+    const at = (logIndex: number) => ({
+      address: HOOK,
+      blockNumber: B,
+      transactionHash: `0x${(0xabc0 + logIndex).toString(16).padStart(64, "0")}` as const,
+      logIndex,
+    })
+    const t = {
+      launchId: BigInt(launchIdOf(2)),
+      trader: TRADER,
+      price: 1000n,
+      sold: 4n * 10n ** 26n,
+      timestamp: Number(B),
+      tokenAmount: 7n,
+      quoteAmount: 9n,
+    }
+    chain.add(tradeLog({ ...t, side: "sell" }, at(0)))
+    chain.add(tradeLog({ ...t, side: "buy" }, at(1)))
+    const batch = await run()
+    expect(batch.trades.map((r) => [r.side, r.amountIn, r.amountOut])).toEqual([
+      ["sell", 7n, 9n],
+      ["buy", 9n, 7n],
     ])
   })
 })
