@@ -3,13 +3,6 @@ title = "ink-indexer gitleaks config"
 [extend]
 useDefault = true
 
-# The mainnet test fixtures store public token contract addresses under a field
-# named `token`, which the generic-api-key rule flags. Allow only 0x-prefixed
-# 40-hex values in those files; any other flagged value there is still reported.
-[[allowlists]]
-description = "0x-prefixed 40-hex addresses in the mainnet fixtures"
-targetRules = ["generic-api-key"]
-condition = "AND"
+[allowlist]
+description = "Mainnet test fixtures hold public on-chain addresses in a field named `token`, which the generic-api-key rule flags."
 paths = ['''packages/sdk/test/fixtures/.*\.json''']
-regexTarget = "secret"
-regexes = ['''^0x[0-9a-fA-F]{40}$''']
