@@ -1,0 +1,8 @@
+title = "ink-indexer gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Mainnet test fixtures hold public on-chain addresses in a field named `token`, which the generic-api-key rule flags."
+paths = ['''packages/sdk/test/fixtures/.*\.json''']

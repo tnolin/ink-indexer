@@ -1,0 +1,12 @@
+ink-indexer is licensed per package. Each path below has its own LICENSE file
+with the full license text.
+
+  packages/sdk       MIT            packages/sdk/LICENSE
+  packages/events    MIT            packages/events/LICENSE
+  packages/db        AGPL-3.0-only  packages/db/LICENSE
+  apps/indexer       AGPL-3.0-only  apps/indexer/LICENSE
+
+Files outside these package folders (docs, examples, scripts and configuration)
+are licensed under the MIT license in packages/sdk/LICENSE.
+
+See docs/adr/0004-license-split.md for the reasoning.

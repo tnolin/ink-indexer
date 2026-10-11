@@ -1,0 +1,30 @@
+{
+  "name": "ink-indexer",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "db:dev": "tsx scripts/dev-db.ts",
+    "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/migrate-cli.ts",
+    "start": "tsx --env-file-if-exists=.env apps/indexer/src/main.ts start",
+    "backfill": "tsx --env-file-if-exists=.env apps/indexer/src/main.ts backfill"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@ink-indexer/db": "workspace:*",
+    "@ink-indexer/sdk": "workspace:*",
+    "@types/node": "26.6.4",
+    "embedded-postgres": "18.4.0-beta.17",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "viem": "^2.57.4",
+    "vitest": "5.0.3"
+  }
+}
