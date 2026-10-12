@@ -9,7 +9,7 @@ The indexer runs unattended under a supervisor. A fatal error or a stall exit re
 
 ## Decision
 
-- When `SENTRY_DSN` is set, the indexer initialises `@sentry/node` with `release` from `SENTRY_RELEASE`, `environment: production` and `sendDefaultPii: false`.
+- When `SENTRY_DSN` is set, the indexer initialises `@sentry/node` with `release` from `SENTRY_RELEASE` and `environment: production`. It collects no user info, cookies, headers, query params or request bodies (`dataCollection`).
 - It reports only what stops the process: startup failures, the error behind a fatal exit, and the stall reason. It flushes for up to 2 seconds before exiting.
 - Transport retries and warnings stay in the logs.
 - Without a DSN nothing changes.

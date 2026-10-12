@@ -16,7 +16,7 @@ describe("initSentry", () => {
     expect(sdk.init).not.toHaveBeenCalled()
   })
 
-  it("initialises with release, production and no PII when SENTRY_DSN is set", async () => {
+  it("initialises with release, production and no personal data when SENTRY_DSN is set", async () => {
     const sdk = fakeSdk()
     const r = initSentry(
       { SENTRY_DSN: "https://k@o1.ingest.sentry.io/1", SENTRY_RELEASE: "v0.2.0" },
@@ -27,8 +27,13 @@ describe("initSentry", () => {
         dsn: "https://k@o1.ingest.sentry.io/1",
         release: "v0.2.0",
         environment: "production",
-        sendDefaultPii: false,
-        dataCollection: { userInfo: false },
+        dataCollection: {
+          userInfo: false,
+          cookies: false,
+          httpHeaders: false,
+          urlQueryParams: false,
+          httpBodies: [],
+        },
       }),
     )
     const err = new Error("boom")
