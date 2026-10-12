@@ -8,6 +8,10 @@
 - `apps/indexer`: the ingestion loop, RPC routing and the per-protocol sources in `src/sources/` (AGPL).
 - `docs/adr`: dated decision records. Read them before changing behaviour they cover.
 
+## Conventions
+
+- `shortcut:` comments mark deliberate simplifications. Each names its limit and the upgrade path. Search for `shortcut:` before scaling a part of the system.
+
 ## Commands
 
 - `pnpm test`: all tests. A throwaway Postgres starts automatically unless `TEST_DATABASE_URL` is set (the tests drop its `indexer` schema; `DATABASE_URL` is never used for tests).

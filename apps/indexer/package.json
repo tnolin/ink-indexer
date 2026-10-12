@@ -8,6 +8,7 @@
     "@ink-indexer/db": "workspace:*",
     "@ink-indexer/events": "workspace:*",
     "@ink-indexer/sdk": "workspace:*",
+    "@sentry/node": "11.6.0",
     "postgres": "^3.4.9",
     "viem": "^2.57.4"
   }

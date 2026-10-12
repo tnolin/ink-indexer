@@ -88,3 +88,47 @@ describe("createShutdown abort", () => {
     expect(events).toEqual(["stop", "exit 1"])
   })
 })
+
+describe("createShutdown with a reporter", () => {
+  function withReporter() {
+    const events: string[] = []
+    const report = {
+      capture: (e: unknown) => events.push(`capture ${e instanceof Error ? e.message : String(e)}`),
+      flush: async () => {
+        events.push("flush")
+        return true
+      },
+    }
+    const s = createShutdown({
+      stop: () => events.push("stop"),
+      inFlight: () => undefined,
+      end: async () => {
+        events.push("end")
+      },
+      exit: (code) => events.push(`exit ${code}`),
+      logger: () => {},
+      waitMs: 50,
+      report,
+    })
+    return { s, events }
+  }
+
+  it("captures and flushes before exiting 1 on a failure", async () => {
+    const { s, events } = withReporter()
+    s.fail(new Error("db down"))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(events).toEqual(["capture db down", "flush", "exit 1"])
+  })
+
+  it("captures the stall reason and flushes before exiting 1 on abort", async () => {
+    const { s, events } = withReporter()
+    await s.abort("indexer stalled: cursor 5 behind head 9 for 300 s")
+    expect(events).toEqual([
+      "stop",
+      "end",
+      "capture indexer stalled: cursor 5 behind head 9 for 300 s",
+      "flush",
+      "exit 1",
+    ])
+  })
+})
