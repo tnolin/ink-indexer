@@ -22,6 +22,16 @@ export function createShutdown(deps: {
 }) {
   const { stop, inFlight, end, exit, logger, waitMs = 10_000, report } = deps
   let stopping = false
+  /** Best effort: a broken reporter is logged and never keeps the process from exiting. */
+  async function send(err: unknown) {
+    if (!report) return
+    try {
+      report.capture(err)
+      await report.flush(2000)
+    } catch (e) {
+      logger("error", "reporting failed", { error: String(e) })
+    }
+  }
   return {
     isStopping: () => stopping,
     fail(err: unknown) {
@@ -31,8 +41,7 @@ export function createShutdown(deps: {
       }
       logger("error", "indexer stopped", { error: err instanceof Error ? err.stack : String(err) })
       if (!report) return exit(1)
-      report.capture(err)
-      void report.flush(2000).finally(() => exit(1))
+      void send(err).finally(() => exit(1))
     },
     /** Stops for a reason that should not look like a clean exit: logs it, closes the database (bounded wait) and exits 1. */
     async abort(reason: string) {
@@ -51,10 +60,7 @@ export function createShutdown(deps: {
       } catch (err) {
         logger("error", "shutdown failed", { error: String(err) })
       }
-      if (report) {
-        report.capture(new Error(reason))
-        await report.flush(2000)
-      }
+      await send(new Error(reason))
       exit(1)
     },
     async signal() {

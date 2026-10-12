@@ -131,4 +131,58 @@ describe("createShutdown with a reporter", () => {
       "exit 1",
     ])
   })
+
+  function withBrokenReporter(report: { capture: () => void; flush: () => Promise<boolean> }) {
+    const events: string[] = []
+    const logs: string[] = []
+    const s = createShutdown({
+      stop: () => events.push("stop"),
+      inFlight: () => undefined,
+      end: async () => {
+        events.push("end")
+      },
+      exit: (code) => events.push(`exit ${code}`),
+      logger: (_level, msg) => logs.push(msg),
+      waitMs: 50,
+      report,
+    })
+    return { s, events, logs }
+  }
+
+  it("still exits 1 on abort when the flush rejects", async () => {
+    const { s, events, logs } = withBrokenReporter({
+      capture: () => {},
+      flush: async () => {
+        throw new Error("network")
+      },
+    })
+    await s.abort("indexer stalled")
+    expect(events).toEqual(["stop", "end", "exit 1"])
+    expect(logs).toContain("reporting failed")
+  })
+
+  it("still exits 1 on a failure when the capture throws", async () => {
+    const { s, events, logs } = withBrokenReporter({
+      capture: () => {
+        throw new Error("sdk broke")
+      },
+      flush: async () => true,
+    })
+    s.fail(new Error("db down"))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(events).toEqual(["exit 1"])
+    expect(logs).toContain("reporting failed")
+  })
+
+  it("still exits 1 on a failure when the flush rejects", async () => {
+    const { s, events } = withBrokenReporter({
+      capture: () => {},
+      flush: async () => {
+        throw new Error("network")
+      },
+    })
+    s.fail(new Error("db down"))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(events).toEqual(["exit 1"])
+  })
 })
