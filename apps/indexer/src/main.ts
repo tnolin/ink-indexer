@@ -4,6 +4,7 @@ import { parseCli } from "./cli"
 import { log } from "./log"
 import { Indexer } from "./loop"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
+import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
@@ -22,6 +23,7 @@ const urls = (process.env.INK_RPC_WS_URLS ?? "")
   .split(",")
   .map((u) => u.trim())
   .filter(Boolean)
+const reporter = initSentry(process.env)
 
 const sql = connect(databaseUrl)
 const store = createStore(sql)
@@ -35,6 +37,7 @@ const shutdown = createShutdown({
   end: () => sql.end({ timeout: 5 }),
   exit: (code) => process.exit(code),
   logger: log,
+  report: reporter,
 })
 let rpc: Awaited<ReturnType<typeof connectRpc>>
 let indexer: Indexer
@@ -51,6 +54,8 @@ try {
   log("error", "startup failed", {
     error: err instanceof Error ? (err.stack ?? String(err)) : String(err),
   })
+  reporter.capture(err)
+  await reporter.flush(2000)
   await sql.end({ timeout: 5 }).catch(() => {})
   process.exit(1)
 }

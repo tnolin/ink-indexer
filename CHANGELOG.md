@@ -11,6 +11,8 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Events schema v1: `launchpad.launch`, `launchpad.trade` and `launchpad.bond`.
 - Trade event `soldBps`: tokens sold over sale supply in basis points, capped at 10,000, beside the curve-based `progressBpsBefore` and `progressBpsAfter`.
 - Indexer: backfill and live following of InkyPump V2 on Ink, getLogs routing across RPC providers, confirmation tracking and reorg rollback.
+- Optional Sentry reporting for fatal and stall exits (`SENTRY_DSN`, `SENTRY_RELEASE`).
+- Migration 0002: `events_launch_creator` and `events_type_id` indexes for readers of `indexer.events`.
 
 ### Changed
 
