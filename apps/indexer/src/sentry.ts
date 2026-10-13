@@ -12,14 +12,27 @@ const DROPPED_CATEGORIES = new Set(["http", "fetch", "console"])
 const REDACTED = "[redacted]"
 const MAX_DEPTH = 12
 
-/** The strings to hide for one configured endpoint: the URL, its form without a query, its HTTP form and any password. */
+/** The strings to hide for one configured endpoint: the URL, its form without a query, its HTTP form, its credentials, path segments and query values. */
 function secretsFor(value: string, withHttpForm: boolean): string[] {
   const out = [value]
   const add = (raw: string) => {
     try {
       const u = new URL(raw)
       out.push(raw, `${u.protocol}//${u.host}${u.pathname}`)
-      if (u.password) out.push(decodeURIComponent(u.password))
+      const parts = [
+        u.username,
+        u.password,
+        ...u.pathname.split("/"),
+        ...[...u.searchParams.values()],
+      ]
+      for (const part of parts) {
+        out.push(part)
+        try {
+          out.push(decodeURIComponent(part))
+        } catch {
+          // malformed escape: the raw part is already listed
+        }
+      }
     } catch {
       // not a URL: the raw value above is all there is to hide
     }
@@ -42,7 +55,7 @@ function configuredSecrets(env: Record<string, string | undefined>): string[] {
     ...(env.DATABASE_URL ? secretsFor(env.DATABASE_URL, false) : []),
     ...rpc.filter(Boolean).flatMap((u) => secretsFor(u, true)),
   ]
-  // shortcut: strings under 8 characters are skipped so a bare "/" or a short password cannot blank whole messages; list real secrets longer
+  // shortcut: strings under 8 characters are skipped so a bare "/" or a short password cannot blank whole messages, and only exact strings match; match on URL structure (or have providers send keys in headers) to close both gaps
   return [...new Set(all.filter((s) => s.length >= 8))].sort((a, b) => b.length - a.length)
 }
 
@@ -74,14 +87,29 @@ export function initSentry(env: Record<string, string | undefined>, sdk: Sdk = S
     },
     // RPC keys live in URL paths, so request and console breadcrumbs would carry them into every event.
     beforeBreadcrumb: (crumb) => (DROPPED_CATEGORIES.has(crumb.category ?? "") ? null : crumb),
-    beforeSend: (event) =>
-      redact(
-        {
-          ...event,
-          breadcrumbs: event.breadcrumbs?.filter((b) => !DROPPED_CATEGORIES.has(b.category ?? "")),
-        },
-        secrets,
-      ) as typeof event,
+    beforeSend: (event) => {
+      try {
+        return redact(
+          {
+            ...event,
+            breadcrumbs: event.breadcrumbs?.filter(
+              (b) => !DROPPED_CATEGORIES.has(b.category ?? ""),
+            ),
+          },
+          secrets,
+        ) as typeof event
+      } catch {
+        // Redaction must never let the original through: keep only the exception type.
+        let type = "Error"
+        try {
+          const t = event.exception?.values?.[0]?.type
+          if (typeof t === "string") type = t
+        } catch {
+          // keep the default type
+        }
+        return { exception: { values: [{ type, value: "redaction failed" }] } } as typeof event
+      }
+    },
   })
   return { capture: (err) => void sdk.captureException(err), flush: (ms) => sdk.flush(ms) }
 }

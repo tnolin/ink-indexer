@@ -116,4 +116,49 @@ describe("sentry scrubbing", () => {
     const event = beforeSend({ extra: cyc })
     expect(event?.extra.msg).toBe("plain")
   })
+
+  it("redacts a bare key segment, query value and username echoed without the URL", () => {
+    const sdk = fakeSdk()
+    initSentry(
+      {
+        SENTRY_DSN: "https://k@o1.ingest.sentry.io/1",
+        INK_RPC_WS_URLS: "https://rpc.example.com/v2/keySegment99/x?token=queryValue77",
+        DATABASE_URL: "postgres://longusername1:pw@db.example.com/ink",
+      },
+      sdk,
+    )
+    const opts = sdk.init.mock.calls[0]?.[0] as { beforeSend: (e: Ev) => Ev | null }
+    const beforeSend = opts.beforeSend
+    const event = beforeSend({
+      exception: {
+        values: [
+          { type: "Error", value: "unauthorized: key keySegment99 / queryValue77 / longusername1" },
+        ],
+      },
+    })
+    const text = JSON.stringify(event)
+    for (const secret of ["keySegment99", "queryValue77", "longusername1"]) {
+      expect(text).not.toContain(secret)
+    }
+    expect(text).toContain("unauthorized")
+  })
+
+  it("never throws and leaks nothing when redaction fails", () => {
+    const { beforeSend } = configured()
+    const event: Ev = {
+      exception: { values: [{ type: "HttpRequestError", value: `failed ${RPC}` }] },
+      message: RPC,
+    }
+    Object.defineProperty(event, "extra", {
+      enumerable: true,
+      get() {
+        throw new Error("boom")
+      },
+    })
+    const out = beforeSend(event)
+    expect(out).toEqual({
+      exception: { values: [{ type: "HttpRequestError", value: "redaction failed" }] },
+    })
+    expect(JSON.stringify(out)).not.toContain("abc123key")
+  })
 })
