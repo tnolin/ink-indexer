@@ -16,6 +16,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Changed
 
+- Sentry events drop HTTP, fetch and console breadcrumbs and redact the configured RPC and database URLs.
 - Indexer: a block the endpoint does not serve yet is retried on the next head instead of stopping the process or triggering a rollback.
 - Indexer: rate-limited reads are retried with backoff.
 - Indexer: batch inserts are split into 1,000-row statements.
