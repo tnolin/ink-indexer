@@ -7,6 +7,15 @@ Open SDK and indexer for Ink launchpads, starting with InkyPump V2.
 
 ink-indexer watches the Ink blockchain for new memecoin launches, trades and bonds, and turns them into clean, typed events that bots, dashboards and AI agents can read. The SDK decodes the raw chain data; the indexer stores it in Postgres.
 
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Deployment](https://github.com/tnolin/mako/blob/main/docs/deploy.md): the indexer is deployed with the MAKO bot, on one server
+- [Decision records](docs/adr)
+- [AGENTS.md](AGENTS.md), for coding agents
+
+<!-- Privacy policy: add the link at https://makobot.xyz once the site is live. -->
+
 ## Quick start
 
     pnpm install
