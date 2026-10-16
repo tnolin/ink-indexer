@@ -369,7 +369,16 @@ export async function connectRpc(
   return { client, heads, pollHeads, router }
 }
 
-/** Calls onHead for every new head, and on its own when no head has arrived for `stallMs`. */
+/** First and longest wait before subscribing to new heads again after an error or a silent stall. */
+const RESUBSCRIBE_MIN_MS = 5_000
+const RESUBSCRIBE_MAX_MS = 5 * 60_000
+
+/**
+ * Calls onHead for every new head, and on its own every `stallMs / 3` while no head has arrived for
+ * `stallMs`. viem's WebSocket transport reconnects the socket but drops the subscription, so after an
+ * error or a silent stall it subscribes again, backing off to RESUBSCRIBE_MAX_MS while the outage lasts.
+ * Each outage logs one warning when it starts and one info line when a new head arrives again.
+ */
 export function watchHeads(
   client: Pick<PublicClient, "watchBlockNumber">,
   onHead: () => void,
@@ -378,28 +387,58 @@ export function watchHeads(
   poll = false,
 ): () => void {
   let last = Date.now()
-  // `poll: false` (WebSocket subscription) is only typed on a client with a known WebSocket transport; the fallback transport is not one.
-  const unwatch = client.watchBlockNumber({
-    poll,
-    emitOnBegin: true,
-    onBlockNumber: () => {
-      last = Date.now()
-      onHead()
-    },
-    onError: (error: unknown) =>
-      logger("warn", "head subscription error", {
-        error: error instanceof Error ? String(error) : JSON.stringify(error),
-      }),
-  } as unknown as WatchBlockNumberParameters)
+  let down = false
+  let stopped = false
+  let wait = RESUBSCRIBE_MIN_MS
+  let retry: ReturnType<typeof setTimeout> | undefined
+  let unwatch = () => {}
+  const subscribe = (first: boolean) => {
+    unwatch()
+    // `poll: false` (WebSocket subscription) is only typed on a client with a known WebSocket transport; the fallback transport is not one.
+    unwatch = client.watchBlockNumber({
+      poll,
+      // Only the first subscription reports the current head; a resubscription's first head must be a new one.
+      emitOnBegin: first,
+      onBlockNumber: () => {
+        if (down) logger("info", "head subscription recovered", { downMs: Date.now() - last })
+        down = false
+        last = Date.now()
+        wait = RESUBSCRIBE_MIN_MS
+        onHead()
+      },
+      onError: (error: unknown) => {
+        if (!down)
+          logger("warn", "head subscription error", {
+            error: error instanceof Error ? String(error) : JSON.stringify(error),
+          })
+        resubscribeLater()
+      },
+    } as unknown as WatchBlockNumberParameters)
+  }
+  const resubscribeLater = () => {
+    if (stopped || retry) return
+    retry = setTimeout(() => {
+      retry = undefined
+      if (!stopped) subscribe(false)
+    }, wait)
+    wait = Math.min(wait * 2, RESUBSCRIBE_MAX_MS)
+  }
+  subscribe(true)
   const timer = setInterval(() => {
     if (Date.now() - last < stallMs) return
-    logger("warn", "no new head for 30 s; ticking without the subscription", {
-      sinceMs: Date.now() - last,
-    })
+    if (!down) {
+      down = true
+      logger("warn", "no new head for 30 s; ticking without the subscription until it recovers", {
+        sinceMs: Date.now() - last,
+      })
+    }
+    resubscribeLater()
     onHead()
   }, stallMs / 3)
   return () => {
+    stopped = true
     unwatch()
     clearInterval(timer)
+    clearTimeout(retry)
   }
 }

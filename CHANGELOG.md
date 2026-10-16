@@ -14,6 +14,10 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Optional Sentry reporting for fatal and stall exits (`SENTRY_DSN`, `SENTRY_RELEASE`).
 - Migration 0002: `events_launch_creator` and `events_type_id` indexes for readers of `indexer.events`.
 
+### Fixed
+
+- The new-head subscription is created again after the WebSocket closes or goes silent, with backoff up to 5 minutes. An outage logs one warning when it starts and one line when heads return, instead of a warning every 10 seconds.
+
 ### Changed
 
 - Sentry events drop HTTP, fetch and console breadcrumbs and redact the configured RPC and database URLs.
