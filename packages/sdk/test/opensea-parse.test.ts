@@ -235,6 +235,14 @@ describe("parseDrop", () => {
     const ok = body("drops/inkverse-ii") as { stages: Record<string, unknown>[] }
     expect(parseDrop({ ...ok, stages: [{ ...ok.stages[0], price: "free" }] })).toBeNull()
     expect(parseDrop({ ...ok, stages: [{ ...ok.stages[0], start_time: "soon" }] })).toBeNull()
+    // A time that names no zone would depend on the host's timezone.
+    expect(
+      parseDrop({ ...ok, stages: [{ ...ok.stages[0], start_time: "2026-10-14T18:54:47" }] }),
+    ).toBeNull()
+    expect(
+      parseDrop({ ...ok, stages: [{ ...ok.stages[0], start_time: "2026-10-14T18:54:47+02:00" }] })
+        ?.stages[0]?.startTime,
+    ).toBe(Date.parse("2026-10-14T16:54:47Z") / 1000)
     for (const bad of [null, undefined, 1, "x", [], {}]) expect(parseDrop(bad)).toBeNull()
   })
 

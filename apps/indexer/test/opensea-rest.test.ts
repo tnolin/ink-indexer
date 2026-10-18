@@ -197,6 +197,90 @@ describe("OpenSeaRest.get", () => {
   })
 })
 
+describe("response bodies", () => {
+  /** A fetch whose body stream records whether it was cancelled. */
+  function tracked(status: number, headers?: Record<string, string>) {
+    const state = { cancelled: false }
+    const f = (async () =>
+      new Response(
+        new ReadableStream({
+          start: (c) => {
+            c.enqueue(new TextEncoder().encode('{"errors":["x"]}'))
+            c.close()
+          },
+          cancel: () => {
+            state.cancelled = true
+          },
+        }),
+        { status, headers },
+      )) as unknown as typeof fetch
+    return { state, f }
+  }
+  const make = (f: typeof fetch, budget?: Budget) =>
+    createOpenSeaRest({
+      key: KEY,
+      budget: budget ?? { take: async () => true, block: async () => {} },
+      fetch: f,
+      log: () => {},
+      report: () => {},
+    })
+
+  it.each([404, 401, 403, 429, 500, 400])(
+    "a %i body is cancelled, not left open",
+    async (status) => {
+      const { state, f } = tracked(status)
+      await make(f).get("/x", 2, (j) => j)
+      expect(state.cancelled).toBe(true)
+    },
+  )
+
+  it("a 200 body is read to the end", async () => {
+    const { state, f } = tracked(200)
+    expect(await make(f).get("/x", 2, (j) => j)).toEqual({ ok: true, value: { errors: ["x"] } })
+    expect(state.cancelled).toBe(false)
+  })
+})
+
+describe("side effects do not hide the reason", () => {
+  it("a throwing reporter or logger still gives rejected", async () => {
+    const rest = createOpenSeaRest({
+      key: KEY,
+      budget: { take: async () => true, block: async () => {} },
+      fetch: fakeFetch({ "/x": { status: 401 } }),
+      log: () => {
+        throw new Error("log down")
+      },
+      report: () => {
+        throw new Error("report down")
+      },
+    })
+    expect(await rest.get("/x", 2, (j) => j)).toEqual({ ok: false, reason: "rejected" })
+  })
+
+  it("a failing block write still gives rate_limited", async () => {
+    const s = setup({
+      routes: { "/x": { status: 429 } },
+      budget: {
+        take: async () => true,
+        block: async () => {
+          throw new Error("connection terminated")
+        },
+      },
+    })
+    expect(await s.rest.get("/x", 2, (j) => j)).toEqual({ ok: false, reason: "rate_limited" })
+  })
+
+  it("an empty Retry-After is the 60 second default", async () => {
+    const block = vi.fn(async (_ms: number) => {})
+    const s = setup({
+      routes: { "/x": { status: 429, headers: { "retry-after": "" } } },
+      budget: { take: async () => true, block },
+    })
+    await s.rest.get("/x", 2, (j) => j)
+    expect(block).toHaveBeenCalledWith(60_000)
+  })
+})
+
 describe("the key", () => {
   it("never appears in a log line, a report or an error, even when fetch echoes it", async () => {
     const echo = (status: number): FakeResponse => ({

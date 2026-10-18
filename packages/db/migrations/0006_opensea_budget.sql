@@ -8,7 +8,7 @@ create table indexer.opensea_budget (
   refill_per_s double precision not null,
   updated_at timestamptz not null default now(),
   -- No request may be made before this time (set after a 429).
-  blocked_until timestamptz not null default '-infinity'
+  blocked_until timestamptz not null default 'epoch'
 );
 insert into indexer.opensea_budget (id, tokens, capacity, refill_per_s) values (1, 500, 500, 500 / 3600.0);
 
@@ -32,7 +32,9 @@ end $$;
 -- the milliseconds to wait (at least 50) until both a token above the class floor and the end of any
 -- block are available. A class may only draw the bucket down to its floor, a share of capacity kept
 -- for the classes above it: 0 bot 0, 1 ranks 5%, 2 discovery and drops 10%, 3 stats 25%, 4 background 50%.
--- The row is locked and updated in one statement, so concurrent callers never take the same token.
+-- The row is locked and updated in one statement, so concurrent callers never take the same token:
+-- the `for update` read waits for any other caller, then sees its committed row, and the update
+-- writes the decision made on that row.
 create function indexer.opensea_take(class int) returns int
 language plpgsql security definer set search_path = indexer, pg_temp as $$
 declare
@@ -63,7 +65,7 @@ begin
       greatest(
         case when avail - 1 >= floor_tokens then 0
           else coalesce((floor_tokens + 1 - avail) / nullif(refill_per_s, 0) * 1000, 3600000) end,
-        extract(epoch from blocked_until - ts) * 1000,
+        case when blocked_until > ts then extract(epoch from blocked_until - ts) * 1000 else 0 end,
         0
       ) as wait
     from calc
@@ -78,11 +80,11 @@ begin
   return wait_ms;
 end $$;
 
--- Stops every class until ms from now. A shorter block never replaces a longer one.
+-- Stops every class until ms from now, at most an hour. A shorter block never replaces a longer one.
 create function indexer.opensea_block(ms int) returns void
 language sql security definer set search_path = indexer, pg_temp as $$
   update opensea_budget set
-    blocked_until = greatest(blocked_until, clock_timestamp() + greatest(ms, 0) * interval '1 millisecond')
+    blocked_until = greatest(blocked_until, clock_timestamp() + least(greatest(ms, 0), 3600000) * interval '1 millisecond')
   where id = 1
 $$;
 

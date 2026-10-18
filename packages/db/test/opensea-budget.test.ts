@@ -20,7 +20,7 @@ async function setBudget(
     update indexer.opensea_budget set
       tokens = ${tokens}, capacity = ${capacity}, refill_per_s = ${refillPerS},
       updated_at = now() - ${extra.idleSeconds ?? 0} * interval '1 second',
-      blocked_until = '-infinity'`
+      blocked_until = 'epoch'`
 }
 const take = async (db: Sql, c: number) =>
   (await db<{ w: number }[]>`select indexer.opensea_take(${c}) as w`)[0]!.w
@@ -63,6 +63,24 @@ it("class 4 stops at 50%, class 0 drains to 0", async () => {
   while ((await take(sql, 0)) === 0) n0++
   expect(n0).toBe(50)
   expect(await tokens()).toBeCloseTo(0, 6)
+})
+
+it("opensea_block never blocks for more than an hour", async () => {
+  await setBudget(100)
+  await sql`select indexer.opensea_block(2147483647)`
+  const [row] = await sql<{ left: number }[]>`
+    select extract(epoch from blocked_until - now())::float8 as left from indexer.opensea_budget`
+  expect(row!.left).toBeGreaterThan(3500)
+  expect(row!.left).toBeLessThanOrEqual(3600)
+  await sql`select indexer.opensea_block(-5)` // negative is no block
+  expect(await take(sql, 0)).toBeLessThanOrEqual(3_600_000)
+})
+
+it("the budget starts unblocked, with a finite blocked_until", async () => {
+  const [row] = await sql<
+    { b: string }[]
+  >`select blocked_until::text as b from indexer.opensea_budget`
+  expect(row!.b).toMatch(/1970-01-01/)
 })
 
 it("each class stops at its own floor", async () => {

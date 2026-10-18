@@ -30,6 +30,7 @@ export type OsStats = {
   owners: number | null
   volume24hWei: bigint | null
   sales24h: number | null
+  /** Always null today: the stats endpoint does not carry it; read it from the collection. */
   totalSupply: number | null
 }
 
@@ -157,19 +158,25 @@ export function parseStats(j: unknown): OsStats | null {
   }
 }
 
+/** Unix seconds from an ISO time that names its zone (Z or an offset), else null. */
+function unixSeconds(v: unknown): number | null {
+  if (typeof v !== "string" || !/(Z|[+-]\d\d:?\d\d)$/i.test(v)) return null
+  const ms = Date.parse(v)
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000)
+}
+
 function parseStage(j: unknown): OsDropStage | null {
   const o = obj(j)
   if (!o) return null
-  const start = typeof o.start_time === "string" ? Date.parse(o.start_time) : Number.NaN
+  const start = unixSeconds(o.start_time)
   const priceWei = big(o.price)
-  if (Number.isNaN(start) || priceWei === null) return null
-  const end = typeof o.end_time === "string" ? Date.parse(o.end_time) : Number.NaN
+  if (start === null || priceWei === null) return null
   return {
     type: str(o.stage_type) ?? "unknown",
     label: str(o.label) ?? "",
     priceWei,
-    startTime: Math.floor(start / 1000),
-    endTime: Number.isNaN(end) ? null : Math.floor(end / 1000),
+    startTime: start,
+    endTime: unixSeconds(o.end_time),
     maxPerWallet: num(o.max_per_wallet),
     allowlistCount: num(o.allowlist_wallet_count),
   }

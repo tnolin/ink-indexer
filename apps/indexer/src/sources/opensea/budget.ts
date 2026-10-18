@@ -18,12 +18,9 @@ export type Budget = {
  * calls (see migration 0006). `take` asks for a token and, if told to wait, sleeps that long and asks
  * again until it gets one or the wait would pass `maxWaitMs`.
  */
-export function createBudget(
-  sql: Sql,
-  clock: { now?: () => number; sleep?: (ms: number) => Promise<void> } = {},
-): Budget {
-  const now = clock.now ?? Date.now
-  const sleep = clock.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+export function createBudget(sql: Sql): Budget {
+  const now = Date.now
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
   return {
     async take(c, maxWaitMs) {
       const deadline = now() + maxWaitMs

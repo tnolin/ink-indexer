@@ -73,37 +73,47 @@ export function createOpenSeaRest(deps: {
           warn("opensea request failed", where, { error: scrub(err) })
           return { ok: false, reason: "error" }
         }
+        if (res.ok) {
+          try {
+            return { ok: true, value: parse(await res.json()) }
+          } catch (err) {
+            warn("opensea response unusable", where, { error: scrub(err) })
+            return { ok: false, reason: "error" }
+          }
+        }
+        // Nothing below reads the body; cancel it so the connection goes back to the pool.
+        await res.body?.cancel().catch(() => {})
         if (res.status === 404) return { ok: false, reason: "not_found" }
         if (res.status === 401 || res.status === 403) {
           const t = now()
           if (rejectedAt === undefined || t - rejectedAt >= REJECTED_REPORT_EVERY_MS) {
             rejectedAt = t
-            log("error", "opensea key rejected", { status: res.status })
-            report(new Error(`opensea key rejected (HTTP ${res.status})`))
+            // A failing logger or reporter must not hide the reason.
+            try {
+              log("error", "opensea key rejected", { status: res.status })
+              report(new Error(`opensea key rejected (HTTP ${res.status})`))
+            } catch {}
           }
           return { ok: false, reason: "rejected" }
         }
         if (res.status === 429) {
-          // shortcut: only a Retry-After in seconds is read; an HTTP-date falls back to 60 s. Parse the date form if OpenSea starts sending it.
-          const secs = Number(res.headers.get("retry-after"))
+          // shortcut: only a Retry-After in seconds is read; an HTTP-date or an empty value falls back to 60 s. Parse the date form if OpenSea starts sending it.
+          const header = res.headers.get("retry-after")?.trim()
+          const secs = header ? Number(header) : Number.NaN
           const ms =
-            res.headers.get("retry-after") !== null && Number.isFinite(secs) && secs >= 0
+            Number.isFinite(secs) && secs >= 0
               ? Math.min(Math.max(secs * 1000, MIN_BLOCK_MS), MAX_BLOCK_MS)
               : DEFAULT_RETRY_MS
-          await budget.block(ms)
+          try {
+            await budget.block(ms)
+          } catch (err) {
+            warn("opensea block not recorded", where, { error: scrub(err) })
+          }
           warn("opensea rate limited", where, { blockedMs: ms })
           return { ok: false, reason: "rate_limited" }
         }
-        if (!res.ok) {
-          warn("opensea request failed", where, { status: res.status })
-          return { ok: false, reason: "error" }
-        }
-        try {
-          return { ok: true, value: parse(await res.json()) }
-        } catch (err) {
-          warn("opensea response unusable", where, { error: scrub(err) })
-          return { ok: false, reason: "error" }
-        }
+        warn("opensea request failed", where, { status: res.status })
+        return { ok: false, reason: "error" }
       } catch (err) {
         warn("opensea request failed", where, { error: scrub(err) })
         return { ok: false, reason: "error" }
