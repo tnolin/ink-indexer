@@ -1,4 +1,4 @@
-import type { NftEvent } from "@ink-indexer/events"
+import type { IndexerEvent, NftEvent } from "@ink-indexer/events"
 import { describe, expect, it } from "vitest"
 import { entityOf } from "../src/sources/source"
 
@@ -28,4 +28,12 @@ describe("entityOf", () => {
   ] as const)("returns the contract for %s", (type) => {
     expect(entityOf(nft(type))).toBe(contract)
   })
+
+  it.each(["launchpad.launch", "launchpad.trade", "launchpad.bond"] as const)(
+    "returns the token for %s",
+    (type) => {
+      const token = "0x00000000000000000000000000000000000000d1"
+      expect(entityOf({ type, token } as unknown as IndexerEvent)).toBe(token)
+    },
+  )
 })

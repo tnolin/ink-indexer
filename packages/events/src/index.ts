@@ -122,10 +122,12 @@ export type NftDropStage = {
   priceWei: string
   /** Unix seconds. */
   startTime: number
-  /** Unix seconds. */
-  endTime: number
-  maxPerWallet: number
-  allowlistCount: number
+  /** Unix seconds. Null when the stage has no end. */
+  endTime: number | null
+  /** Null when the stage has no per-wallet cap. */
+  maxPerWallet: number | null
+  /** Null for stages without an allowlist, such as the public sale. */
+  allowlistCount: number | null
 }
 
 export type NftDropEvent = NftBase & {

@@ -4,6 +4,7 @@ import {
   type IndexerEvent,
   type LaunchpadEvent,
   type NftCollectionEvent,
+  type NftDropEvent,
   type NftEvent,
   type NftListingEvent,
   type NftMintEvent,
@@ -56,6 +57,24 @@ describe("@ink-indexer/events", () => {
     expectTypeOf<NftMintEvent["stageCounts"]>().toEqualTypeOf<
       { stageIndex: number; label: string; minted: string }[] | undefined
     >()
+  })
+
+  it("markBps rejects a number outside 2500, 5000, 7500 or null", () => {
+    expectTypeOf<NftMintEvent["markBps"]>().toEqualTypeOf<2500 | 5000 | 7500 | null>()
+    const mark = (e: NftMintEvent) => {
+      e.markBps = 7500
+      e.markBps = null
+      // @ts-expect-error 3000 is not a milestone
+      e.markBps = 3000
+    }
+    expect(mark).toBeTypeOf("function")
+  })
+
+  it("a drop stage may have no end, cap or allowlist", () => {
+    type Stage = NftDropEvent["stages"][number]
+    expectTypeOf<Stage["endTime"]>().toEqualTypeOf<number | null>()
+    expectTypeOf<Stage["maxPerWallet"]>().toEqualTypeOf<number | null>()
+    expectTypeOf<Stage["allowlistCount"]>().toEqualTypeOf<number | null>()
   })
 
   it("IndexerEvent includes NftSaleEvent", () => {
