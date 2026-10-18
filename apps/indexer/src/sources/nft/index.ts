@@ -22,6 +22,13 @@ import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
 import type { EventRow, Source, SourceBatch } from "../source"
+import {
+  loadMilestoneContexts,
+  type MilestoneUpdate,
+  milestoneBlocks,
+  milestoneEvents,
+  type StageRow,
+} from "./milestones"
 import { TIMESTAMP_READ_CONCURRENCY } from "./policy"
 import { rollbackRows, writeRows } from "./write"
 
@@ -102,13 +109,17 @@ export type NftBatch = SourceBatch & {
   sales: SaleRow[]
   launches: LaunchRow[]
   collections: CollectionTouch[]
+  /** Stages whose first mint is in this batch. */
+  stages: StageRow[]
+  /** Per SeaDrop contract that had mint stats: the state the milestones leave it in. */
+  milestones: MilestoneUpdate[]
   /** Every contract in `collections`: those with a mint, a burn, a SeaDrop log or a launch. */
   touched: Address[]
 }
 
 export type NftDeps = {
   sql: Sql
-  chain: Pick<Chain, "getBlock">
+  chain: Pick<Chain, "getBlock" | "readMintStats">
   logger: Logger
 }
 
@@ -137,7 +148,7 @@ export function nftSource(deps: NftDeps): Source<NftBatch, null> {
   return {
     name: "nft",
     filters: () => FILTERS,
-    process: (logs) => processLogs(logs, deps),
+    process: (logs, ctx) => processLogs(logs, deps, ctx.toBlock),
     write: writeRows,
     prepareRollback: async () => null,
     rollback: (tx, fork) => rollbackRows(tx, fork),
@@ -148,7 +159,11 @@ export function nftSource(deps: NftDeps): Source<NftBatch, null> {
 
 const s = (x: bigint) => x.toString()
 
-export async function processLogs(logs: ChainLog[][], deps: NftDeps): Promise<NftBatch> {
+export async function processLogs(
+  logs: ChainLog[][],
+  deps: NftDeps,
+  toBlock: bigint,
+): Promise<NftBatch> {
   const { logger } = deps
   const empty: ChainLog[] = []
   const at = (i: number) => logs[i] ?? empty
@@ -273,9 +288,11 @@ export async function processLogs(logs: ChainLog[][], deps: NftDeps): Promise<Nf
     const b = firstMintBlock.get(m.contract)
     if (b === undefined || m.block < b) firstMintBlock.set(m.contract, m.block)
   }
+  const milestoneContexts = await loadMilestoneContexts(deps.sql, seadropMints)
   const wanted = new Set<bigint>([
     ...firstMintBlock.values(),
     ...saleLogs.map((x) => x.log.blockNumber),
+    ...milestoneBlocks(milestoneContexts),
   ])
   const times = await blockTimestamps(deps.chain, [...wanted])
 
@@ -312,6 +329,15 @@ export async function processLogs(logs: ChainLog[][], deps: NftDeps): Promise<Nf
     }
   }
 
+  const milestones = await milestoneEvents(milestoneContexts, deps, {
+    toBlock,
+    times,
+    blockHash: (block) => hashes.get(block)!,
+    mints,
+    collections: [...collections.values()],
+  })
+  events.push(...milestones.events)
+
   return {
     events,
     blocks: [...hashes].map(([number, hash]) => ({ number, hash })),
@@ -322,6 +348,8 @@ export async function processLogs(logs: ChainLog[][], deps: NftDeps): Promise<Nf
     sales,
     launches,
     collections: [...collections.values()],
+    stages: milestones.stages,
+    milestones: milestones.updates,
     touched: [...collections.keys()],
   }
 }

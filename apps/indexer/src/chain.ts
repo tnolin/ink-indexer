@@ -2,8 +2,10 @@ import {
   type ChainLog,
   type LaunchKey,
   type LaunchState,
+  type NftReader,
   readErc20Meta,
   readLaunchStates,
+  readMintStats,
   readTotalSupplies,
   type StateReader,
 } from "@ink-indexer/sdk"
@@ -25,6 +27,12 @@ export type Chain = {
   readLaunchStates(keys: LaunchKey[], block: bigint): Promise<LaunchState[]>
   readTotalSupplies(tokens: Address[], block: bigint): Promise<bigint[]>
   readErc20Meta(token: Address): Promise<{ decimals: number; symbol: string }>
+  /** SeaDrop-style `getMintStats` at a block. null when the contract has no such function. */
+  readMintStats(
+    contract: Address,
+    minter: Address,
+    block: bigint,
+  ): Promise<{ totalSupply: bigint; maxSupply: bigint } | null>
 }
 
 /** The slice of a PublicClient that viemChain reads blocks with. Structural, so chain-specific block shapes (Ink's deposit transactions) still fit. */
@@ -77,7 +85,7 @@ async function retryOnTransportError<T>(
 }
 
 export function viemChain(
-  client: StateReader & BlockReader,
+  client: StateReader & NftReader & BlockReader,
   router: LogRouter,
   opts: {
     logger?: Logger
@@ -105,5 +113,7 @@ export function viemChain(
     readTotalSupplies: (tokens, block) =>
       retry("readTotalSupplies", () => readTotalSupplies(client, tokens, block)),
     readErc20Meta: (token) => retry("readErc20Meta", () => readErc20Meta(client, token)),
+    readMintStats: (contract, minter, block) =>
+      retry("readMintStats", () => readMintStats(client, contract, minter, block)),
   }
 }

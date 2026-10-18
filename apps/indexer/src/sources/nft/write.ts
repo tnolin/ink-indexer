@@ -123,6 +123,23 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
   for (const part of chunks(batch.launches.map(launchRecord)))
     await tx`insert into indexer.nft_launches ${tx(part)} on conflict do nothing`
 
+  // Milestones: stages first seen, and where each contract's marks and sell-out stand.
+  const stage = (r: NftBatch["stages"][number]) => ({
+    contract: r.contract,
+    stage_index: r.index,
+    first_block: s(r.block),
+    first_ts: new Date(r.ts * 1000),
+  })
+  for (const part of chunks(batch.stages.map(stage)))
+    await tx`insert into indexer.nft_stages ${tx(part)} on conflict do nothing`
+  for (const m of batch.milestones)
+    await tx`
+      update indexer.nft_collections set
+        max_supply = ${s(m.maxSupply)},
+        last_mark_bps = greatest(last_mark_bps, ${m.lastMarkBps}),
+        sold_out_block = coalesce(sold_out_block, ${m.soldOutBlock === null ? null : s(m.soldOutBlock)})
+      where contract = ${m.contract}`
+
   // A sold item has no live listing.
   for (const part of chunks(batch.sales))
     await tx`
@@ -153,4 +170,17 @@ export async function rollbackRows(tx: Tx, fork: bigint) {
   await tx`
     update indexer.nft_collections set first_mint_block = null, first_mint_ts = null
     where first_mint_block > ${f}`
+
+  // Stages first seen above the fork start again on replay. A collection's marks and sell-out
+  // stand where the surviving `nft.mint` events leave them (the loop already deleted the rest).
+  await tx`delete from indexer.nft_stages where first_block > ${f}`
+  await tx`
+    update indexer.nft_collections c set
+      last_mark_bps = coalesce((
+        select max((e.payload->>'markBps')::int) from indexer.events e
+        where e.type = 'nft.mint' and e.entity = c.contract and e.payload->>'kind' = 'progress'), 0),
+      sold_out_block = (
+        select min(e.block) from indexer.events e
+        where e.type = 'nft.mint' and e.entity = c.contract and e.payload->>'kind' = 'sold_out')
+    where c.last_mark_bps > 0 or c.sold_out_block is not null`
 }

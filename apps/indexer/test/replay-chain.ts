@@ -110,4 +110,8 @@ export class ReplayChain implements Chain {
   async readErc20Meta(token: Address) {
     return this.answer<{ decimals: number; symbol: string }>("readErc20Meta", [token])
   }
+
+  async readMintStats(): Promise<null> {
+    throw new Error("readMintStats was not recorded")
+  }
 }

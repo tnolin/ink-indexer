@@ -23,6 +23,11 @@ export class FakeChain implements Chain {
   logs: ChainLog[] = []
   states = new Map<string, LaunchState>()
   supplies = new Map<string, bigint>()
+  /** Per contract, its mint stats at a block. A contract with no entry has no `getMintStats`. */
+  mintStats = new Map<
+    string,
+    (block: bigint) => { totalSupply: bigint; maxSupply: bigint } | null
+  >()
   erc20 = new Map<string, { decimals: number; symbol: string }>()
   stateReads: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
@@ -96,5 +101,9 @@ export class FakeChain implements Chain {
     const m = this.erc20.get(token)
     if (!m) throw new Error(`no fake erc20 for ${token}`)
     return m
+  }
+
+  async readMintStats(contract: Address, _minter: Address, block: bigint) {
+    return this.mintStats.get(contract)?.(block) ?? null
   }
 }
