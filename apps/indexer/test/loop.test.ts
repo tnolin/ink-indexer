@@ -1,8 +1,14 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import { INKYPUMP_START_BLOCK as S } from "@ink-indexer/sdk"
+import { type ChainLog, INKYPUMP_START_BLOCK as S } from "@ink-indexer/sdk"
+import { type Address, type Hash, type Hex, pad, toHex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
+import type { Chain } from "../src/chain"
+import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
+import type { LogFilter } from "../src/rpc"
+import { inkypumpSource } from "../src/sources/inkypump/index"
+import type { Source, Tx } from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 import { bond, HOOK, launch, launchIdOf, stateFor, tokenOf, trade, xstocksHook } from "./scenario"
@@ -15,14 +21,20 @@ beforeEach(async () => {
 })
 afterEach(() => sql.end())
 
+/** An indexer with only the InkyPump source registered. */
+function pumpIndexer(chain: Chain, s: Store, logger: Logger = () => {}) {
+  return new Indexer({
+    chain,
+    store: s,
+    logger,
+    sources: [inkypumpSource({ sql, chain, logger })],
+  })
+}
+
 async function indexerFor(chain: FakeChain) {
   const warnings: string[] = []
-  const idx = new Indexer({
-    chain,
-    store,
-    logger: (level, msg) => {
-      if (level === "warn") warnings.push(msg)
-    },
+  const idx = pumpIndexer(chain, store, (level, msg) => {
+    if (level === "warn") warnings.push(msg)
   })
   await idx.init()
   return { idx, warnings }
@@ -183,7 +195,7 @@ describe("Indexer", () => {
         return store.writeBatch(...args)
       },
     }
-    const idx = new Indexer({ chain, store: flaky, logger: () => {} })
+    const idx = pumpIndexer(chain, flaky)
     await idx.init()
     await expect(idx.trigger()).rejects.toThrow("db down")
     await idx.trigger()
@@ -264,12 +276,8 @@ describe("Indexer log and block endpoints disagreeing", () => {
     launch(chain, { n: 1, block: S + 10n })
     trade(chain, { n: 1, block: S + 15n, sold: 1n })
     const warnings: string[] = []
-    const idx = new Indexer({
-      chain,
-      store,
-      logger: (level, msg) => {
-        if (level === "warn") warnings.push(msg)
-      },
+    const idx = pumpIndexer(chain, store, (level, msg) => {
+      if (level === "warn") warnings.push(msg)
     })
     await idx.init()
     const getLogs = chain.getLogs.bind(chain)
@@ -317,8 +325,8 @@ describe("Indexer confirmation is atomic with inserts", () => {
     const seen: unknown[] = []
     const checking: Store = {
       ...store,
-      writeBatch: async (batch, opts) => {
-        await store.writeBatch(batch, opts)
+      writeBatch: async (batches, writers, opts) => {
+        await store.writeBatch(batches, writers, opts)
         seen.push(...(await violations(opts.head)), ...(await orderViolations()))
       },
     }
@@ -330,7 +338,7 @@ describe("Indexer confirmation is atomic with inserts", () => {
     launch(chain, { n: 1, block: S + 10n })
     trade(chain, { n: 1, block: S + 100n, sold: 1n }) // tip row, unconfirmed at head S+100
     const first = watched()
-    const idx1 = new Indexer({ chain, store: first.checking, logger: () => {} })
+    const idx1 = pumpIndexer(chain, first.checking)
     await idx1.init()
     await idx1.trigger()
     expect(
@@ -343,7 +351,7 @@ describe("Indexer confirmation is atomic with inserts", () => {
     trade(chain, { n: 1, block: S + 104n, sold: 3n })
     trade(chain, { n: 1, block: S + 106n, sold: 4n })
     const second = watched()
-    const idx2 = new Indexer({ chain, store: second.checking, logger: () => {} })
+    const idx2 = pumpIndexer(chain, second.checking)
     await idx2.init()
     await idx2.trigger()
     expect(second.seen).toEqual([])
@@ -355,7 +363,7 @@ describe("Indexer confirmation is atomic with inserts", () => {
     launch(chain, { n: 1, block: S + 10n })
     trade(chain, { n: 1, block: S + 100n, sold: 1n })
     const warm = watched()
-    const idx0 = new Indexer({ chain, store: warm.checking, logger: () => {} })
+    const idx0 = pumpIndexer(chain, warm.checking)
     await idx0.init()
     await idx0.trigger()
 
@@ -365,7 +373,7 @@ describe("Indexer confirmation is atomic with inserts", () => {
     trade(chain, { n: 1, block: S + 108n, sold: 3n })
     chain.nullOnce.add(S + 106n) // the third span's end block is not served
     const w = watched()
-    const idx = new Indexer({ chain, store: w.checking, logger: () => {} })
+    const idx = pumpIndexer(chain, w.checking)
     await idx.init()
     await idx.trigger() // aborted mid-way: earlier spans committed, no store.confirm ran
     expect(await store.getCursor()).toEqual({ block: S + 104n, hash: chain.hashOf(S + 104n) })
@@ -438,5 +446,218 @@ describe("Indexer in-memory cursor and head fetches", () => {
     await first.idx.trigger()
     const second = await indexerFor(chain)
     expect(second.idx.cursorBlock).toBe(S + 50n)
+  })
+})
+
+describe("Indexer over several sources", () => {
+  const A: Address = "0x00000000000000000000000000000000000000a1"
+  const B: Address = "0x00000000000000000000000000000000000000b1"
+  const T1 = pad("0x01", { size: 32 }) as Hex
+  const T2 = pad("0x02", { size: 32 }) as Hex
+  const filterA: LogFilter = { address: A, topics: [] }
+  const filterB1: LogFilter = { address: B, topics: [T1] }
+  const filterB2: LogFilter = { address: B, topics: [T2] }
+
+  let n = 0
+  const log = (address: Address, topic: Hex, block: bigint): ChainLog => ({
+    address,
+    topics: [topic],
+    data: "0x",
+    blockNumber: block,
+    blockHash: "0x00",
+    transactionHash: pad(toHex(0xab0000 + ++n), { size: 32 }) as Hash,
+    logIndex: 0,
+  })
+
+  beforeEach(async () => {
+    await sql`create table indexer.fake_writes (source text not null, block bigint not null)`
+  })
+
+  /** A source that records every call in `calls` and writes its log blocks to fake_writes. */
+  function fakeSource(name: string, filters: LogFilter[], calls: string[], failWrite = false) {
+    const seen: { logs: ChainLog[][]; toBlock: bigint }[] = []
+    const rollbackTxs: Tx[] = []
+    const source: Source<{ events: []; blocks: { number: bigint; hash: Hash }[] }, string> = {
+      name,
+      filters: () => filters,
+      async process(logs, ctx) {
+        seen.push({ logs, toBlock: ctx.toBlock })
+        const blocks = new Map(logs.flat().map((l) => [l.blockNumber, l.blockHash]))
+        return { events: [], blocks: [...blocks].map(([number, hash]) => ({ number, hash })) }
+      },
+      async write(tx, batch) {
+        calls.push(`${name}.write`)
+        if (failWrite) throw new Error(`${name} write failed`)
+        for (const b of batch.blocks)
+          await tx`insert into indexer.fake_writes values (${name}, ${b.number.toString()})`
+      },
+      async prepareRollback(fork) {
+        calls.push(`${name}.prepare:${fork - S}`)
+        return `${name}-prepared`
+      },
+      async rollback(tx, fork, prepared) {
+        calls.push(`${name}.rollback:${fork - S}:${prepared}`)
+        rollbackTxs.push(tx)
+        await tx`delete from indexer.fake_writes where source = ${name} and block > ${fork.toString()}`
+      },
+      async reload() {
+        calls.push(`${name}.reload`)
+      },
+    }
+    return { source, seen, rollbackTxs }
+  }
+
+  /** Records [from - S, to - S, filter] for every getLogs call. */
+  function recordGetLogs(chain: FakeChain) {
+    const recorded: [bigint, bigint, LogFilter][] = []
+    const getLogs = chain.getLogs.bind(chain)
+    chain.getLogs = async (from, to, filter) => {
+      recorded.push([from - S, to - S, filter])
+      return getLogs(from, to, filter)
+    }
+    return recorded
+  }
+
+  const fakeWrites = async () =>
+    (
+      await sql<{ source: string; block: bigint }[]>`
+        select source, block from indexer.fake_writes order by source, block`
+    ).map((r) => `${r.source}:${r.block - S}`)
+
+  it("runs every source's filters over the same range and moves one cursor", async () => {
+    const chain = new FakeChain(S + 20n)
+    const la = log(A, T1, S + 5n)
+    const lb1 = log(B, T1, S + 7n)
+    const lb2 = log(B, T2, S + 15n)
+    for (const l of [la, lb1, lb2]) chain.add(l)
+    const recorded = recordGetLogs(chain)
+    const calls: string[] = []
+    const a = fakeSource("a", [filterA], calls)
+    const b = fakeSource("b", [filterB1, filterB2], calls)
+    const idx = new Indexer({ chain, store, logger: () => {}, sources: [a.source, b.source] })
+    await idx.init()
+    await idx.trigger()
+
+    expect(recorded).toEqual([
+      [0n, 20n, filterA],
+      [0n, 20n, filterB1],
+      [0n, 20n, filterB2],
+    ])
+    const hashed = (l: ChainLog) => ({ ...l, blockHash: chain.hashOf(l.blockNumber) })
+    expect(a.seen).toEqual([{ logs: [[hashed(la)]], toBlock: S + 20n }])
+    expect(b.seen).toEqual([{ logs: [[hashed(lb1)], [hashed(lb2)]], toBlock: S + 20n }])
+    expect(calls).toEqual(["a.reload", "b.reload", "a.write", "b.write"])
+    expect(await fakeWrites()).toEqual(["a:5", "b:7", "b:15"])
+    expect(await sql`select source, block from indexer.cursors`).toEqual([
+      { source: "inkypump", block: S + 20n },
+    ])
+    expect((await store.recentBlocks()).map((r) => r.number - S)).toEqual([20n, 15n, 7n, 5n])
+    expect(idx.cursorBlock).toBe(S + 20n)
+  })
+
+  it("clamps the range to the smallest toBlock any filter returned and drops logs above it", async () => {
+    const chain = new FakeChain(S + 20n)
+    const early = log(A, T1, S + 5n)
+    const late = log(A, T1, S + 15n)
+    chain.add(early)
+    chain.add(late)
+    const recorded = recordGetLogs(chain)
+    const recording = chain.getLogs
+    // The transport serving filterB1 has only seen up to S + 10 on the first span.
+    chain.getLogs = async (from, to, filter) => {
+      const r = await recording(from, to, filter)
+      if (filter !== filterB1 || from > S + 10n) return r
+      const toBlock = S + 10n < to ? S + 10n : to
+      return { logs: r.logs.filter((l) => l.blockNumber <= toBlock), toBlock }
+    }
+    const calls: string[] = []
+    const a = fakeSource("a", [filterA], calls)
+    const b = fakeSource("b", [filterB1, filterB2], calls)
+    const idx = new Indexer({ chain, store, logger: () => {}, sources: [a.source, b.source] })
+    await idx.init()
+    await idx.trigger()
+
+    expect(recorded).toEqual([
+      [0n, 20n, filterA],
+      [0n, 20n, filterB1],
+      [0n, 10n, filterB2],
+      [11n, 20n, filterA],
+      [11n, 20n, filterB1],
+      [11n, 20n, filterB2],
+    ])
+    const hashed = (l: ChainLog) => ({ ...l, blockHash: chain.hashOf(l.blockNumber) })
+    expect(a.seen).toEqual([
+      { logs: [[hashed(early)]], toBlock: S + 10n },
+      { logs: [[hashed(late)]], toBlock: S + 20n },
+    ])
+    expect(b.seen.map((s) => s.toBlock)).toEqual([S + 10n, S + 20n])
+    expect(await fakeWrites()).toEqual(["a:5", "a:15"])
+    expect(await store.getCursor()).toEqual({ block: S + 20n, hash: chain.hashOf(S + 20n) })
+  })
+
+  it("a failing source write rolls back the whole batch and calls reload on every source", async () => {
+    const chain = new FakeChain(S + 20n)
+    launch(chain, { n: 1, block: S + 10n })
+    chain.add(log(A, T1, S + 12n))
+    const calls: string[] = []
+    const a = fakeSource("a", [filterA], calls)
+    const b = fakeSource("b", [filterB1], calls, true)
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: () => {},
+      sources: [inkypumpSource({ sql, chain, logger: () => {} }), a.source, b.source],
+    })
+    await idx.init()
+    await expect(idx.trigger()).rejects.toThrow("b write failed")
+
+    expect(calls).toEqual(["a.reload", "b.reload", "a.write", "b.write", "a.reload", "b.reload"])
+    expect([await count("events"), await count("tokens"), await count("recent_blocks")]).toEqual([
+      0, 0, 0,
+    ])
+    expect(await fakeWrites()).toEqual([])
+    expect(await store.getCursor()).toBeNull()
+    expect(idx.cursorBlock).toBeNull()
+  })
+
+  it("rollback calls prepareRollback outside and rollback inside one transaction for every source", async () => {
+    const chain = new FakeChain(S + 20n)
+    chain.add(log(A, T1, S + 5n))
+    chain.add(log(B, T1, S + 10n))
+    const calls: string[] = []
+    const a = fakeSource("a", [filterA], calls)
+    const b = fakeSource("b", [filterB1], calls)
+    const warnings: string[] = []
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: (level, msg) => {
+        if (level === "warn") warnings.push(msg)
+      },
+      sources: [a.source, b.source],
+    })
+    await idx.init()
+    await idx.trigger()
+    expect(await fakeWrites()).toEqual(["a:5", "b:10"])
+
+    chain.reorg(S + 8n) // S + 10 and S + 20 change hash; S + 5 is the fork block
+    calls.length = 0
+    await idx.trigger()
+
+    expect(calls).toEqual([
+      "a.prepare:5",
+      "b.prepare:5",
+      "a.rollback:5:a-prepared",
+      "b.rollback:5:b-prepared",
+      "a.reload",
+      "b.reload",
+      "a.write",
+      "b.write",
+    ])
+    expect(a.rollbackTxs).toHaveLength(1)
+    expect(b.rollbackTxs[0]).toBe(a.rollbackTxs[0])
+    expect(warnings).toContain("reorg: rolled back to fork block")
+    expect(await fakeWrites()).toEqual(["a:5"])
+    expect(await store.getCursor()).toEqual({ block: S + 20n, hash: chain.hashOf(S + 20n) })
   })
 })

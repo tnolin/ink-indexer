@@ -6,6 +6,7 @@ import { Indexer } from "./loop"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
+import { inkypumpSource } from "./sources/inkypump/index"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 
@@ -44,10 +45,12 @@ let indexer: Indexer
 try {
   await migrate(sql)
   rpc = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
+  const chain = viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping })
   indexer = new Indexer({
-    chain: viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping }),
+    chain,
     store,
     logger: log,
+    sources: [inkypumpSource({ sql, chain, logger: log })],
   })
   await indexer.init()
 } catch (err) {

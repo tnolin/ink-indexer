@@ -1,18 +1,12 @@
-import { curveValue, INKYPUMP_START_BLOCK, LOG_TOPICS, progressBps } from "@ink-indexer/sdk"
+import { type ChainLog, INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import type { Chain } from "./chain"
 import { BlockNotServedError } from "./errors"
 import type { Logger } from "./log"
-import type { LogFilter } from "./rpc"
-import { HookRegistry, nativeHookRows } from "./sources/inkypump/hooks"
-import { type Batch, type CurveRow, curveMarketCap, processLogs } from "./sources/inkypump/index"
+import type { Source, SourceBatch } from "./sources/source"
 import type { Cursor, Store } from "./store"
 
-/** Every InkyPump event: one topic0 position matching any of the event signatures. */
-const INKYPUMP_LOG_FILTER: LogFilter = { topics: [LOG_TOPICS] }
-
 export class Indexer {
-  private registry = new HookRegistry([])
   private running: Promise<void> | null = null
   private again = false
   /** The chain head the last tick started from; undefined before the first tick. */
@@ -24,11 +18,12 @@ export class Indexer {
   /** The stored cursor block, kept in memory so liveness checks never wait on the database. */
   cursorBlock: bigint | null | undefined
 
-  constructor(private readonly deps: { chain: Chain; store: Store; logger: Logger }) {}
+  constructor(
+    private readonly deps: { chain: Chain; store: Store; logger: Logger; sources: Source[] },
+  ) {}
 
   async init() {
-    await this.deps.store.seedHooks(nativeHookRows())
-    await this.reloadHooks()
+    await this.reloadSources()
     this.cursorBlock = (await this.deps.store.getCursor())?.block ?? null
   }
 
@@ -60,6 +55,8 @@ export class Indexer {
     try {
       await this.checkReorg()
       const cursor = await store.getCursor()
+      // shortcut: a fresh database starts every source at InkyPump's start block. A source with
+      // older history needs a per-source start block, and a backfill for the range it missed.
       let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
       while (from <= head) from = (await this.ingest(from, head, head, true)) + 1n
       await store.confirm(head)
@@ -82,39 +79,57 @@ export class Indexer {
     head: bigint,
     moveCursor: boolean,
   ): Promise<bigint> {
-    const { chain, store, logger } = this.deps
-    const { logs, toBlock } = await chain.getLogs(from, to, INKYPUMP_LOG_FILTER)
-    let batch: Batch
+    const { chain, store, logger, sources } = this.deps
+    // Every filter covers the same range. A transport may serve less than asked, so each call asks
+    // up to the lowest end returned so far, and logs above the final end are dropped.
+    let toBlock = to
+    const fetched: ChainLog[][][] = []
+    for (const source of sources) {
+      const perFilter: ChainLog[][] = []
+      for (const filter of source.filters()) {
+        const r = await chain.getLogs(from, toBlock, filter)
+        if (r.toBlock < toBlock) toBlock = r.toBlock
+        perFilter.push(r.logs)
+      }
+      fetched.push(perFilter)
+    }
+    const logs = fetched.map((perFilter) =>
+      perFilter.map((ls) => ls.filter((l) => l.blockNumber <= toBlock)),
+    )
+    let events = 0
     try {
-      batch = await processLogs(logs, {
-        chain,
-        registry: this.registry,
-        logger,
-        loadLaunches: (keys) => store.loadLaunches(keys),
-      })
+      const batches: SourceBatch[] = []
+      for (const [i, source] of sources.entries())
+        batches.push(await source.process(logs[i]!, { toBlock }))
       let cursor: Cursor | null = null
       if (moveCursor) {
         const end = await chain.getBlock(toBlock)
         if (!end) throw new BlockNotServedError(toBlock)
         // The logs and the block hash may come from different endpoints. If the newest log block
         // no longer has the hash its logs reported, a reorg landed between the two calls.
-        const newest = batch.blocks.reduce<Batch["blocks"][number] | undefined>(
-          (a, b) => (!a || b.number > a.number ? b : a),
-          undefined,
-        )
+        const newest = batches
+          .flatMap((b) => b.blocks)
+          .reduce<SourceBatch["blocks"][number] | undefined>(
+            (a, b) => (!a || b.number > a.number ? b : a),
+            undefined,
+          )
         if (newest && (await this.blockHash(newest.number)) !== newest.hash)
           throw new BlockNotServedError(newest.number)
         cursor = { block: toBlock, hash: end.hash }
       }
-      await store.writeBatch(batch, { cursor, head })
+      await store.writeBatch(
+        batches,
+        sources.map((source, i) => (tx) => source.write(tx, batches[i]!)),
+        { cursor, head },
+      )
       if (cursor) this.cursorBlock = cursor.block
+      events = batches.reduce((n, b) => n + b.events.length, 0)
     } catch (err) {
-      // processLogs registers new hooks in memory before they are persisted; drop that state.
-      await this.reloadHooks()
+      // Sources may hold in-memory state (new hooks) for rows that were never written; drop it.
+      await this.reloadSources()
       throw err
     }
-    if (batch.events.length > 0)
-      logger("info", "ingested", { from, to: toBlock, events: batch.events.length })
+    if (events > 0) logger("info", "ingested", { from, to: toBlock, events })
     return toBlock
   }
 
@@ -142,34 +157,21 @@ export class Indexer {
   }
 
   private async rollback(fork: bigint, forkHash: Hash) {
-    const { chain, store, logger } = this.deps
-    const launches = await store.launchesToRefresh(fork)
-    const states =
-      launches.length > 0
-        ? await chain.readLaunchStates(
-            launches.map((l) => ({ hook: l.hook, launchId: l.launchId })),
-            fork,
-          )
-        : []
-    const refreshed: CurveRow[] = launches.map((l, i) => {
-      const sold = states[i]!.sold
-      const value = curveValue(l.params, sold)
-      return {
-        token: l.token,
-        progressBps: progressBps(value, l.params.targetRaise),
-        curveValue: value,
-        target: l.params.targetRaise,
-        marketCap: curveMarketCap(l, sold),
-        updatedBlock: fork,
-      }
-    })
-    await store.rollback(fork, forkHash, refreshed)
+    const { store, logger, sources } = this.deps
+    // Network reads first, so the transaction holds no locks while waiting on the chain.
+    const prepared: unknown[] = []
+    for (const source of sources) prepared.push(await source.prepareRollback(fork))
+    await store.rollback(
+      fork,
+      forkHash,
+      sources.map((source, i) => (tx) => source.rollback(tx, fork, prepared[i])),
+    )
     this.cursorBlock = fork
-    await this.reloadHooks()
-    logger("warn", "reorg: rolled back to fork block", { fork, refreshed: refreshed.length })
+    await this.reloadSources()
+    logger("warn", "reorg: rolled back to fork block", { fork })
   }
 
-  private async reloadHooks() {
-    this.registry = new HookRegistry(await this.deps.store.loadHooks(), this.deps.logger)
+  private async reloadSources() {
+    for (const source of this.deps.sources) await source.reload()
   }
 }

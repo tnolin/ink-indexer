@@ -6,7 +6,11 @@ afterAll(() => sql.end())
 
 it("applies migrations to an empty database, then does nothing on a second run", async () => {
   await sql`drop schema if exists indexer cascade`
-  expect(await migrate(sql)).toEqual(["0001_init.sql", "0002_events_bot_indexes.sql"])
+  expect(await migrate(sql)).toEqual([
+    "0001_init.sql",
+    "0002_events_bot_indexes.sql",
+    "0003_events_sub.sql",
+  ])
   expect(await migrate(sql)).toEqual([])
   const tables = await sql<{ table_name: string }[]>`
     select table_name from information_schema.tables where table_schema = 'indexer' order by 1`
@@ -20,4 +24,28 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "tokens",
     "trades",
   ])
+})
+
+it("0003 allows two events per log with different sub", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const row = (sub: string) => ({
+    type: "nft.sale",
+    entity: "0x00000000000000000000000000000000000000c0",
+    payload: sql.json({}),
+    block: "1",
+    block_hash: "0x01",
+    tx_hash: "0xaa",
+    log_index: 0,
+    confirmed: false,
+    sub,
+  })
+  await sql`insert into indexer.events ${sql(row(""))}`
+  await sql`insert into indexer.events ${sql(row("sale:1"))}`
+  await expect(sql`insert into indexer.events ${sql(row(""))}`).rejects.toThrow(
+    /duplicate key value violates unique constraint/,
+  )
+  const inserted = await sql`
+    insert into indexer.events ${sql(row(""))} on conflict (tx_hash, log_index, sub) do nothing returning id`
+  expect(inserted).toEqual([])
 })

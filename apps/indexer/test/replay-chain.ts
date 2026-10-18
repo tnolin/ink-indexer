@@ -51,6 +51,8 @@ const stringify = (v: unknown) =>
  */
 export class ReplayChain implements Chain {
   private readonly answers = new Map<string, unknown>()
+  private readonly asked = new Set<string>()
+  private readonly served = new Set<ChainLog>()
 
   constructor(private readonly calls: RecordedCalls = loadCalls()) {
     for (const c of calls.getBlock) this.answers.set(`getBlock:${stringify([c.block])}`, c.result)
@@ -65,6 +67,7 @@ export class ReplayChain implements Chain {
   private answer<T>(method: string, args: unknown[]): T {
     const key = `${method}:${stringify(args)}`
     if (!this.answers.has(key)) throw new Error(`no recorded answer for ${key}`)
+    this.asked.add(key)
     return this.answers.get(key) as T
   }
 
@@ -83,7 +86,17 @@ export class ReplayChain implements Chain {
     const logs = this.calls.logs.filter(
       (l) => l.blockNumber >= from && l.blockNumber <= toBlock && matchesFilter(l, filter),
     )
+    for (const l of logs) this.served.add(l)
     return { logs, toBlock }
+  }
+
+  /** Recorded answers never asked for, and recorded logs never returned. Empty when the run used the whole recording. */
+  unused(): string[] {
+    const answers = [...this.answers.keys()].filter((k) => !this.asked.has(k))
+    const logs = this.calls.logs
+      .filter((l) => !this.served.has(l))
+      .map((l) => `log:${l.transactionHash}:${l.logIndex}`)
+    return [...answers, ...logs]
   }
 
   async readLaunchStates(keys: LaunchKey[], block: bigint) {

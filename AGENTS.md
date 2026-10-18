@@ -31,5 +31,5 @@ xStocks hooks are discovered on-chain. For a new native hook (the indexer logs "
 
 1. Decoders and pure event builders go in `packages/sdk/src/<protocol>/`, tested against captured mainnet fixtures.
 2. New event types go in `packages/events` (a new schema version if an existing shape changes).
-3. Ingestion goes in `apps/indexer/src/sources/<protocol>/`, returning rows like `sources/inkypump`.
+3. Ingestion goes in `apps/indexer/src/sources/<protocol>/` as a `Source` (`apps/indexer/src/sources/source.ts`), registered in `apps/indexer/src/main.ts`. Every source shares one cursor, one batch transaction and one rollback. New event types get a case in `entityOf`.
 4. Record the decision in a new ADR.

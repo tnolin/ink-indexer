@@ -15,6 +15,7 @@ import { type Chain, viemChain } from "../apps/indexer/src/chain"
 import type { Logger } from "../apps/indexer/src/log"
 import { Indexer } from "../apps/indexer/src/loop"
 import { connectRpc } from "../apps/indexer/src/rpc"
+import { inkypumpSource } from "../apps/indexer/src/sources/inkypump/index"
 import { createStore } from "../apps/indexer/src/store"
 
 function flag(name: string): bigint {
@@ -121,7 +122,12 @@ if (!databaseUrl) {
 }
 
 const sql = await resetDb(databaseUrl)
-const indexer = new Indexer({ chain: recording, store: createStore(sql), logger })
+const indexer = new Indexer({
+  chain: recording,
+  store: createStore(sql),
+  logger,
+  sources: [inkypumpSource({ sql, chain: recording, logger })],
+})
 await indexer.init()
 await indexer.backfill(from, to)
 

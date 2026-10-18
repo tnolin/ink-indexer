@@ -3,6 +3,7 @@ import { resetDb } from "@ink-indexer/db/testing"
 import { LOG_TOPICS } from "@ink-indexer/sdk"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import { Indexer } from "../src/loop"
+import { inkypumpSource } from "../src/sources/inkypump/index"
 import { createStore } from "../src/store"
 import { goldenEvents, loadCalls, ReplayChain } from "./replay-chain"
 
@@ -15,7 +16,9 @@ beforeEach(async () => {
 afterEach(() => sql.end())
 
 async function run(chain: ReplayChain, from: bigint, to: bigint) {
-  const idx = new Indexer({ chain, store: createStore(sql), logger: () => {} })
+  const logger = () => {}
+  const sources = [inkypumpSource({ sql, chain, logger })]
+  const idx = new Indexer({ chain, store: createStore(sql), logger, sources })
   await idx.init()
   await idx.backfill(from, to)
 }
@@ -33,13 +36,18 @@ describe("recorded InkyPump range", () => {
     expect(events.some((e) => e.type === "launchpad.trade" && quote(e) !== zero)).toBe(true)
   })
 
-  it("is written by today's loop exactly as recorded", async () => {
+  it("is written by the loop with only the InkyPump source exactly as recorded, using every recorded call", async () => {
     const calls = loadCalls()
-    await run(new ReplayChain(calls), calls.range.from, calls.range.to)
+    const chain = new ReplayChain(calls)
+    await run(chain, calls.range.from, calls.range.to)
+    expect(chain.unused()).toEqual([])
     const rows = await sql<{ block: bigint }[]>`
-      select type, entity, payload, block, block_hash, tx_hash, log_index, confirmed
+      select type, entity, payload, block, block_hash, tx_hash, log_index, confirmed, sub
       from indexer.events order by id`
-    expect(rows.map((r) => ({ ...r, block: r.block.toString() }))).toEqual(goldenEvents())
+    // golden.json predates the sub column; every InkyPump row has sub ''.
+    expect(rows.map((r) => ({ ...r, block: r.block.toString() }))).toEqual(
+      goldenEvents().map((e) => ({ ...e, sub: "" })),
+    )
   })
 
   it("refuses a call it has no recording for", async () => {

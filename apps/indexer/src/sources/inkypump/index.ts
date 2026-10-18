@@ -1,4 +1,4 @@
-import type { IndexerEvent } from "@ink-indexer/events"
+import type { Sql } from "@ink-indexer/db"
 import {
   bondEvent,
   type ChainLog,
@@ -11,8 +11,10 @@ import {
   type LaunchKey,
   type LaunchMetadata,
   type LaunchState,
+  LOG_TOPICS,
   launchEvent,
   marketCap,
+  progressBps,
   tradeEvent,
   XSTOCKS_HOOK_CREATED_TOPIC,
   type XStocksHookCreated,
@@ -21,7 +23,17 @@ import type { Address, Hash } from "viem"
 import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
-import type { HookRegistry, HookRow } from "./hooks"
+import type { LogFilter } from "../../rpc"
+import type { EventRow, Source } from "../source"
+import { HookRegistry, type HookRow, nativeHookRows } from "./hooks"
+import {
+  launchesToRefresh,
+  loadHooks,
+  loadLaunches,
+  rollbackRows,
+  seedHooks,
+  writeRows,
+} from "./store"
 
 export type KnownLaunch = {
   token: Address
@@ -66,7 +78,6 @@ export type CurveRow = {
   marketCap: bigint
   updatedBlock: bigint
 }
-export type EventRow = { event: IndexerEvent; block: bigint; blockHash: Hash }
 export type Batch = {
   hooks: HookRow[]
   tokens: TokenRow[]
@@ -84,6 +95,61 @@ export type SourceDeps = {
 }
 
 type Item = { log: ChainLog; d: Exclude<DecodedLog, XStocksHookCreated> }
+
+/** Every InkyPump event: one topic0 position matching any of the event signatures. */
+const LOG_FILTER: LogFilter = { topics: [LOG_TOPICS] }
+
+/**
+ * InkyPump as a loop source. It keeps the hook registry in memory; `reload` seeds the native hooks
+ * (idempotent) and rebuilds the registry from the database.
+ */
+export function inkypumpSource(deps: {
+  sql: Sql
+  chain: SourceDeps["chain"]
+  logger: Logger
+}): Source<Batch, CurveRow[]> {
+  const { sql, chain, logger } = deps
+  let registry = new HookRegistry([], logger)
+  return {
+    name: "inkypump",
+    filters: () => [LOG_FILTER],
+    process: ([logs]) =>
+      processLogs(logs ?? [], {
+        chain,
+        registry,
+        logger,
+        loadLaunches: (keys) => loadLaunches(sql, keys),
+      }),
+    write: writeRows,
+    async prepareRollback(fork) {
+      const launches = await launchesToRefresh(sql, fork)
+      const states =
+        launches.length > 0
+          ? await chain.readLaunchStates(
+              launches.map((l) => ({ hook: l.hook, launchId: l.launchId })),
+              fork,
+            )
+          : []
+      return launches.map((l, i) => {
+        const sold = states[i]!.sold
+        const value = curveValue(l.params, sold)
+        return {
+          token: l.token,
+          progressBps: progressBps(value, l.params.targetRaise),
+          curveValue: value,
+          target: l.params.targetRaise,
+          marketCap: curveMarketCap(l, sold),
+          updatedBlock: fork,
+        }
+      })
+    },
+    rollback: rollbackRows,
+    async reload() {
+      await seedHooks(sql, nativeHookRows())
+      registry = new HookRegistry(await loadHooks(sql), logger)
+    },
+  }
+}
 
 const keyOf = (hook: string, launchId: string) => `${hook}:${launchId}`
 
