@@ -1,0 +1,548 @@
+{
+  "status": 200,
+  "body": {
+    "collections": [
+      {
+        "collection": "spooky-ink",
+        "name": "Spooky Ink",
+        "description": "999 Spooky Ink character 2D hand-drawing 1/1 by OldDirtyDegen",
+        "image_url": "https://i2c.seadn.io/collection/spooky-ink/image_type_logo/61bed9c8dc4dddea83074ae33d3414/4161bed9c8dc4dddea83074ae33d3414.png",
+        "banner_image_url": null,
+        "owner": "0xaea1c0816c2f43cad6198b327998fab89103aaad",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": false,
+        "opensea_url": "https://opensea.io/collection/spooky-ink",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x78eb1563120e619629d83d7772280a90c58ea518",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "inkbox-638357297",
+        "name": "INKBOX",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/inkbox-638357297/image_type_logo/5689419ee5a74669e51f66274920ef/bb5689419ee5a74669e51f66274920ef.png",
+        "banner_image_url": null,
+        "owner": "0xe40d3ed908d41d9c6cdc6530b10ac8e9cfee58a6",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/inkbox-638357297",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x08488f9241062b7283b2507f6c3ba0f46b7a2130",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "unrulyhq-326083684",
+        "name": "UnrulyHQ",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/unrulyhq-326083684/image_type_logo/e12d9c717ec6e4176f1bc6dbe4b21a/31e12d9c717ec6e4176f1bc6dbe4b21a.jpeg",
+        "banner_image_url": null,
+        "owner": "0xe40d3ed908d41d9c6cdc6530b10ac8e9cfee58a6",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/unrulyhq-326083684",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xd4407a561cbae429ff3cf18893a665e2e5b84423",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "ink-goblins-698968901",
+        "name": "INK GOBLINS",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/ink-goblins-698968901/image_type_logo/a08bf8d415048421fbb89aa6c4861f/8da08bf8d415048421fbb89aa6c4861f.jpeg",
+        "banner_image_url": null,
+        "owner": "0xe40d3ed908d41d9c6cdc6530b10ac8e9cfee58a6",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/ink-goblins-698968901",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x3d0bd808c31f5fbcca558599133863d471f92427",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "loopyfaces-349363949",
+        "name": "LoopyFaces",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/loopyfaces-349363949/image_type_logo/6cdc44e93de6b063324e345c83bc66/866cdc44e93de6b063324e345c83bc66.gif",
+        "banner_image_url": null,
+        "owner": "0xe40d3ed908d41d9c6cdc6530b10ac8e9cfee58a6",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/loopyfaces-349363949",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xd6da536f65d9f8c7450d710059eedae224a4958d",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "unrulyhq",
+        "name": "UnrulyHQ",
+        "description": "A cult of 999 kids who can’t be controlled.",
+        "image_url": "https://i2c.seadn.io/collection/unrulyhq/image_type_logo/e47f9330047f7a7554b7ed80a9c088/cbe47f9330047f7a7554b7ed80a9c088.jpeg",
+        "banner_image_url": null,
+        "owner": "0xad5758a2c15960d823e4f4ef4ed355480f815412",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": true,
+        "collection_offers_enabled": false,
+        "opensea_url": "https://opensea.io/collection/unrulyhq",
+        "project_url": "https://unruly.ink/",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": "UnrulyHQ",
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xf2b643aa2fe27863cf49eeb4c73e13bd2d4d7781",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "inkqutumam-942993169",
+        "name": "InkQutumam",
+        "description": "InkQutumam",
+        "image_url": "https://i2c.seadn.io/collection/inkqutumam-942993169/image_type_logo/228e9dbee3ad3d1ed88c08b918a5a6/7c228e9dbee3ad3d1ed88c08b918a5a6.jpeg",
+        "banner_image_url": null,
+        "owner": "0x8fdd13a144155837d97ac0ac1edace410667f24c",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/inkqutumam-942993169",
+        "project_url": "https://opensea.io/collection/inkqutumam-942993169",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x43746ebd4b2380595f67f27bd6c1838f6b38edf7",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "inkzombienft",
+        "name": "InkZombieNFT",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/inkzombienft/image_type_logo/c31afed977d336e57d376746e0adb6/d1c31afed977d336e57d376746e0adb6.jpeg",
+        "banner_image_url": null,
+        "owner": "0x6ec78eb3c9c17235cf54a06168da7a18d535ff22",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": false,
+        "opensea_url": "https://opensea.io/collection/inkzombienft",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xbe85e59db8edd43a8b99b87ce13818a89ce2410c",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "theunseens",
+        "name": "Theunseen",
+        "description": "659 FREE UNSEENs",
+        "image_url": "https://i2c.seadn.io/collection/theunseen-605418954/image_type_logo/a5353c23c402b45e616f2d002ed8df/88a5353c23c402b45e616f2d002ed8df.jpeg",
+        "banner_image_url": null,
+        "owner": "0x8bfcece76ab1e07b759c91175696d71ee97ec36c",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": false,
+        "opensea_url": "https://opensea.io/collection/theunseens",
+        "project_url": "https://theunseen.ink",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": "TheUnseenInk",
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x92aa3a483f8a29fe8627f48e641cb61d412338e0",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "daddy-524385665",
+        "name": "Daddy ",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/daddy-524385665/image_type_logo/189ab5df4c9083911e256f0c344bdb/7f189ab5df4c9083911e256f0c344bdb.jpeg",
+        "banner_image_url": null,
+        "owner": "0xe34325e8b763ba125bb9397b431a44c5499fc7f9",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/daddy-524385665",
+        "project_url": "https://x.com/inkdaddynft",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x534bf097cb9497868bc3df2aac1b1a664c475439",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "ink-daddy-868545233",
+        "name": "Ink Daddy",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/ink-daddy-868545233/image_type_logo/189ab5df4c9083911e256f0c344bdb/7f189ab5df4c9083911e256f0c344bdb.jpeg",
+        "banner_image_url": null,
+        "owner": "0xe34325e8b763ba125bb9397b431a44c5499fc7f9",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/ink-daddy-868545233",
+        "project_url": "https://x.com/inkdaddynfts",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x7b4391156edb0a07e9f1f1affc8cdbdc572f1d75",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "bloopink-919827839",
+        "name": "BLOOPINK",
+        "description": "888 BLOOPINK unique characters abstracts 1/1 hand drawing",
+        "image_url": "https://i2c.seadn.io/collection/bloopink-919827839/image_type_logo/0bd7f8efe7efd8d92787ca26bcfaf8/c40bd7f8efe7efd8d92787ca26bcfaf8.jpeg",
+        "banner_image_url": null,
+        "owner": "0x175f31e484601271cd7a018f1d0953baf15ccdf3",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/bloopink-919827839",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x1e24a0c9284ec6345a3d1ce4c53b49edd83e3d94",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "tensileink-v2",
+        "name": "TensileInk V2",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/tensileink-v2/image_type_logo/62034dc816e04ef723105aaaf7b15b/fd62034dc816e04ef723105aaaf7b15b.jpeg",
+        "banner_image_url": null,
+        "owner": "0x5c2d1102e4623766b85b4fe2bebaaab75caf9b35",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/tensileink-v2",
+        "project_url": "https://tensileink.com",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": "tensileink",
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xfc410abdb27be1ba58bb8e0d9bec11279a5eedb4",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "0xc37ba6bcfed272e312fdced9843b6035b5c94e7e",
+        "name": "MUTTIVERSE",
+        "description": "FREE MINT\n333 SUPPLY\nINK CHAIN",
+        "image_url": "https://i2c.seadn.io/collection/0xc37ba6bcfed272e312fdced9843b6035b5c94e7e/image_type_logo/2b3417db406f0c928f2503d2329121/bf2b3417db406f0c928f2503d2329121.gif",
+        "banner_image_url": null,
+        "owner": "0x469455583200b72d988f4e303022a21a1550602c",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": false,
+        "opensea_url": "https://opensea.io/collection/0xc37ba6bcfed272e312fdced9843b6035b5c94e7e",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xc37ba6bcfed272e312fdced9843b6035b5c94e7e",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "variants-292808167",
+        "name": "Variants",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/variants-292808167/image_type_logo/26f4c98feab843ade79a3e176e36b1/5426f4c98feab843ade79a3e176e36b1.jpeg",
+        "banner_image_url": null,
+        "owner": "0x21e7a89aca650e7cc3cbeead2aa0d729358d88f1",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/variants-292808167",
+        "project_url": "https://x.com/variant_nft",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xf71634d9907368d52d938bc32233cf61e80a367d",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "nftaudpe",
+        "name": "NFTAUDPE",
+        "description": null,
+        "image_url": null,
+        "banner_image_url": null,
+        "owner": "0xa9d3ef4342afdb01c0d66988bb7651c89aeb6c5f",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": false,
+        "opensea_url": "https://opensea.io/collection/nftaudpe",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xb5b3dc6bf529def7d8caf70000d92ce55b2a51db",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "mink-823368288",
+        "name": "Mink",
+        "description": "5,555 agentic NFTs built on \n@inkonchain, exploring the intersection of digital identity, NFTs, and the agentic era.",
+        "image_url": "https://i2c.seadn.io/collection/mink-823368288/image_type_logo/87289cd2525f621a7107e0b1a36e62/1d87289cd2525f621a7107e0b1a36e62.png",
+        "banner_image_url": null,
+        "owner": "0xe586f9a0eaaa4f9212ff002db78a6785351bb3c4",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/mink-823368288",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": "MinkOnInk",
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x4c1a88ebfac0dade85839da8313ff1002c5cf9cd",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "nftybf",
+        "name": "NFTYBF",
+        "description": null,
+        "image_url": null,
+        "banner_image_url": null,
+        "owner": "0x9512ad247adb6fe10d1691ea6b8ea0eaf2228a75",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": false,
+        "opensea_url": "https://opensea.io/collection/nftybf",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xf7c53b7b4c01664778f8243281e74973f31eef93",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "spacink-nft",
+        "name": "SpacInk NFT",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/spacink-nft/image_type_logo/a2049acd6ac7b4429a3a7211278613/02a2049acd6ac7b4429a3a7211278613.jpeg",
+        "banner_image_url": null,
+        "owner": "0xe40d3ed908d41d9c6cdc6530b10ac8e9cfee58a6",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/spacink-nft",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0xdcab3491a8897c286ad17de68d80e47dd3ebc3e2",
+            "chain": "ink"
+          }
+        ]
+      },
+      {
+        "collection": "frontonauts-nft",
+        "name": "Frontonauts NFT",
+        "description": null,
+        "image_url": "https://i2c.seadn.io/collection/frontonauts-nft/image_type_logo/b8162a58df7b7e82c4f04fd35f9bf0/dfb8162a58df7b7e82c4f04fd35f9bf0.jpeg",
+        "banner_image_url": null,
+        "owner": "0xe40d3ed908d41d9c6cdc6530b10ac8e9cfee58a6",
+        "safelist_status": "not_requested",
+        "category": "",
+        "is_disabled": false,
+        "is_nsfw": false,
+        "trait_offers_enabled": false,
+        "collection_offers_enabled": true,
+        "opensea_url": "https://opensea.io/collection/frontonauts-nft",
+        "project_url": "",
+        "wiki_url": "",
+        "discord_url": "",
+        "telegram_url": "",
+        "twitter_username": null,
+        "instagram_username": "",
+        "contracts": [
+          {
+            "address": "0x2c6e97d1f6ea623b2d04892dfd935bfd4fbc3149",
+            "chain": "ink"
+          }
+        ]
+      }
+    ],
+    "next": "WyIyMDI2LTEwLTE4VDAxOjM1OjAwWiIsIjU1MzJlZGQ3LWM4MDUtMzQyMy05NDRmLTNiMzlhYTkzMjgyZSJd"
+  }
+}

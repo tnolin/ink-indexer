@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "address": "0x7c701c0148e0e965065aa05e008ac9341e6efc6c",
+    "chain": "ink",
+    "collection": "wiredonink",
+    "contract_standard": "erc721",
+    "name": "WIRED"
+  }
+}

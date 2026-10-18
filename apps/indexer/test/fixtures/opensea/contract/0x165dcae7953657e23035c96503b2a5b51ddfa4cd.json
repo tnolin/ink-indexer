@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "address": "0x165dcae7953657e23035c96503b2a5b51ddfa4cd",
+    "chain": "ink",
+    "collection": "inkverse-ii",
+    "contract_standard": "erc721",
+    "name": "INKverse II"
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "status": 200,
+  "body": {
+    "nft": {
+      "identifier": "489",
+      "collection": "prtscn-ink",
+      "contract": "0x3ea71c6abde8a1b3cf6e5683761a7378b4e9e448",
+      "token_standard": "erc721",
+      "name": "PRTSCN #489",
+      "description": "PRTSCN #489. It mirrors QUOTRON #489 -- same floor, same casing, same keycaps, same background, rebuilt as a Quotron 800. The tube is lit and holding smug.",
+      "image_url": "https://i2c.seadn.io/ink/0x3ea71c6abde8a1b3cf6e5683761a7378b4e9e448/d20e4365a34adddbb701ebf450753c/a3d20e4365a34adddbb701ebf450753c.gif",
+      "display_image_url": "https://i2c.seadn.io/ink/0x3ea71c6abde8a1b3cf6e5683761a7378b4e9e448/d20e4365a34adddbb701ebf450753c/a3d20e4365a34adddbb701ebf450753c.gif",
+      "display_animation_url": null,
+      "metadata_url": "https://ipfs2.seadn.io/ipfs/bafybeidg2urm2jl2zun4rzsgadwkbfymvbqo7szoh5csw3cbalahkoaode/489.json",
+      "opensea_url": "https://opensea.io/assets/ink/0x3ea71c6abde8a1b3cf6e5683761a7378b4e9e448/489",
+      "updated_at": "2026-10-18T12:08:54.042206",
+      "is_disabled": false,
+      "is_nsfw": false,
+      "original_image_url": "ipfs://bafybeiap2w7pg62f4kwz5ytlyfu2sofevhyjz5aad6h5p53uq64rymaaja/0489.gif",
+      "original_animation_url": null,
+      "traits": [
+        {
+          "trait_type": "Dual",
+          "display_type": null,
+          "max_value": null,
+          "value": "No"
+        },
+        {
+          "trait_type": "Tier",
+          "display_type": null,
+          "max_value": null,
+          "value": "Quotron 800"
+        },
+        {
+          "trait_type": "Floor",
+          "display_type": null,
+          "max_value": null,
+          "value": "GME"
+        },
+        {
+          "trait_type": "Casing",
+          "display_type": null,
+          "max_value": null,
+          "value": "Cream"
+        },
+        {
+          "trait_type": "Screen",
+          "display_type": null,
+          "max_value": null,
+          "value": "Clean"
+        },
+        {
+          "trait_type": "Keycaps",
+          "display_type": null,
+          "max_value": null,
+          "value": "Sky Blue"
+        },
+        {
+          "trait_type": "Phosphor",
+          "display_type": null,
+          "max_value": null,
+          "value": "White"
+        },
+        {
+          "trait_type": "Background",
+          "display_type": null,
+          "max_value": null,
+          "value": "Slate Sky"
+        },
+        {
+          "trait_type": "Expression",
+          "display_type": null,
+          "max_value": null,
+          "value": "smug"
+        }
+      ],
+      "estimated_value_usd": null,
+      "decimals": null,
+      "animation_url": null,
+      "is_suspicious": false,
+      "creator": "",
+      "owners": [
+        {
+          "address": "0xf0d6999725115e3ead3d927eb3329d63afaec09b",
+          "quantity": 1,
+          "quantity_string": "1"
+        }
+      ],
+      "rarity": {
+        "strategy_id": "openrarity",
+        "strategy_version": "1.0",
+        "rank": 2960
+      },
+      "subscription": null,
+      "agent_binding": null,
+      "agent_metadata": null
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "status": 200,
+  "body": {
+    "total": {
+      "volume": 240.88647116059093,
+      "volume_symbol": "ETH",
+      "sales": 4402,
+      "num_owners": 1931,
+      "floor_price": 0.0374537,
+      "floor_price_symbol": "ETH"
+    },
+    "intervals": [
+      {
+        "interval": "one_day",
+        "volume": 1.07788808,
+        "volume_symbol": "ETH",
+        "sales": 25
+      },
+      {
+        "interval": "seven_day",
+        "volume": 10.357693929996001,
+        "volume_symbol": "ETH",
+        "sales": 216
+      },
+      {
+        "interval": "thirty_day",
+        "volume": 40.04794380816081,
+        "volume_symbol": "ETH",
+        "sales": 1027
+      }
+    ]
+  }
+}

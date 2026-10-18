@@ -1,0 +1,40 @@
+{
+  "status": 200,
+  "body": {
+    "nft": {
+      "identifier": "1",
+      "collection": "inkverse-ii",
+      "contract": "0x165dcae7953657e23035c96503b2a5b51ddfa4cd",
+      "token_standard": "erc721",
+      "name": "#1",
+      "description": null,
+      "image_url": null,
+      "display_image_url": null,
+      "display_animation_url": null,
+      "metadata_url": null,
+      "opensea_url": "https://opensea.io/assets/ink/0x165dcae7953657e23035c96503b2a5b51ddfa4cd/1",
+      "updated_at": "2026-10-18T12:08:55.329947",
+      "is_disabled": false,
+      "is_nsfw": false,
+      "original_image_url": null,
+      "original_animation_url": null,
+      "traits": [],
+      "estimated_value_usd": null,
+      "decimals": null,
+      "animation_url": null,
+      "is_suspicious": false,
+      "creator": "",
+      "owners": [
+        {
+          "address": "0x70f81cb9f2a9ce4a6500dce1ce628ce9c5182cda",
+          "quantity": 1,
+          "quantity_string": "1"
+        }
+      ],
+      "rarity": null,
+      "subscription": null,
+      "agent_binding": null,
+      "agent_metadata": null
+    }
+  }
+}

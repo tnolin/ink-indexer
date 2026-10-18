@@ -1,0 +1,83 @@
+{
+  "status": 200,
+  "body": {
+    "collection": "prtscn-ink",
+    "name": "PRTSCN",
+    "description": "4444 terminal PFPs for Quotrons enjoooooyers. Secondary sales feed the engine. ;-)",
+    "image_url": "https://i2c.seadn.io/ink/0x3ea71c6abde8a1b3cf6e5683761a7378b4e9e448/9901a26d4e2ad976ac4274be141be8/de9901a26d4e2ad976ac4274be141be8.gif",
+    "banner_image_url": "https://i2c.seadn.io/collection/prtscn-ink/image_type_hero_desktop/7795623acc830e9b1c5ae752b50c32/4f7795623acc830e9b1c5ae752b50c32.png",
+    "owner": "0x7171e64e979265aed6588577d1c6b60a701d7866",
+    "safelist_status": "verified",
+    "category": "pfps",
+    "is_disabled": false,
+    "is_nsfw": false,
+    "trait_offers_enabled": true,
+    "collection_offers_enabled": true,
+    "opensea_url": "https://opensea.io/collection/prtscn-ink",
+    "project_url": "https://www.quotrons.cash/prtscn",
+    "wiki_url": "",
+    "discord_url": "",
+    "telegram_url": "",
+    "twitter_username": null,
+    "instagram_username": "",
+    "contracts": [
+      {
+        "address": "0x3ea71c6abde8a1b3cf6e5683761a7378b4e9e448",
+        "chain": "ink"
+      }
+    ],
+    "editors": [
+      "0x7171e64e979265aed6588577d1c6b60a701d7866"
+    ],
+    "fees": [
+      {
+        "fee": 1,
+        "recipient": "0x07d3a100c3880830dd43fe5c938b5144721ce9d6",
+        "required": true
+      },
+      {
+        "fee": 3,
+        "recipient": "0xdb876b493d21f8af540f59817e32a8e9a806e209",
+        "required": true
+      },
+      {
+        "fee": 2,
+        "recipient": "0x79af491d1b533a3fcd1c9ab009931ac95701f6ff",
+        "required": true
+      }
+    ],
+    "required_zone": "0x000056f7000000ece9003ca63978907a00ffd100",
+    "rarity": {
+      "calculated_at": "2026-10-18T12:08:27.809739",
+      "max_rank": 4440,
+      "total_supply": 4440,
+      "strategy_id": "openrarity",
+      "strategy_version": "1.0"
+    },
+    "total_supply": 4440,
+    "unique_item_count": 4440,
+    "created_date": "2026-09-09",
+    "pricing_currencies": {
+      "listing_currency": {
+        "symbol": "ETH",
+        "address": "0x0000000000000000000000000000000000000000",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/ETH.svg",
+        "name": "Ethereum",
+        "decimals": 18,
+        "eth_price": "1",
+        "usd_price": "2417.2"
+      },
+      "offer_currency": {
+        "symbol": "WETH",
+        "address": "0x4200000000000000000000000000000000000006",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/WETH.svg",
+        "name": "Wrapped Ethereum",
+        "decimals": 18,
+        "eth_price": "0.99960284626840973",
+        "usd_price": "2416.24"
+      }
+    }
+  }
+}

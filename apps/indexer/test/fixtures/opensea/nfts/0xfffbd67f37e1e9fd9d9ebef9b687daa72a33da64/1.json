@@ -1,0 +1,81 @@
+{
+  "status": 200,
+  "body": {
+    "nft": {
+      "identifier": "1",
+      "collection": "inkverse-920024436",
+      "contract": "0xfffbd67f37e1e9fd9d9ebef9b687daa72a33da64",
+      "token_standard": "erc721",
+      "name": "Dusk Undertow",
+      "description": "Smoke rings layer and drift around the INK mark. Sunset palette. Fine scanlines add a screen-like surface.",
+      "image_url": "https://i2c.seadn.io/ink/0xfffbd67f37e1e9fd9d9ebef9b687daa72a33da64/f18af241d79f4cda3f8bf92898f095/15f18af241d79f4cda3f8bf92898f095.gif",
+      "display_image_url": "https://i2c.seadn.io/ink/0xfffbd67f37e1e9fd9d9ebef9b687daa72a33da64/f18af241d79f4cda3f8bf92898f095/15f18af241d79f4cda3f8bf92898f095.gif",
+      "display_animation_url": null,
+      "metadata_url": "https://ipfs2.seadn.io/ipfs/QmXNLf2rie3xF1ZjoqLgNXiYCPrVRss42yUnMvr7D9kj7w/1",
+      "opensea_url": "https://opensea.io/assets/ink/0xfffbd67f37e1e9fd9d9ebef9b687daa72a33da64/1",
+      "updated_at": "2026-10-18T12:08:53.393705",
+      "is_disabled": false,
+      "is_nsfw": false,
+      "original_image_url": "ipfs://bafybeidd2tgr4fmuje7ri232b4o3q7itbwqqx25pwxdtown6npvy2usdle",
+      "original_animation_url": "ipfs://bafybeif6ybat4vqqqtfduejpkq7q2cse7vzbnhueenwtkevmf37vs5zuua",
+      "traits": [
+        {
+          "trait_type": "Loop",
+          "display_type": null,
+          "max_value": null,
+          "value": "Seamless"
+        },
+        {
+          "trait_type": "Style",
+          "display_type": null,
+          "max_value": null,
+          "value": "Fluid"
+        },
+        {
+          "trait_type": "Rarity",
+          "display_type": null,
+          "max_value": null,
+          "value": "Common"
+        },
+        {
+          "trait_type": "Palette",
+          "display_type": null,
+          "max_value": null,
+          "value": "Sunset"
+        },
+        {
+          "trait_type": "Flashing",
+          "display_type": null,
+          "max_value": null,
+          "value": "No"
+        },
+        {
+          "trait_type": "Technique",
+          "display_type": null,
+          "max_value": null,
+          "value": "Layered Smoke Rings"
+        }
+      ],
+      "estimated_value_usd": null,
+      "decimals": null,
+      "animation_url": null,
+      "is_suspicious": false,
+      "creator": "",
+      "owners": [
+        {
+          "address": "0xe54342e4cbc3f6bf029f25175cd8c4e62917017d",
+          "quantity": 1,
+          "quantity_string": "1"
+        }
+      ],
+      "rarity": {
+        "strategy_id": "openrarity",
+        "strategy_version": "1.0",
+        "rank": 895
+      },
+      "subscription": null,
+      "agent_binding": null,
+      "agent_metadata": null
+    }
+  }
+}

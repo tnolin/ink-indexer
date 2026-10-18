@@ -1,0 +1,93 @@
+{
+  "status": 200,
+  "body": {
+    "nft": {
+      "identifier": "1",
+      "collection": "ink-hornet",
+      "contract": "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b",
+      "token_standard": "erc721",
+      "name": "Hornet #1",
+      "description": "2222 unique grumpy anthropomorphic hornets. Premium generative NFT collection.",
+      "image_url": "https://i2c.seadn.io/ink/0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b/b3cfe979273e6d288b0a29e4177ba0/aab3cfe979273e6d288b0a29e4177ba0.png",
+      "display_image_url": "https://i2c.seadn.io/ink/0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b/b3cfe979273e6d288b0a29e4177ba0/aab3cfe979273e6d288b0a29e4177ba0.png",
+      "display_animation_url": null,
+      "metadata_url": "https://ipfs2.seadn.io/ipfs/QmT2gHGsYMDQ5EurLmz5QS7ZVRFN71yPhuW7Bv6HQeAGBs/1",
+      "opensea_url": "https://opensea.io/assets/ink/0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b/1",
+      "updated_at": "2026-10-18T12:08:52.753635",
+      "is_disabled": false,
+      "is_nsfw": false,
+      "original_image_url": "ipfs://bafybeiawcjp24mgibakgjymsij7opz2deathsxkoxkvjw4bqbtsh2d36lq",
+      "original_animation_url": null,
+      "traits": [
+        {
+          "trait_type": "Type",
+          "display_type": null,
+          "max_value": null,
+          "value": "Accessory"
+        },
+        {
+          "trait_type": "Force",
+          "display_type": null,
+          "max_value": null,
+          "value": "Iron"
+        },
+        {
+          "trait_type": "Voice",
+          "display_type": null,
+          "max_value": null,
+          "value": "Granite"
+        },
+        {
+          "trait_type": "Spirit",
+          "display_type": null,
+          "max_value": null,
+          "value": "Breeze"
+        },
+        {
+          "trait_type": "Vision",
+          "display_type": null,
+          "max_value": null,
+          "value": "Fenris"
+        },
+        {
+          "trait_type": "Essence",
+          "display_type": null,
+          "max_value": null,
+          "value": "Ignis"
+        },
+        {
+          "trait_type": "Character",
+          "display_type": null,
+          "max_value": null,
+          "value": "simpson"
+        },
+        {
+          "trait_type": "Background",
+          "display_type": null,
+          "max_value": null,
+          "value": "down"
+        }
+      ],
+      "estimated_value_usd": null,
+      "decimals": null,
+      "animation_url": null,
+      "is_suspicious": false,
+      "creator": "",
+      "owners": [
+        {
+          "address": "0x03879da9151af28d8aa88a407d29473086b03f35",
+          "quantity": 1,
+          "quantity_string": "1"
+        }
+      ],
+      "rarity": {
+        "strategy_id": "openrarity",
+        "strategy_version": "1.0",
+        "rank": 1734
+      },
+      "subscription": null,
+      "agent_binding": null,
+      "agent_metadata": null
+    }
+  }
+}

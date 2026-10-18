@@ -1,0 +1,78 @@
+{
+  "status": 200,
+  "body": {
+    "collection": "ink-hornet",
+    "name": "Ink Hornet",
+    "description": "Hornet is 2,222 living on the Ink chain.\n\nNot bees. Not butterflies. Not some cute animal that looks friendly and approachable. ONE MORE THING\nHORNET. The ones you run from at a picnic. The ones that sting you twice just because they can. The ones that look at a bear and think \"I can take him.\"\nThat's the energy.\nAll of them are angry about something and none of them will tell you what.\n",
+    "image_url": "https://i2c.seadn.io/collection/ink-hornet/image_type_logo/a455c9c5ec33729240b6e445a20373/fba455c9c5ec33729240b6e445a20373.png",
+    "banner_image_url": "https://i2c.seadn.io/collection/ink-hornet/image_type_hero_desktop/166e583832d0a68ee09a1d06664404/53166e583832d0a68ee09a1d06664404.png",
+    "owner": "0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2",
+    "safelist_status": "not_requested",
+    "category": "pfps",
+    "is_disabled": false,
+    "is_nsfw": false,
+    "trait_offers_enabled": true,
+    "collection_offers_enabled": true,
+    "opensea_url": "https://opensea.io/collection/ink-hornet",
+    "project_url": "https://www.inkhornet.com/",
+    "wiki_url": "",
+    "discord_url": "",
+    "telegram_url": "https://t.me/catchainchat",
+    "twitter_username": "inkthehornet",
+    "instagram_username": "",
+    "contracts": [
+      {
+        "address": "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b",
+        "chain": "ink"
+      }
+    ],
+    "editors": [
+      "0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2"
+    ],
+    "fees": [
+      {
+        "fee": 1,
+        "recipient": "0x07d3a100c3880830dd43fe5c938b5144721ce9d6",
+        "required": true
+      },
+      {
+        "fee": 7,
+        "recipient": "0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2",
+        "required": true
+      }
+    ],
+    "required_zone": "0x000056f7000000ece9003ca63978907a00ffd100",
+    "rarity": {
+      "calculated_at": "2026-10-18T12:08:38.783124",
+      "max_rank": 2222,
+      "total_supply": 2222,
+      "strategy_id": "openrarity",
+      "strategy_version": "1.0"
+    },
+    "total_supply": 2222,
+    "unique_item_count": 2222,
+    "created_date": "2026-09-01",
+    "pricing_currencies": {
+      "listing_currency": {
+        "symbol": "ETH",
+        "address": "0x0000000000000000000000000000000000000000",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/ETH.svg",
+        "name": "Ethereum",
+        "decimals": 18,
+        "eth_price": "1",
+        "usd_price": "2417.67"
+      },
+      "offer_currency": {
+        "symbol": "WETH",
+        "address": "0x4200000000000000000000000000000000000006",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/WETH.svg",
+        "name": "Wrapped Ethereum",
+        "decimals": 18,
+        "eth_price": "0.999425066282826027",
+        "usd_price": "2416.28"
+      }
+    }
+  }
+}

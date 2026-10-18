@@ -1,0 +1,70 @@
+{
+  "status": 200,
+  "body": {
+    "collection": "inkverse-ii",
+    "name": "INKverse II",
+    "description": null,
+    "image_url": "https://i2c.seadn.io/collection/inkverse-ii/image_type_logo/0e191e5c1638c342ff36e873bfa95f/4c0e191e5c1638c342ff36e873bfa95f.png",
+    "banner_image_url": "https://i2c.seadn.io/collection/inkverse-ii/image_type_hero_desktop/ab43af227e39839df103f9214fef35/41ab43af227e39839df103f9214fef35.png",
+    "owner": "0xe747f432dc361eb415825a0041f82eb2dc0e84d6",
+    "safelist_status": "not_requested",
+    "category": "",
+    "is_disabled": false,
+    "is_nsfw": false,
+    "trait_offers_enabled": false,
+    "collection_offers_enabled": true,
+    "opensea_url": "https://opensea.io/collection/inkverse-ii",
+    "project_url": "",
+    "wiki_url": "",
+    "discord_url": "",
+    "telegram_url": "",
+    "twitter_username": null,
+    "instagram_username": "",
+    "contracts": [
+      {
+        "address": "0x165dcae7953657e23035c96503b2a5b51ddfa4cd",
+        "chain": "ink"
+      }
+    ],
+    "editors": [
+      "0xe747f432dc361eb415825a0041f82eb2dc0e84d6"
+    ],
+    "fees": [
+      {
+        "fee": 1,
+        "recipient": "0x07d3a100c3880830dd43fe5c938b5144721ce9d6",
+        "required": true
+      },
+      {
+        "fee": 10,
+        "recipient": "0x14e9915cc24eafa11c304a6d53eb142fc0dee55a",
+        "required": false
+      }
+    ],
+    "total_supply": 30917,
+    "unique_item_count": 30917,
+    "created_date": "2026-10-14",
+    "pricing_currencies": {
+      "listing_currency": {
+        "symbol": "ETH",
+        "address": "0x0000000000000000000000000000000000000000",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/ETH.svg",
+        "name": "Ethereum",
+        "decimals": 18,
+        "eth_price": "1",
+        "usd_price": "2417.2"
+      },
+      "offer_currency": {
+        "symbol": "WETH",
+        "address": "0x4200000000000000000000000000000000000006",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/WETH.svg",
+        "name": "Wrapped Ethereum",
+        "decimals": 18,
+        "eth_price": "0.99960284626840973",
+        "usd_price": "2416.24"
+      }
+    }
+  }
+}

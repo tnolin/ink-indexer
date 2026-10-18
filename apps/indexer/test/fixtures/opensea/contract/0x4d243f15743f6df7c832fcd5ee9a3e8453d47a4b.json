@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "address": "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b",
+    "chain": "ink",
+    "collection": "ink-hornet",
+    "contract_standard": "erc721",
+    "name": "Ink Hornet"
+  }
+}
