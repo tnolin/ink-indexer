@@ -1,5 +1,7 @@
 // Records NFT test fixtures from Ink and OpenSea: chain logs, REST responses and Stream frames.
 // Usage: OPENSEA_API_KEY=<key> INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts [--only <step,step>]
+//        INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts --chimera
+// --chimera records the Chimera factory's campaign logs from its deployment block to head. It needs only the RPC.
 // Steps: collections, seaport, erc1155, farm, rest, stream (all by default).
 // Chain logs go to packages/sdk/test/fixtures/nft, OpenSea responses to apps/indexer/test/fixtures/opensea.
 // Run it once while the key is valid, then commit the output. Every file is checked for the API key
@@ -9,8 +11,9 @@ import { dirname, join } from "node:path"
 import { createPublicClient, decodeEventLog, type Hex, http, parseAbi } from "viem"
 import { ink } from "viem/chains"
 
-const KEY = process.env.OPENSEA_API_KEY
-if (!KEY) throw new Error("OPENSEA_API_KEY is not set")
+const CHIMERA_ONLY = process.argv.includes("--chimera")
+const KEY = process.env.OPENSEA_API_KEY ?? ""
+if (!KEY && !CHIMERA_ONLY) throw new Error("OPENSEA_API_KEY is not set")
 const RPC_URL = process.env.INK_RPC ?? "https://rpc-qnd.inkonchain.com"
 const ROOT = join(import.meta.dirname, "..")
 const CHAIN_DIR = join(ROOT, "packages/sdk/test/fixtures/nft")
@@ -30,7 +33,7 @@ const client = createPublicClient({
   }),
 })
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-const redact = (s: string) => s.replaceAll(KEY, "[key]")
+const redact = (s: string) => (KEY ? s.replaceAll(KEY, "[key]") : s)
 
 // ---- constants ----
 
@@ -86,6 +89,9 @@ const COLLECTIONS = {
     seadrop: false,
   },
 } as const
+const CHIMERA_FACTORY = "0xa66c05f14e79f40952531c20de0b60282e3800be"
+const CHIMERA_FACTORY_START_BLOCK = 57_096_880
+const CAMPAIGN_CREATED = "0x001b4892649817454e3dcb90d0d534ad709c098776f4f6de335baf16506299b3"
 const BURST_ADDRESS = "0x165dcae7953657e23035c96503b2a5b51ddfa4cd"
 
 // ---- output ----
@@ -94,7 +100,7 @@ const writtenFiles: string[] = []
 
 /** Writes a fixture, refusing to save anything that contains the API key. */
 function save(path: string, text: string) {
-  if (text.includes(KEY as string)) {
+  if (KEY && text.includes(KEY)) {
     console.error(`refusing to write ${path}: it contains the API key`)
     process.exit(1)
   }
@@ -645,6 +651,27 @@ async function recordStream() {
   console.log(`stream: ${frames.length} frames in 5 minutes`)
 }
 
+// ---- chimera ----
+
+/** Every CampaignCreated log of the Chimera factory, plus one other factory log. Needs only the RPC. */
+async function recordChimera() {
+  const head = await headBlock()
+  const campaigns = await collect(CHIMERA_FACTORY_START_BLOCK, head, {
+    address: CHIMERA_FACTORY,
+    topics: [CAMPAIGN_CREATED],
+  })
+  const everything = await collect(CHIMERA_FACTORY_START_BLOCK, head, {
+    address: CHIMERA_FACTORY,
+    topics: [],
+  })
+  const other = everything.find((l) => l.topics[0] !== CAMPAIGN_CREATED)
+  if (!other) throw new Error("no non-campaign factory log found")
+  save(join(CHAIN_DIR, "chimera-campaigns.json"), logsJson([...campaigns, other]))
+  console.log(
+    `chimera: ${campaigns.length} campaigns up to block ${head}, other log ${other.topics[0]}`,
+  )
+}
+
 // ---- main ----
 
 function checkForKey(dir: string) {
@@ -652,7 +679,7 @@ function checkForKey(dir: string) {
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry)
     if (statSync(p).isDirectory()) checkForKey(p)
-    else if (readFileSync(p, "utf8").includes(KEY as string)) {
+    else if (KEY && readFileSync(p, "utf8").includes(KEY)) {
       console.error(`${p} contains the API key`)
       process.exit(1)
     }
@@ -660,6 +687,11 @@ function checkForKey(dir: string) {
 }
 
 try {
+  if (CHIMERA_ONLY) {
+    await recordChimera()
+    console.log(`wrote ${writtenFiles.length} files`)
+    process.exit(0)
+  }
   const streamDone = steps.has("stream") ? recordStream() : Promise.resolve()
   streamDone.catch(() => {}) // surfaced below; keeps an early failure from being unhandled meanwhile
   if (steps.has("collections")) await recordCollections()
