@@ -1,4 +1,5 @@
 import type { Sql } from "@ink-indexer/db"
+import type { NftEvent } from "@ink-indexer/events"
 import type postgres from "postgres"
 import type { Hash } from "viem"
 import { entityOf, type SourceBatch, type Tx } from "./sources/source"
@@ -107,15 +108,58 @@ export function createStore(sql: Sql) {
       )
     },
 
+    /**
+     * Events with no transaction (synthetic `os:` or `nft:` ids), stamped with the chain cursor's
+     * block and hash and left unconfirmed, so the next `confirm` or `writeBatch` confirms them with
+     * the chain rows at that block. Every later chain row is for a higher block, so no confirmed row
+     * ever gets a higher id than one of these while it is unconfirmed. `extra` writes state rows in
+     * the same transaction.
+     *
+     * Must not run concurrently with `Indexer.backfill`: a backfill writes old blocks, already
+     * confirmed, with ids above an unconfirmed off-chain row. Off-chain writers run only inside
+     * `start`, and a backfill runs while `start` is stopped.
+     */
+    async writeOffchain(rows: { event: NftEvent; sub?: string }[], extra?: TxStep) {
+      await withLock(() =>
+        sql.begin(async (tx) => {
+          const [cursor] = await tx<{ block: bigint; block_hash: Hash }[]>`
+            select block, block_hash from indexer.cursors where source = ${CURSOR_ROW}`
+          if (!cursor)
+            throw new Error("no chain cursor yet: off-chain events need an ingested block")
+          const values = rows.map(({ event, sub }) => ({
+            type: event.type,
+            entity: entityOf(event),
+            payload: tx.json(event as unknown as postgres.JSONValue),
+            block: s(BigInt(cursor.block)),
+            block_hash: cursor.block_hash,
+            tx_hash: event.txHash,
+            log_index: event.logIndex,
+            sub: sub ?? "",
+            confirmed: false,
+          }))
+          for (const part of chunks(values))
+            await tx`insert into indexer.events ${tx(part)} on conflict (tx_hash, log_index, sub) do nothing`
+          if (extra) await extra(tx)
+        }),
+      )
+    },
+
     async confirm(head: bigint) {
       await sql`update indexer.events set confirmed = true where not confirmed and block <= ${s(head - 1n)}`
     },
 
-    /** One transaction: events above `fork`, each source's `steps`, then block hashes and the cursor. */
+    /**
+     * One transaction: events above `fork`, each source's `steps`, then block hashes and the cursor.
+     * Off-chain rows above the fork cannot be emitted again, so they move to the fork block,
+     * unconfirmed, instead of being deleted; chain rows above the fork are deleted.
+     */
     async rollback(fork: bigint, forkHash: Hash, steps: TxStep[]) {
       const f = s(fork)
       await withLock(() =>
         sql.begin(async (tx) => {
+          await tx`
+            update indexer.events set block = ${f}, block_hash = ${forkHash}, confirmed = false
+            where block > ${f} and (tx_hash like 'os:%' or tx_hash like 'nft:%')`
           await tx`delete from indexer.events where block > ${f}`
           for (const step of steps) await step(tx)
           await tx`delete from indexer.recent_blocks where number > ${f}`
