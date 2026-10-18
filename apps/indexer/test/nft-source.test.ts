@@ -274,6 +274,73 @@ describe("NFT source", () => {
     expect(await count("nft_sales")).toBe(2)
   })
 
+  it("two contracts selling the same token id in one order both get a sale", async () => {
+    const other = "0x00000000000000000000000000000000000000b2" as Address
+    const item = (token: Address): Item => ({ itemType: 2, token, identifier: 5n, amount: 1n })
+    await ingest([orderLog([item(NFT_A), item(other)], 2_000n)])
+    const rows = await sql<{ sub: string; entity: string; payload: Record<string, unknown> }[]>`
+      select sub, entity, payload from indexer.events order by sub`
+    expect(rows.map((r) => [r.sub, r.entity, r.payload.priceWei])).toEqual([
+      ["sale:5", NFT_A, "1000"],
+      [`sale:5:${other}`, other, "1000"],
+    ])
+    const sales = await sql`select contract, token_id from indexer.nft_sales order by contract`
+    expect(sales.map((r) => [r.contract, r.token_id])).toEqual([
+      [NFT_A, "5"],
+      [other, "5"],
+    ])
+  })
+
+  it("a matched offer and listing in one transaction is one sale with the buyer, seller and price of the offer", async () => {
+    const logs = loadNftFixture("seaport-matched")
+    await ingest(logs)
+    const rows = await sql<{ entity: string; sub: string; payload: Record<string, unknown> }[]>`
+      select entity, sub, payload from indexer.events`
+    expect(rows).toHaveLength(1)
+    const buyerOrder = logs.find(
+      (l) => l.topics[1] === pad("0x5ca2ccb0a103821195b3d1712a7941a2ab89e58f"),
+    )!
+    expect(rows[0]).toMatchObject({
+      entity: "0x47da169e2e85825d3ef9bc73151b39b7af7ef40c",
+      sub: "sale:101",
+      payload: {
+        type: "nft.sale",
+        tokenId: "101",
+        buyer: "0x5ca2ccb0a103821195b3d1712a7941a2ab89e58f",
+        seller: "0x505f8ec6e6d832d4ef620a963bc4ff501e7b78ae",
+        priceWei: "100000000000000",
+        currency: "WETH",
+        txHash: buyerOrder.transactionHash,
+        logIndex: buyerOrder.logIndex,
+      },
+    })
+    expect(await count("nft_sales")).toBe(1)
+    const [sale] = await sql`select buyer, seller, price_wei from indexer.nft_sales`
+    expect(sale).toMatchObject({
+      buyer: "0x5ca2ccb0a103821195b3d1712a7941a2ab89e58f",
+      seller: "0x505f8ec6e6d832d4ef620a963bc4ff501e7b78ae",
+      price_wei: "100000000000000",
+    })
+  })
+
+  it("a second campaign for a collection keeps the first launch token", async () => {
+    const [first] = loadChimeraCampaigns().filter((l) => l.blockNumber === 58_346_281n)
+    const second = {
+      ...first!,
+      blockNumber: 58_346_300n,
+      logIndex: 3,
+      transactionHash: `0x${"33".repeat(32)}` as const,
+      // Same collection, another token (the token is the first word of the data).
+      data: `0x${"0".repeat(24)}${"ab".repeat(20)}${first!.data.slice(66)}` as `0x${string}`,
+    }
+    await ingest([first!, second])
+    expect(await count("nft_launches")).toBe(1)
+    const [row] =
+      await sql`select launch_token from indexer.nft_collections where contract = ${WIRED}`
+    const [launch] = await sql`select token from indexer.nft_launches`
+    expect(row!.launch_token).toBe(launch!.token)
+  })
+
   it("listing state for a sold item is deleted", async () => {
     const roles = loadSeaportRoles()
     const logs = loadNftFixture("seaport-fills").filter((l) => l.transactionHash === roles.sweep)
@@ -369,7 +436,12 @@ describe("NFT source", () => {
     const sweep = loadNftFixture("seaport-fills")
       .filter((l) => l.transactionHash === roles.sweep)
       .map((l) => ({ ...l, blockNumber: lastBlock(burst) + 10n }))
-    const logs = [...burst, ...sweep]
+    // A recorded burn, moved next to the burst too.
+    const burn = loadNftFixture("wired-transfers")
+      .filter((l) => decodeNftTransfers(l).some((x) => x.kind === "burn"))
+      .slice(0, 1)
+      .map((l) => ({ ...l, blockNumber: lastBlock(burst) + 5n }))
+    const logs = [...burst, ...burn, ...sweep]
     const first = firstBlock(logs)
     const chain = new FakeChain(lastBlock(logs) + 5n)
     for (const l of logs) chain.add(l)
@@ -385,7 +457,13 @@ describe("NFT source", () => {
       head: chain.head,
     })
     await idx.trigger()
-    for (const table of ["nft_mints", "nft_seadrop_mints", "nft_seadrop_config", "nft_sales"])
+    for (const table of [
+      "nft_mints",
+      "nft_burns",
+      "nft_seadrop_mints",
+      "nft_seadrop_config",
+      "nft_sales",
+    ])
       expect(await count(table), table).toBeGreaterThan(0)
 
     chain.reorg(first)

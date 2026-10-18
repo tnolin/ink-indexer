@@ -100,7 +100,7 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
         seadrop = indexer.nft_collections.seadrop or excluded.seadrop,
         kind = coalesce(excluded.kind, indexer.nft_collections.kind),
         launchpad = coalesce(excluded.launchpad, indexer.nft_collections.launchpad),
-        launch_token = coalesce(excluded.launch_token, indexer.nft_collections.launch_token)`
+        launch_token = coalesce(indexer.nft_collections.launch_token, excluded.launch_token)`
 
   for (const part of chunks(batch.mints.map((t) => transferRecord(t, "recipient"))))
     await tx`insert into indexer.nft_mints ${tx(part)} on conflict do nothing`
@@ -133,7 +133,10 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
 
 /**
  * Deletes rows above `fork`. A collection whose first mint was above it loses its first-mint
- * fields; one whose launch was above it loses the launchpad it was given.
+ * fields; one whose launch was above it loses the launchpad, token and kind that launch gave it.
+ *
+ * shortcut: a collection whose only logs were above the fork keeps its row, `standard` and
+ * `seadrop = true`. Deleting it would need a first-seen block column on nft_collections.
  */
 export async function rollbackRows(tx: Tx, fork: bigint) {
   const f = s(fork)
@@ -144,7 +147,7 @@ export async function rollbackRows(tx: Tx, fork: bigint) {
   await tx`delete from indexer.nft_sales where block > ${f}`
   await tx`
     update indexer.nft_collections
-    set launchpad = null, launch_token = null, kind = case when kind = 'continuous' then null else kind end
+    set launchpad = null, launch_token = null, kind = null
     where contract in (select collection from indexer.nft_launches where block > ${f})`
   await tx`delete from indexer.nft_launches where block > ${f}`
   await tx`

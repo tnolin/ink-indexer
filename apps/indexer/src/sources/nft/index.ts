@@ -8,6 +8,7 @@ import {
   decodeOrderFulfilled,
   decodeSeaDropLog,
   INK_CHAIN_ID,
+  mergeMatchedSales,
   NFT_TOPICS,
   SEADROP_V1,
   SEAPORT_1_5,
@@ -217,13 +218,34 @@ export async function processLogs(logs: ChainLog[][], deps: NftDeps): Promise<Nf
     }
   }
 
+  // Matched orders (a buyer's offer filled against a seller's listing) log the same NFT twice in one
+  // transaction. Merge them per transaction before building rows: one sale, at the offer's log.
+  const byTx = new Map<Hash, (SeaportSale & { log: ChainLog })[]>()
+  for (const l of at(SEAPORT))
+    for (const sale of decodeOrderFulfilled(l)) {
+      const items = byTx.get(l.transactionHash) ?? []
+      items.push({ ...sale, log: l })
+      byTx.set(l.transactionHash, items)
+    }
+  const byLog = new Map<ChainLog, (SeaportSale & { log: ChainLog })[]>()
+  for (const items of byTx.values())
+    for (const item of mergeMatchedSales(items)) {
+      const forLog = byLog.get(item.log) ?? []
+      forLog.push(item)
+      byLog.set(item.log, forLog)
+    }
   const saleLogs: { log: ChainLog; sales: SaleRow[] }[] = []
-  for (const l of at(SEAPORT)) {
-    const sales = linesToSales(l, decodeOrderFulfilled(l))
-    if (sales.length === 0) continue
+  for (const [l, items] of byLog) {
     seen(l)
-    saleLogs.push({ log: l, sales })
+    saleLogs.push({ log: l, sales: linesToSales(l, items) })
   }
+  saleLogs.sort((a, b) =>
+    a.log.blockNumber === b.log.blockNumber
+      ? a.log.logIndex - b.log.logIndex
+      : a.log.blockNumber < b.log.blockNumber
+        ? -1
+        : 1,
+  )
 
   const launches: LaunchRow[] = []
   for (const l of at(CHIMERA)) {
@@ -270,7 +292,9 @@ export async function processLogs(logs: ChainLog[][], deps: NftDeps): Promise<Nf
   for (const [contract, block] of firstMintBlock)
     touch(contract).firstMint = { block, ts: times.get(block)! }
   for (const contract of seadropContracts) touch(contract).seadrop = true
-  for (const l of launches) touch(l.collection).launch = { launchpad: l.launchpad, token: l.token }
+  // The first launch of a collection wins, as in nft_launches.
+  for (const l of launches)
+    touch(l.collection).launch ??= { launchpad: l.launchpad, token: l.token }
 
   const events: EventRow[] = []
   const sales: SaleRow[] = []
