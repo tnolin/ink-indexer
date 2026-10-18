@@ -1,4 +1,4 @@
-import type { Sql } from "@ink-indexer/db"
+import { connect, type Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import type {
   NftEvent,
@@ -135,6 +135,42 @@ type Row = { id: bigint; tx_hash: string; block: bigint; block_hash: string; con
 const rows = () =>
   sql<Row[]>`select id, tx_hash, block, block_hash, confirmed from indexer.events order by id`
 
+/** The bot's read: `confirmed and id > cursor order by id`, from its own last id. */
+function reader(db: Sql) {
+  let cursor = 0n
+  const read: bigint[] = []
+  return {
+    read,
+    async poll() {
+      const got = await db<{ id: bigint }[]>`
+        select id from indexer.events where confirmed and id > ${cursor.toString()} order by id`
+      for (const r of got) read.push(r.id)
+      if (got.length > 0) cursor = got.at(-1)!.id
+    },
+  }
+}
+
+/** An `extra` step that records its start, then waits for `release()`. */
+function gatedExtra(order: string[]) {
+  let release!: () => void
+  const gate = new Promise<void>((r) => {
+    release = r
+  })
+  let entered!: () => void
+  const inside = new Promise<void>((r) => {
+    entered = r
+  })
+  const extra = async () => {
+    order.push("extra-start")
+    entered()
+    await gate
+    order.push("extra-end")
+  }
+  return { extra, inside, release }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 describe("store.writeOffchain", () => {
   it("off-chain rows take the cursor block and confirm on the next confirm(head)", async () => {
     await chainSpan([sale(B + 9n)], cursorAt(B + 10n), B + 10n)
@@ -148,7 +184,7 @@ describe("store.writeOffchain", () => {
       events.map((e) => ({
         type: e.type,
         entity: CONTRACT,
-        payload: e,
+        payload: { ...e, blockNumber: (B + 10n).toString() },
         block: B + 10n,
         block_hash: hashOf(B + 10n),
         tx_hash: e.txHash,
@@ -190,14 +226,7 @@ describe("store.writeOffchain", () => {
 
   it("a reader of confirmed and id > cursor never passes an unconfirmed off-chain row", async () => {
     // The bot's read, polled after every step.
-    let readCursor = 0n
-    const read: bigint[] = []
-    const poll = async () => {
-      const got = await sql<{ id: bigint }[]>`
-        select id from indexer.events where confirmed and id > ${readCursor.toString()} order by id`
-      for (const r of got) read.push(r.id)
-      if (got.length > 0) readCursor = got.at(-1)!.id
-    }
+    const { read, poll } = reader(sql)
     const step = async (fn: () => Promise<unknown>) => {
       await fn()
       await poll()
@@ -212,14 +241,24 @@ describe("store.writeOffchain", () => {
     // Old enough to confirm, but written unconfirmed; the next confirm takes it.
     await step(() => offchain([listing(2)]))
     await step(() => store.confirm(B + 4n))
-    // Unconfirmed chain and off-chain rows at B+5, then a reorg back to B+4.
+    // An off-chain row at B+4, confirmed and read before the reorg moves it.
+    await step(() => chainSpan([], cursorAt(B + 4n), B + 5n))
+    await step(() => offchain([stats(3)]))
+    await step(() => store.confirm(B + 5n))
+    const readStats3 = (await rows()).find((r) => r.tx_hash === stats(3).txHash)!
+    expect(read).toContain(readStats3.id)
+    // Unconfirmed chain and off-chain rows at B+5, then a reorg back to B+3.
     await step(() => chainSpan([sale(B + 5n)], cursorAt(B + 5n), B + 5n))
     await step(() => offchain([listing(3), mintStart()]))
     const orphan = (await rows()).find((r) => r.tx_hash === sale(B + 5n).event.txHash)!
-    await step(() => store.rollback(B + 4n, hashOf(B + 4n), []))
-    // The new branch: B+5' and B+6' confirm the moved off-chain rows first.
+    await step(() => store.rollback(B + 3n, hashOf(B + 3n), []))
+    // The new branch: B+4' to B+6' confirm the moved off-chain rows first.
     await step(() =>
-      chainSpan([sale(B + 5n, 0, 1n), sale(B + 6n, 0, 1n)], cursorAt(B + 6n, 1n), B + 6n),
+      chainSpan(
+        [sale(B + 4n, 0, 1n), sale(B + 5n, 0, 1n), sale(B + 6n, 0, 1n)],
+        cursorAt(B + 6n, 1n),
+        B + 6n,
+      ),
     )
     await step(() => offchain([stats(2)]))
     await step(() => chainSpan([sale(B + 7n, 0, 1n)], cursorAt(B + 7n, 1n), B + 7n))
@@ -229,13 +268,14 @@ describe("store.writeOffchain", () => {
     expect(final.every((r) => r.confirmed)).toBe(true)
     expect(final.map((r) => r.id)).not.toContain(orphan.id)
     expect(read).not.toContain(orphan.id)
-    // Every surviving row, read exactly once and in id order.
+    // Every surviving row, read exactly once and in id order: the moved stats(3) is not read again.
     expect(read).toEqual(final.map((r) => r.id))
     const offchainIds = final.filter((r) => !r.tx_hash.startsWith("0x")).map((r) => r.tx_hash)
     expect(offchainIds).toEqual([
       listing(1).txHash,
       stats(1).txHash,
       listing(2).txHash,
+      stats(3).txHash,
       listing(3).txHash,
       mintStart().txHash,
       stats(2).txHash,
@@ -271,6 +311,14 @@ describe("store.writeOffchain", () => {
       { tx_hash: listing(2).txHash, block: fork, block_hash: hashOf(fork), confirmed: false },
       { tx_hash: mintStart().txHash, block: fork, block_hash: hashOf(fork), confirmed: false },
     ])
+    expect(
+      await sql`select tx_hash, payload->>'blockNumber' as n from indexer.events order by id`,
+    ).toEqual([
+      { tx_hash: sale(B + 1n).event.txHash, n: (B + 1n).toString() },
+      { tx_hash: listing(1).txHash, n: fork.toString() },
+      { tx_hash: listing(2).txHash, n: fork.toString() },
+      { tx_hash: mintStart().txHash, n: fork.toString() },
+    ])
     expect(await store.getCursor()).toEqual(cursorAt(fork))
     await store.confirm(fork + 1n)
     expect((await rows()).every((r) => r.confirmed)).toBe(true)
@@ -279,27 +327,15 @@ describe("store.writeOffchain", () => {
   it("writeOffchain and writeBatch never interleave", async () => {
     await chainSpan([], cursorAt(B), B)
     const order: string[] = []
-    let release!: () => void
-    const gate = new Promise<void>((r) => {
-      release = r
-    })
-    let entered!: () => void
-    const inExtra = new Promise<void>((r) => {
-      entered = r
-    })
-    const off = offchain([listing(1)], async () => {
-      order.push("extra-start")
-      entered()
-      await gate
-      order.push("extra-end")
-    })
-    await inExtra
+    const { extra, inside, release } = gatedExtra(order)
+    const off = offchain([listing(1)], extra)
+    await inside
     const batch = store.writeBatch(
       [{ events: [sale(B + 1n)], blocks: [] }],
       [async () => void order.push("write")],
       { cursor: cursorAt(B + 1n), head: B + 1n },
     )
-    await new Promise((r) => setTimeout(r, 30))
+    await sleep(30)
     expect(order).toEqual(["extra-start"])
     release()
     await Promise.all([off, batch])
@@ -308,5 +344,43 @@ describe("store.writeOffchain", () => {
       [listing(1).txHash, B],
       [sale(B + 1n).event.txHash, B + 1n],
     ])
+  })
+
+  it("serialises writeOffchain and writeBatch from separate processes", async () => {
+    // A second connection pool and store stand in for a CLI process beside the running indexer.
+    const other = connect(inject("databaseUrl"))
+    const order: string[] = []
+    const { extra, inside, release } = gatedExtra(order)
+    try {
+      const cli = createStore(other)
+      await chainSpan([], cursorAt(B), B)
+      const { read, poll } = reader(sql)
+      const off = cli.writeOffchain([{ event: listing(1) }], extra)
+      await inside
+      // Confirmed at insert: committing it first would let the reader pass the off-chain row.
+      const batch = store.writeBatch(
+        [{ events: [sale(B + 1n)], blocks: [] }],
+        [async () => void order.push("write")],
+        { cursor: cursorAt(B + 1n), head: B + 2n },
+      )
+      await sleep(50)
+      await poll()
+      expect(order).toEqual(["extra-start"])
+      expect(read).toEqual([])
+      release()
+      await Promise.all([off, batch])
+      await store.confirm(B + 2n)
+      await poll()
+      expect(order).toEqual(["extra-start", "extra-end", "write"])
+      const final = await rows()
+      expect(final.map((r) => [r.tx_hash, r.confirmed])).toEqual([
+        [listing(1).txHash, true],
+        [sale(B + 1n).event.txHash, true],
+      ])
+      expect(read).toEqual(final.map((r) => r.id))
+    } finally {
+      release()
+      await other.end()
+    }
   })
 })
