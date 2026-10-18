@@ -13,6 +13,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "0004_nft_chain.sql",
     "0005_nft_milestones.sql",
     "0006_opensea_budget.sql",
+    "0007_nft_opensea_state.sql",
   ])
   expect(await migrate(sql)).toEqual([])
   const tables = await sql<{ table_name: string }[]>`

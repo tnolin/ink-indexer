@@ -1,0 +1,187 @@
+import { createHash } from "node:crypto"
+import type { Sql } from "@ink-indexer/db"
+import {
+  type NftCollectionEvent,
+  type NftEvent,
+  type NftGates,
+  SCHEMA_VERSION,
+} from "@ink-indexer/events"
+import type { Address } from "viem"
+import type { Store } from "../../store"
+import type { Tx } from "../source"
+
+/** `nft_collections` as the snapshot reads it. Numbers that can pass 2^53 come back as strings. */
+export type CollectionRow = {
+  contract: string
+  standard: string | null
+  kind: string | null
+  launchpad: string | null
+  launch_token: string | null
+  seadrop: boolean
+  max_supply: string | null
+  slug: string | null
+  name: string | null
+  image_url: string | null
+  twitter: string | null
+  website: string | null
+  discord: string | null
+  safelist: string | null
+  opensea_url: string | null
+  rarity_calculated_at: Date | null
+  max_rank: number | null
+  verdict: string
+  gates: NftGates | null
+  snapshot_hash: string | null
+  snapshot_n: number
+}
+
+/** Columns a caller may change together with the snapshot. */
+export type CollectionPatch = Partial<
+  Omit<CollectionRow, "contract" | "snapshot_hash" | "snapshot_n"> & {
+    discovery_attempts: number
+    next_discovery_at: Date | null
+    discovered_at: Date | null
+    next_metadata_at: Date | null
+    next_drops_at: Date | null
+    verdict_dirty: boolean
+  }
+>
+
+const KINDS = ["drop", "continuous", "legacy"] as const
+type Kind = (typeof KINDS)[number]
+const VERDICTS = ["real", "pending", "junk"] as const
+
+/** Fields the hash leaves out: they differ between two snapshots of the same collection. */
+const BASE_FIELDS = new Set(["txHash", "logIndex", "blockNumber", "blockTimestamp"])
+
+/** JSON with object keys sorted at every level, so equal values give equal text. */
+export function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`
+  if (v !== null && typeof v === "object")
+    return `{${Object.entries(v)
+      .filter(([, x]) => x !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([k, x]) => `${JSON.stringify(k)}:${canonicalJson(x)}`)
+      .join(",")}}`
+  return JSON.stringify(v)
+}
+
+/** sha256 of the event's canonical JSON without its base fields (hex). */
+export function snapshotHash(e: NftEvent): string {
+  const body = Object.fromEntries(Object.entries(e).filter(([k]) => !BASE_FIELDS.has(k)))
+  return createHash("sha256").update(canonicalJson(body)).digest("hex")
+}
+
+/**
+ * Gate states before any gate has been judged. Gates that judge a mint phase do not apply to a
+ * collection with none.
+ */
+function pendingGates(kind: Kind): NftGates {
+  const mintPhase = kind === "drop"
+  return {
+    page: "pending",
+    structure: mintPhase ? "pending" : "n/a",
+    traits: "pending",
+    farm: mintPhase ? "pending" : "n/a",
+    farmShareBps: null,
+  }
+}
+
+/**
+ * The `nft.collection` event for a row, or null while the row cannot make one (no standard yet).
+ * The base fields other than `source` and `contract` are placeholders the caller fills in.
+ */
+export function composeCollection(
+  row: CollectionRow,
+  nowSeconds: number,
+): NftCollectionEvent | null {
+  if (row.standard !== "erc721" && row.standard !== "erc1155") return null
+  // shortcut: a row with no kind yet is reported as a drop. Its verdict stays pending, so no feed
+  // alert follows; kind detection re-emits the snapshot once it sets the kind.
+  const kind = KINDS.find((k) => k === row.kind) ?? "drop"
+  const verdict = VERDICTS.find((v) => v === row.verdict) ?? "pending"
+  const chimera = row.launchpad === "chimera"
+  return {
+    v: SCHEMA_VERSION,
+    chainId: 57073,
+    contract: row.contract as Address,
+    source: "opensea",
+    txHash: `os:col:${row.contract}:${row.snapshot_n + 1}`,
+    logIndex: 0,
+    blockNumber: "0",
+    blockTimestamp: nowSeconds,
+    type: "nft.collection",
+    slug: row.slug,
+    name: row.name,
+    imageUrl: row.image_url,
+    links: { twitter: row.twitter, website: row.website, discord: row.discord },
+    standard: row.standard,
+    kind,
+    verdict,
+    gates: row.gates ?? pendingGates(kind),
+    manual: false,
+    safelist: row.safelist,
+    maxSupply: row.max_supply,
+    seadrop: row.seadrop,
+    openseaUrl: row.opensea_url,
+    rarityCalculatedAt: row.rarity_calculated_at
+      ? Math.floor(row.rarity_calculated_at.getTime() / 1000)
+      : null,
+    maxRank: row.max_rank,
+    launchpad: chimera ? "chimera" : null,
+    launchToken: chimera ? ((row.launch_token as Address | null) ?? null) : null,
+  }
+}
+
+/** A snapshot was written for the row since this caller read it. */
+export class SnapshotRaced extends Error {
+  constructor(contract: string) {
+    super(`nft.collection snapshot of ${contract} changed while it was being written`)
+  }
+}
+
+export type Snapshots = ReturnType<typeof createSnapshots>
+
+/** Writes `nft.collection` events: one whenever a collection's row makes a different event than the last. */
+export function createSnapshots(deps: { sql: Sql; store: Store; now?: () => number }) {
+  const { sql, store } = deps
+  const now = deps.now ?? Date.now
+
+  /**
+   * Applies `patch` to the collection's row and, if the event the row now makes differs from the
+   * last one written, writes it (`txHash` `os:col:<contract>:<n>`) in the same transaction, with the
+   * new hash and count. Nothing is written for a row with no standard yet, or for an unknown
+   * contract. True when an event was written. Database writes only: fetch before calling.
+   */
+  async function emitSnapshotIfChanged(
+    contract: string,
+    patch: CollectionPatch = {},
+  ): Promise<boolean> {
+    const [row] = await sql<CollectionRow[]>`
+      select contract, standard, kind, launchpad, launch_token, seadrop, max_supply::text as max_supply,
+        slug, name, image_url, twitter, website, discord, safelist, opensea_url,
+        rarity_calculated_at, max_rank, verdict, gates, snapshot_hash, snapshot_n
+      from indexer.nft_collections where contract = ${contract}`
+    if (!row) return false
+    const apply = async (tx: Tx) => {
+      if (Object.keys(patch).length > 0)
+        await tx`update indexer.nft_collections set ${tx(patch as Record<string, never>)} where contract = ${contract}`
+    }
+    const event = composeCollection({ ...row, ...patch } as CollectionRow, Math.floor(now() / 1000))
+    const hash = event ? snapshotHash(event) : null
+    if (!event || hash === row.snapshot_hash) {
+      await sql.begin(apply)
+      return false
+    }
+    await store.writeOffchain([{ event }], async (tx) => {
+      await apply(tx)
+      const moved = await tx`
+        update indexer.nft_collections set snapshot_hash = ${hash}, snapshot_n = snapshot_n + 1
+        where contract = ${contract} and snapshot_n = ${row.snapshot_n} returning 1`
+      if (moved.length === 0) throw new SnapshotRaced(contract)
+    })
+    return true
+  }
+
+  return { emitSnapshotIfChanged }
+}

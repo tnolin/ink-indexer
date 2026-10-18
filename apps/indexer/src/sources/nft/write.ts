@@ -8,7 +8,7 @@ import type {
   SeaDropMintRow,
   TransferRow,
 } from "./index"
-import { ROW_CHUNK } from "./policy"
+import { DISCOVERY_RETRY_MS, DROPS_DEBOUNCE_MS, ROW_CHUNK } from "./policy"
 
 // The NFT source's tables, written inside the loop's transaction.
 
@@ -101,6 +101,27 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
         kind = coalesce(excluded.kind, indexer.nft_collections.kind),
         launchpad = coalesce(excluded.launchpad, indexer.nft_collections.launchpad),
         launch_token = coalesce(indexer.nft_collections.launch_token, excluded.launch_token)`
+
+  // OpenSea triggers. A new row is due for discovery by its column default. New activity on a
+  // contract with no slug restarts discovery: the failures are forgotten, and the next lookup is
+  // at most five minutes away (at once if it had given up). A SeaDrop configuration log makes the
+  // drop page due soon, unless it is already due sooner.
+  const active = [
+    ...new Set([...batch.mints.map((m) => m.contract), ...batch.sales.map((r) => r.contract)]),
+  ]
+  if (active.length > 0)
+    await tx`
+      update indexer.nft_collections set
+        discovery_attempts = 0,
+        next_discovery_at = least(coalesce(next_discovery_at, now()), now() + make_interval(secs => ${DISCOVERY_RETRY_MS[0] / 1000}::float8))
+      where contract = any(${tx.array(active)}::text[]) and slug is null
+        and (discovery_attempts > 0 or next_discovery_at is null)`
+  const configured = [...new Set(batch.seadropConfig.map((c) => c.contract))]
+  if (configured.length > 0)
+    await tx`
+      update indexer.nft_collections set
+        next_drops_at = least(coalesce(next_drops_at, 'infinity'::timestamptz), now() + make_interval(secs => ${DROPS_DEBOUNCE_MS / 1000}::float8))
+      where contract = any(${tx.array(configured)}::text[])`
 
   for (const part of chunks(batch.mints.map((t) => transferRecord(t, "recipient"))))
     await tx`insert into indexer.nft_mints ${tx(part)} on conflict do nothing`
