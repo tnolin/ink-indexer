@@ -2,7 +2,6 @@ import {
   type ChainLog,
   type LaunchKey,
   type LaunchState,
-  LOG_TOPICS,
   readErc20Meta,
   readLaunchStates,
   readTotalSupplies,
@@ -10,15 +9,19 @@ import {
 } from "@ink-indexer/sdk"
 import { type Address, BlockNotFoundError, type Hash } from "viem"
 import { type Logger, log } from "./log"
-import { isTransportError, type LogRouter } from "./rpc"
+import { isTransportError, type LogFilter, type LogRouter } from "./rpc"
 
 /** Everything the indexer needs from Ink. viemChain is the real one; tests use FakeChain. */
 export type Chain = {
   getBlockNumber(): Promise<bigint>
   /** null when the serving endpoint does not have the block yet. That is unknown, never a hash mismatch. */
   getBlock(n: bigint): Promise<{ hash: Hash; timestamp: bigint } | null>
-  /** Logs for every InkyPump topic from `from` up to at most `to`, and the last block covered. The log transport may be behind head, so this can stop short of `to`. */
-  getLogs(from: bigint, to: bigint): Promise<{ logs: ChainLog[]; toBlock: bigint }>
+  /** Logs matching `filter` from `from` up to at most `to`, and the last block covered. The log transport may be behind head, so this can stop short of `to`. */
+  getLogs(
+    from: bigint,
+    to: bigint,
+    filter: LogFilter,
+  ): Promise<{ logs: ChainLog[]; toBlock: bigint }>
   readLaunchStates(keys: LaunchKey[], block: bigint): Promise<LaunchState[]>
   readTotalSupplies(tokens: Address[], block: bigint): Promise<bigint[]>
   readErc20Meta(token: Address): Promise<{ decimals: number; symbol: string }>
@@ -96,7 +99,7 @@ export function viemChain(
         throw err
       }
     },
-    getLogs: (from, to) => router.getLogs(from, to, LOG_TOPICS),
+    getLogs: (from, to, filter) => router.getLogs(from, to, filter),
     readLaunchStates: (keys, block) =>
       retry("readLaunchStates", () => readLaunchStates(client, keys, block)),
     readTotalSupplies: (tokens, block) =>

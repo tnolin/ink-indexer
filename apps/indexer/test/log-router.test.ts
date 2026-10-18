@@ -7,7 +7,15 @@ import {
   WebSocketRequestError,
 } from "viem"
 import { describe, expect, it } from "vitest"
-import { isConnectionError, isSocketError, LogRouter, type LogTransport, seedFor } from "../src/rpc"
+import {
+  type GetLogsParams,
+  isConnectionError,
+  isSocketError,
+  type LogFilter,
+  LogRouter,
+  type LogTransport,
+  seedFor,
+} from "../src/rpc"
 
 function fakeClock() {
   const c = {
@@ -49,6 +57,7 @@ function transport(
 
 const quiet = () => {}
 const FAR = 10n ** 9n
+const NO_FILTER: LogFilter = { topics: [] }
 
 describe("seedFor", () => {
   it("uses the measured caps by hostname", () => {
@@ -60,11 +69,30 @@ describe("seedFor", () => {
 })
 
 describe("LogRouter", () => {
+  it("passes the filter through unchanged", async () => {
+    const seen: GetLogsParams[] = []
+    const t = transport("t", 1_000)
+    t.getLogs = async (p) => {
+      seen.push(p)
+      return []
+    }
+    const filter: LogFilter = {
+      address: [
+        "0x00005ea00ac477b1030ce78506496e8c2de24bf5",
+        "0x0000000000000000000000000000000000000001",
+      ],
+      topics: [["0xaa", "0xbb"], null, `0x${"0".repeat(64)}`],
+    }
+    await new LogRouter([t], fakeClock(), quiet).getLogs(5n, 10n, filter)
+    expect(seen).toEqual([{ fromBlock: 5n, toBlock: 10n, ...filter }])
+    expect(seen[0]!.topics).toBe(filter.topics)
+  })
+
   it("routes to the healthy transport with the largest range", async () => {
     const drpc = transport("drpc", 100)
     const qn = transport("qn", 10_000)
     const router = new LogRouter([drpc, qn], fakeClock(), quiet)
-    expect(await router.getLogs(1n, 50_000n, [])).toEqual({ logs: [], toBlock: 10_000n })
+    expect(await router.getLogs(1n, 50_000n, NO_FILTER)).toEqual({ logs: [], toBlock: 10_000n })
     expect(qn.calls).toEqual([[1n, 10_000n]])
     expect(drpc.calls).toEqual([])
   })
@@ -73,7 +101,7 @@ describe("LogRouter", () => {
     const drpc = transport("drpc", 100)
     const qn = transport("qn", 10_000, (from, to) => to - from + 1n > 2_500n)
     const router = new LogRouter([drpc, qn], fakeClock(), quiet)
-    expect((await router.getLogs(1n, FAR, [])).toBlock).toBe(2_500n)
+    expect((await router.getLogs(1n, FAR, NO_FILTER)).toBlock).toBe(2_500n)
     expect(qn.calls).toEqual([
       [1n, 10_000n],
       [1n, 5_000n],
@@ -88,11 +116,11 @@ describe("LogRouter", () => {
   it("doubles back after 20 consecutive successes, never past the seed", async () => {
     const gel = transport("gel", 1_000, (_f, _t, call) => call === 1)
     const router = new LogRouter([gel], fakeClock(), quiet)
-    await router.getLogs(1n, FAR, [])
+    await router.getLogs(1n, FAR, NO_FILTER)
     expect(router.ranges()[0]!.range).toBe(500)
-    for (let i = 0; i < 19; i++) await router.getLogs(1n, FAR, [])
+    for (let i = 0; i < 19; i++) await router.getLogs(1n, FAR, NO_FILTER)
     expect(router.ranges()[0]!.range).toBe(1_000)
-    for (let i = 0; i < 20; i++) await router.getLogs(1n, FAR, [])
+    for (let i = 0; i < 20; i++) await router.getLogs(1n, FAR, NO_FILTER)
     expect(router.ranges()[0]!.range).toBe(1_000)
   })
 
@@ -101,12 +129,12 @@ describe("LogRouter", () => {
     const a = transport("a", 1, (_f, _t, call) => call === 1)
     const b = transport("b", 1)
     const router = new LogRouter([a, b], clock, quiet)
-    await router.getLogs(1n, 5n, [])
+    await router.getLogs(1n, 5n, NO_FILTER)
     expect([a.calls.length, b.calls.length]).toEqual([1, 1])
-    await router.getLogs(1n, 5n, [])
+    await router.getLogs(1n, 5n, NO_FILTER)
     expect([a.calls.length, b.calls.length]).toEqual([1, 2])
     clock.t += 60_000
-    await router.getLogs(1n, 5n, [])
+    await router.getLogs(1n, 5n, NO_FILTER)
     expect(a.calls.length).toBe(2)
   })
 
@@ -114,7 +142,7 @@ describe("LogRouter", () => {
     const a = transport("a", 10_000, () => true)
     const b = transport("b", 100)
     const router = new LogRouter([a, b], fakeClock(), quiet)
-    expect((await router.getLogs(1n, FAR, [])).toBlock).toBe(100n)
+    expect((await router.getLogs(1n, FAR, NO_FILTER)).toBlock).toBe(100n)
     expect(a.calls.map(([f, t]) => t - f + 1n)).toEqual([10_000n, 5_000n, 2_500n, 1_250n, 625n])
     expect(router.ranges()[0]).toMatchObject({ healthy: false })
   })
@@ -123,7 +151,7 @@ describe("LogRouter", () => {
     const clock = fakeClock()
     const a = transport("a", 1, (_f, _t, call) => call === 1)
     const router = new LogRouter([a], clock, quiet)
-    expect((await router.getLogs(7n, 9n, [])).toBlock).toBe(7n)
+    expect((await router.getLogs(7n, 9n, NO_FILTER)).toBlock).toBe(7n)
     expect(clock.t).toBe(61_000) // 1 + 2 + 4 + 8 + 16 + 30 seconds of backoff
     expect(a.calls).toEqual([
       [7n, 7n],
@@ -134,7 +162,7 @@ describe("LogRouter", () => {
   it("clamps the span to the transport's own head and returns the clamped toBlock", async () => {
     const qn = transport("qn", 10_000, () => false, 5_000n)
     const router = new LogRouter([qn], fakeClock(), quiet)
-    expect(await router.getLogs(1n, FAR, [])).toEqual({ logs: [], toBlock: 5_000n })
+    expect(await router.getLogs(1n, FAR, NO_FILTER)).toEqual({ logs: [], toBlock: 5_000n })
     expect(qn.calls).toEqual([[1n, 5_000n]])
   })
 
@@ -142,7 +170,7 @@ describe("LogRouter", () => {
     const behind = transport("behind", 10_000, () => false, 10n)
     const ok = transport("ok", 100)
     const router = new LogRouter([behind, ok], fakeClock(), quiet)
-    expect(await router.getLogs(50n, 1_000n, [])).toEqual({ logs: [], toBlock: 149n })
+    expect(await router.getLogs(50n, 1_000n, NO_FILTER)).toEqual({ logs: [], toBlock: 149n })
     expect(behind.calls).toEqual([])
     expect(ok.calls).toEqual([[50n, 149n]])
   })
@@ -156,7 +184,7 @@ describe("LogRouter", () => {
       gel.head = 20n
     }
     const router = new LogRouter([gel], clock, quiet)
-    expect(await router.getLogs(11n, FAR, [])).toEqual({ logs: [], toBlock: 20n })
+    expect(await router.getLogs(11n, FAR, NO_FILTER)).toEqual({ logs: [], toBlock: 20n })
     expect(clock.t).toBe(1_000)
   })
 
@@ -164,11 +192,11 @@ describe("LogRouter", () => {
     const clock = fakeClock()
     const qn = transport("qn", 10_000)
     const router = new LogRouter([qn], clock, quiet)
-    await router.getLogs(1n, 10n, [])
-    await router.getLogs(11n, 20n, [])
+    await router.getLogs(1n, 10n, NO_FILTER)
+    await router.getLogs(11n, 20n, NO_FILTER)
     expect(qn.headCalls).toBe(1)
     clock.t += 1_000
-    await router.getLogs(21n, 30n, [])
+    await router.getLogs(21n, 30n, NO_FILTER)
     expect(qn.headCalls).toBe(2)
   })
 })
@@ -212,7 +240,7 @@ describe("socket errors", () => {
     }
     const qn = transport("qn", 1_000)
     const router = new LogRouter([gel, qn], fakeClock(), (l, m, f) => logged.push([l, m, f]))
-    expect(await router.getLogs(1n, FAR, [])).toEqual({ logs: [], toBlock: 1_000n })
+    expect(await router.getLogs(1n, FAR, NO_FILTER)).toEqual({ logs: [], toBlock: 1_000n })
     expect(router.ranges()).toEqual([
       { name: "ws-gel.inkonchain.com", range: 10_000, healthy: false },
       { name: "qn", range: 1_000, healthy: true },
@@ -230,7 +258,7 @@ describe("socket errors", () => {
     }
     const qn = transport("qn", 1_000)
     const router = new LogRouter([gel, qn], fakeClock(), quiet)
-    await router.getLogs(1n, 10n, [])
+    await router.getLogs(1n, 10n, NO_FILTER)
     expect(router.ranges()[0]!.healthy).toBe(false)
     expect(router.ranges()[1]!.healthy).toBe(true)
   })
@@ -250,13 +278,13 @@ describe("socket errors", () => {
       if (clock.t >= 60_000) broken = false
     }
     const router = new LogRouter([gel], clock, quiet)
-    expect(await router.getLogs(1n, 10n, [])).toEqual({ logs: [], toBlock: 10n })
+    expect(await router.getLogs(1n, 10n, NO_FILTER)).toEqual({ logs: [], toBlock: 10n })
   })
 
   it("still halves the range on other errors", async () => {
     const t = transport("t", 1_000, (_f, _t, call) => call === 1)
     const router = new LogRouter([t], fakeClock(), quiet)
-    await router.getLogs(1n, 10_000n, [])
+    await router.getLogs(1n, 10_000n, NO_FILTER)
     expect(t.calls[1]).toEqual([1n, 500n])
     expect(router.ranges()[0]!.healthy).toBe(true)
   })
@@ -267,7 +295,7 @@ describe("repeated failures", () => {
     const logged: [string, string, Record<string, unknown> | undefined][] = []
     const t = transport("qn", 10_000, (_f, _t, call) => call <= 5)
     const router = new LogRouter([t], fakeClock(), (l, m, f) => logged.push([l, m, f]))
-    await router.getLogs(1n, 10n, [])
+    await router.getLogs(1n, 10n, NO_FILTER)
     expect(logged.filter(([l]) => l === "warn")).toHaveLength(5)
     const errors = logged.filter(([l]) => l === "error")
     expect(errors).toHaveLength(1)
@@ -300,7 +328,7 @@ describe("http failures", () => {
     }
     const ok = transport("ok", 1_000)
     const router = new LogRouter([qn, ok], fakeClock(), quiet)
-    await router.getLogs(1n, FAR, [])
+    await router.getLogs(1n, FAR, NO_FILTER)
     expect(router.ranges()[0]).toEqual({ name: "qn", range: 10_000, healthy: false })
     expect(router.ranges()[1]!.healthy).toBe(true)
   })
@@ -312,7 +340,7 @@ describe("http failures", () => {
     }
     const ok = transport("ok", 1_000)
     const router = new LogRouter([qn, ok], fakeClock(), quiet)
-    await router.getLogs(1n, FAR, [])
+    await router.getLogs(1n, FAR, NO_FILTER)
     expect(router.ranges()[0]).toEqual({ name: "qn", range: 625, healthy: true })
   })
 
@@ -320,7 +348,7 @@ describe("http failures", () => {
     const logged: [string, string, Record<string, unknown> | undefined][] = []
     const t = transport("qn", 1, (_f, _t, call) => call <= 6)
     const router = new LogRouter([t], fakeClock(), (l, m, f) => logged.push([l, m, f]))
-    await router.getLogs(1n, 10n, [])
+    await router.getLogs(1n, 10n, NO_FILTER)
     const errors = logged.filter(([l]) => l === "error")
     expect(errors.map(([, , f]) => f!.failures)).toEqual([5, 6])
   })

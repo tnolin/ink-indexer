@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { resetDb, testDatabaseUrl } from "@ink-indexer/db/testing"
-import { type ChainLog, decodeLog, NATIVE_QUOTE_ASSET } from "@ink-indexer/sdk"
+import { type ChainLog, decodeLog, LOG_TOPICS, NATIVE_QUOTE_ASSET } from "@ink-indexer/sdk"
 import EmbeddedPostgres from "embedded-postgres"
 import type { Address } from "viem"
 import { type Chain, viemChain } from "../apps/indexer/src/chain"
@@ -45,7 +45,7 @@ const live = viemChain(client, router, { logger })
 /** launchId of every launch created in the range, per hook. */
 const createdKeys = new Set<string>()
 for (let next = from; next <= to; ) {
-  const { logs, toBlock } = await live.getLogs(next, to)
+  const { logs, toBlock } = await live.getLogs(next, to, { topics: [LOG_TOPICS] })
   for (const l of logs) {
     const d = decodeLog(l)
     if (d?.kind === "launchCreated") createdKeys.add(`${l.address}:${d.launchId}`)
@@ -79,8 +79,8 @@ const recording: Chain = {
     calls.push({ method: "getBlock", args: [n], result })
     return result
   },
-  async getLogs(a, b) {
-    const r = await live.getLogs(a, b)
+  async getLogs(a, b, filter) {
+    const r = await live.getLogs(a, b, filter)
     const logs = r.logs.filter(keep)
     calls.push({ method: "getLogs", args: [a, b], result: { logs, toBlock: r.toBlock } })
     return { logs, toBlock: r.toBlock }

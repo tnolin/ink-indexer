@@ -3,6 +3,8 @@ import { join } from "node:path"
 import type { ChainLog, LaunchKey, LaunchState } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Chain } from "../src/chain"
+import type { LogFilter } from "../src/rpc"
+import { matchesFilter } from "./fake-chain"
 
 const DIR = join(import.meta.dirname, "fixtures", "inkypump-range")
 
@@ -74,11 +76,13 @@ export class ReplayChain implements Chain {
     return this.answer<{ hash: Hash; timestamp: bigint } | null>("getBlock", [n])
   }
 
-  async getLogs(from: bigint, to: bigint) {
+  async getLogs(from: bigint, to: bigint, filter: LogFilter) {
     const toBlock = to < this.calls.head ? to : this.calls.head
     if (from < this.calls.range.from || from > toBlock)
       throw new Error(`no recorded logs for ${from}-${to}`)
-    const logs = this.calls.logs.filter((l) => l.blockNumber >= from && l.blockNumber <= toBlock)
+    const logs = this.calls.logs.filter(
+      (l) => l.blockNumber >= from && l.blockNumber <= toBlock && matchesFilter(l, filter),
+    )
     return { logs, toBlock }
   }
 

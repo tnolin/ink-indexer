@@ -1,11 +1,15 @@
-import { curveValue, INKYPUMP_START_BLOCK, progressBps } from "@ink-indexer/sdk"
+import { curveValue, INKYPUMP_START_BLOCK, LOG_TOPICS, progressBps } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import type { Chain } from "./chain"
 import { BlockNotServedError } from "./errors"
 import type { Logger } from "./log"
+import type { LogFilter } from "./rpc"
 import { HookRegistry, nativeHookRows } from "./sources/inkypump/hooks"
 import { type Batch, type CurveRow, curveMarketCap, processLogs } from "./sources/inkypump/index"
 import type { Cursor, Store } from "./store"
+
+/** Every InkyPump event: one topic0 position matching any of the event signatures. */
+const INKYPUMP_LOG_FILTER: LogFilter = { topics: [LOG_TOPICS] }
 
 export class Indexer {
   private registry = new HookRegistry([])
@@ -79,7 +83,7 @@ export class Indexer {
     moveCursor: boolean,
   ): Promise<bigint> {
     const { chain, store, logger } = this.deps
-    const { logs, toBlock } = await chain.getLogs(from, to)
+    const { logs, toBlock } = await chain.getLogs(from, to, INKYPUMP_LOG_FILTER)
     let batch: Batch
     try {
       batch = await processLogs(logs, {

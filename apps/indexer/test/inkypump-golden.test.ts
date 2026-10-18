@@ -1,9 +1,12 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
+import { LOG_TOPICS } from "@ink-indexer/sdk"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import { Indexer } from "../src/loop"
 import { createStore } from "../src/store"
 import { goldenEvents, loadCalls, ReplayChain } from "./replay-chain"
+
+const FILTER = { topics: [LOG_TOPICS] }
 
 let sql: Sql
 beforeEach(async () => {
@@ -43,7 +46,7 @@ describe("recorded InkyPump range", () => {
     const calls = loadCalls()
     const chain = new ReplayChain(calls)
     await expect(chain.getBlock(1n)).rejects.toThrow(/no recorded answer/)
-    await expect(chain.getLogs(calls.range.from - 1n, calls.range.to)).rejects.toThrow(
+    await expect(chain.getLogs(calls.range.from - 1n, calls.range.to, FILTER)).rejects.toThrow(
       /no recorded logs/,
     )
     await expect(chain.readErc20Meta("0x0000000000000000000000000000000000000001")).rejects.toThrow(
@@ -53,8 +56,22 @@ describe("recorded InkyPump range", () => {
 
   it("clamps getLogs to the recorded head", async () => {
     const calls = loadCalls()
-    const r = await new ReplayChain(calls).getLogs(calls.range.from, calls.head + 1_000n)
+    const r = await new ReplayChain(calls).getLogs(calls.range.from, calls.head + 1_000n, FILTER)
     expect(r.toBlock).toBe(calls.head)
     expect(r.logs).toHaveLength(calls.logs.length)
+  })
+
+  it("applies the address and topic filter to the recorded logs", async () => {
+    const calls = loadCalls()
+    const chain = new ReplayChain(calls)
+    const first = calls.logs[0]!
+    const { range } = calls
+    const logs = async (filter: Parameters<ReplayChain["getLogs"]>[2]) =>
+      (await chain.getLogs(range.from, range.to, filter)).logs
+    expect(await logs({ address: first.address, topics: [first.topics[0]!] })).toContainEqual(first)
+    expect(await logs({ topics: [[]] })).toEqual([])
+    expect(
+      await logs({ address: "0x0000000000000000000000000000000000000001", topics: [] }),
+    ).toEqual([])
   })
 })

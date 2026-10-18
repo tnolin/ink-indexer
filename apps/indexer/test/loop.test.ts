@@ -273,8 +273,8 @@ describe("Indexer log and block endpoints disagreeing", () => {
     })
     await idx.init()
     const getLogs = chain.getLogs.bind(chain)
-    chain.getLogs = async (from, to) => {
-      const r = await getLogs(from, to)
+    chain.getLogs = async (from, to, filter) => {
+      const r = await getLogs(from, to, filter)
       chain.reorg(S + 15n) // the block endpoint now sees the other fork
       return r
     }
