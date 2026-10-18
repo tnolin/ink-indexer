@@ -79,3 +79,11 @@ export type SeaportRoles = {
 export function loadSeaportRoles(): SeaportRoles {
   return readNftJson("seaport-roles.json")
 }
+
+/** Every Chimera factory CampaignCreated log since its deployment, and one other factory log. */
+export function loadChimeraCampaigns(): ChainLog[] {
+  return readNftJson<SavedLog[]>("chimera-campaigns.json").map((l) => ({
+    ...l,
+    blockNumber: BigInt(l.blockNumber),
+  }))
+}
