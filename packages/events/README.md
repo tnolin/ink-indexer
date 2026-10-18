@@ -2,7 +2,7 @@
 
 Typed, versioned event schema for ink-indexer. These are the payloads in the indexer's `indexer.events` table and the contract for anything that reads it. MIT licensed.
 
-Every event has `v` (schema version, currently `1`), `type`, `chainId` (57073), `launchpad`, `token`, `launchId`, `txHash`, `logIndex`, `blockNumber` (decimal string) and `blockTimestamp` (unix seconds). Addresses and hashes are lowercase. Amounts are decimal strings in base units.
+Every event has `v` (schema version, currently `1`), `type`, `chainId` (57073), `txHash`, `logIndex`, `blockNumber` (decimal string) and `blockTimestamp` (unix seconds). `launchpad.*` events also have `launchpad`, `token` and `launchId`. `nft.*` events have `contract` and `source` (`chain` or `opensea`; `txHash` is a synthetic id for OpenSea events) and are typed as `NftEvent`. Addresses and hashes are lowercase. Amounts are decimal strings in base units.
 
 ## `launchpad.launch`
 

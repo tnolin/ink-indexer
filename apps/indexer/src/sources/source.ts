@@ -36,5 +36,12 @@ export function entityOf(e: IndexerEvent): string {
     case "launchpad.trade":
     case "launchpad.bond":
       return e.token
+    case "nft.collection":
+    case "nft.drop":
+    case "nft.mint":
+    case "nft.listing":
+    case "nft.sale":
+    case "nft.stats":
+      return e.contract
   }
 }
