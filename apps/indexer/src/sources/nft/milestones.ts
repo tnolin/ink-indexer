@@ -171,13 +171,13 @@ export async function loadMilestoneContexts(
       contract: Address
       last_mark_bps: number
       sold_out_block: string | null
-      first_ts: number | null
+      first_ts: string | null
     }[]
   >`
-    select contract, last_mark_bps, sold_out_block, extract(epoch from first_mint_ts)::int as first_ts
+    select contract, last_mark_bps, sold_out_block, extract(epoch from first_mint_ts)::bigint as first_ts
     from indexer.nft_collections where contract = any(${contracts}::text[])`
-  const stages = await sql<{ contract: Address; stage_index: number; ts: number }[]>`
-    select contract, stage_index, extract(epoch from first_ts)::int as ts
+  const stages = await sql<{ contract: Address; stage_index: number; ts: string }[]>`
+    select contract, stage_index, extract(epoch from first_ts)::bigint as ts
     from indexer.nft_stages where contract = any(${contracts}::text[])`
   const drops = await sql<
     { contract: Address; slug: string | null; stages: NftDropStage[]; max_supply: string | null }[]
@@ -190,7 +190,7 @@ export async function loadMilestoneContexts(
     const c = collections.find((x) => x.contract === contract)
     const drop = drops.find((x) => x.contract === contract)
     const knownStages = new Map(
-      stages.filter((x) => x.contract === contract).map((x) => [x.stage_index, x.ts]),
+      stages.filter((x) => x.contract === contract).map((x) => [x.stage_index, Number(x.ts)]),
     )
     const seen = new Set(knownStages.keys())
     const newStageRows = rows.filter((r) => !seen.has(r.stage) && seen.add(r.stage))
@@ -200,7 +200,7 @@ export async function loadMilestoneContexts(
       knownStages,
       lastMarkBps: c?.last_mark_bps ?? 0,
       soldOutBlock: c?.sold_out_block != null ? BigInt(c.sold_out_block) : null,
-      firstMintTs: c?.first_ts ?? null,
+      firstMintTs: c?.first_ts != null ? Number(c.first_ts) : null,
       drop: drop
         ? {
             slug: drop.slug,
@@ -313,7 +313,6 @@ export async function milestoneEvents(
         blockTimestamp: time(row.block),
         ...payload,
       }
-      if (event.stageCounts === undefined) delete event.stageCounts
       out.events.push({ event, block: row.block, blockHash: at.blockHash(row.block), sub })
     }
 
@@ -329,7 +328,7 @@ export async function milestoneEvents(
   return out
 }
 
-/** Distinct recipients of the contract's stored mints and the batch's, counted once. */
+/** Distinct `nft_mints` recipients of the contract, stored rows and the batch's together, each counted once. */
 async function countMinters(sql: Sql, contract: Address, batch: TransferRow[]): Promise<number> {
   const recipients = batch.filter((m) => m.contract === contract).map((m) => m.account)
   const [row] = await sql<{ n: number }[]>`

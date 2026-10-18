@@ -378,6 +378,92 @@ describe("mint milestones in the NFT source", () => {
     expect(c).toMatchObject({ last_mark_bps: 0, max_supply: null })
   })
 
+  it("one log that starts a stage, crosses every mark and sells out keeps all five events", async () => {
+    // The recording's first mint transaction, whose supply is the whole collection.
+    const all = loadNftFixture("inkverse-mints")
+    const at = firstBlock(all.filter((l) => mintsIn(l) > 0n))
+    const logs = all.filter((l) => l.blockNumber === at)
+    const supply = logs.reduce((n, l) => n + mintsIn(l), 0n)
+    const chain = new FakeChain(at + 5n)
+    for (const l of logs) chain.add(l)
+    supplyFrom(chain, INKVERSE, supply)
+    const idx = await start(chain, logs)
+    await idx.trigger()
+
+    const rows = await sql<{ sub: string; tx_hash: string; log_index: number }[]>`
+      select sub, tx_hash, log_index from indexer.events where type = 'nft.mint' order by id`
+    expect(rows.map((r) => r.sub)).toEqual([
+      "mint:stage_start:1",
+      "mint:progress:2500",
+      "mint:progress:5000",
+      "mint:progress:7500",
+      "mint:sold_out:0",
+    ])
+    // All five sit on the same log, told apart by `sub` alone.
+    expect(new Set(rows.map((r) => `${r.tx_hash}:${r.log_index}`)).size).toBe(1)
+  })
+
+  it("one batch holding the whole recording stores every milestone with its own sub", async () => {
+    const logs = loadNftFixture("inkverse-mints")
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    chain.maxSpan = 1_000_000n
+    for (const l of logs) chain.add(l)
+    supplyFrom(chain, INKVERSE, 1_000n)
+    const idx = await start(chain, logs)
+    await idx.trigger()
+    // Every filter was asked for the same single range.
+    expect(new Set(chain.getLogsCalls.map((c) => c.join())).size).toBe(1)
+
+    const rows = await sql<{ sub: string; tx_hash: string; log_index: number }[]>`
+      select sub, tx_hash, log_index from indexer.events where type = 'nft.mint' order by id`
+    expect(rows.map((r) => r.sub).sort()).toEqual(
+      [
+        "mint:stage_start:1",
+        "mint:stage_start:2",
+        "mint:stage_start:3",
+        "mint:progress:2500",
+        "mint:progress:5000",
+        "mint:progress:7500",
+        "mint:sold_out:0",
+      ].sort(),
+    )
+    // The marks and the sell-out share the batch's last mint log.
+    const shared = rows.filter((r) => !r.sub.startsWith("mint:stage_start"))
+    expect(new Set(shared.map((r) => `${r.tx_hash}:${r.log_index}`)).size).toBe(1)
+  })
+
+  it("announces each milestone once after mint stats start to answer", async () => {
+    const logs = loadNftFixture("inkverse-mints")
+    const mintBlocks = blocksOf(logs.filter((l) => mintsIn(l) > 0n))
+    const half = mintBlocks[300]!
+    const chain = new FakeChain(half)
+    for (const l of logs) chain.add(l)
+    const idx = await start(chain, logs)
+    // Without stats nothing is announced and no stage is recorded.
+    await idx.trigger()
+    expect(await mintEvents()).toEqual([])
+    expect((await sql`select 1 from indexer.nft_stages`).length).toBe(0)
+
+    supplyFrom(chain, INKVERSE, 1_000n)
+    chain.head = lastBlock(logs) + 5n
+    await idx.trigger()
+    const subs = (await mintEvents()).map((e) => e.sub)
+    expect(new Set(subs).size).toBe(subs.length)
+    for (const k of [
+      "mint:progress:2500",
+      "mint:progress:5000",
+      "mint:progress:7500",
+      "mint:sold_out:0",
+    ])
+      expect(subs.filter((x) => x === k)).toHaveLength(1)
+    // Every stage seen after the switch is announced once and stored once.
+    const stored = (await sql`select stage_index from indexer.nft_stages`).map((r) => r.stage_index)
+    expect(subs.filter((x) => x.startsWith("mint:stage_start:")).sort()).toEqual(
+      stored.map((i) => `mint:stage_start:${i}`).sort(),
+    )
+    expect(stored.length).toBeGreaterThan(0)
+  })
+
   it("rollback below the 75% mark recomputes last_mark_bps to 5000 and re-emits 75% on replay", async () => {
     // The first 200 mints of the recording. The collection is "sold out" at its last mint.
     const all = compactInkverse()
