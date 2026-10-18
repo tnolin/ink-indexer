@@ -217,6 +217,10 @@ export type SeaportSale = {
   currency: "ETH" | "WETH"
   buyer: Address
   seller: Address
+  /** The order's offerer: the seller when the NFT is in the offer, the buyer when it is in the consideration. */
+  offerer: Address
+  /** Where the NFT sits in the order: `offer` for a filled listing, `consideration` for an accepted offer. */
+  nftSide: "offer" | "consideration"
 }
 
 const ITEM_NATIVE = 0
@@ -280,7 +284,39 @@ export function decodeOrderFulfilled(log: ChainLog): SeaportSale[] {
     currency: sawNative ? "ETH" : "WETH",
     buyer: sellerIsOfferer ? recipient : offerer,
     seller: sellerIsOfferer ? offerer : recipient,
+    offerer,
+    nftSide: sellerIsOfferer ? "offer" : "consideration",
   }))
+}
+
+/**
+ * Collapses matched orders. When a marketplace fills a buyer's offer against the seller's listing in one
+ * call, one transaction carries two `OrderFulfilled` logs for the same NFT. Pass the sales of one
+ * transaction; each (contract, token) that appears once as an accepted offer (NFT in the consideration)
+ * and once as a listing (NFT in the offer) becomes the offer's sale: its buyer and price, with the
+ * listing's offerer as seller. The offer's log position is kept. Every other sale passes through
+ * unchanged, in order. shortcut: a token that appears in more than two orders of one transaction
+ * (a resale within a single transaction) is not merged; pair those by log order if it matters.
+ */
+export function mergeMatchedSales<T extends SeaportSale>(sales: T[]): T[] {
+  const groups = new Map<string, T[]>()
+  for (const s of sales) {
+    const key = `${s.contract}:${s.tokenId}`
+    groups.set(key, [...(groups.get(key) ?? []), s])
+  }
+  const dropped = new Set<T>()
+  const sellerOf = new Map<T, Address>()
+  for (const group of groups.values()) {
+    if (group.length !== 2) continue
+    const offer = group.find((s) => s.nftSide === "consideration")
+    const listing = group.find((s) => s.nftSide === "offer")
+    if (!offer || !listing) continue
+    dropped.add(listing)
+    sellerOf.set(offer, listing.offerer)
+  }
+  return sales
+    .filter((s) => !dropped.has(s))
+    .map((s) => (sellerOf.has(s) ? { ...s, seller: sellerOf.get(s)! } : s))
 }
 
 // ---- Chimera ----

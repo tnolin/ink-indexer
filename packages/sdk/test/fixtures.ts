@@ -44,6 +44,7 @@ export const NFT_FIXTURES = [
   "prtscn-mints",
   "seaport-fills",
   "erc1155-mints",
+  "seaport-matched",
 ] as const
 export type NftFixtureName = (typeof NFT_FIXTURES)[number]
 

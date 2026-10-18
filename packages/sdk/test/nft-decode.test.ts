@@ -19,6 +19,7 @@ import {
   decodeNftTransfers,
   decodeOrderFulfilled,
   decodeSeaDropLog,
+  mergeMatchedSales,
   NFT_SELECTORS,
   NFT_TOPICS,
   SEADROP_V1,
@@ -549,5 +550,86 @@ describe("decodeOrderFulfilled", () => {
     for (const l of fills)
       for (const s of decodeOrderFulfilled(l))
         for (const a of [s.contract, s.buyer, s.seller]) expect(a).toBe(a.toLowerCase())
+  })
+})
+
+describe("mergeMatchedSales", () => {
+  const BUYER = "0x5ca2ccb0a103821195b3d1712a7941a2ab89e58f"
+  const SELLER = "0x505f8ec6e6d832d4ef620a963bc4ff501e7b78ae"
+
+  it("turns a matched offer and listing from a recorded transaction into one sale", () => {
+    const logs = loadNftFixture("seaport-matched").filter(
+      (l) => l.topics[0] === NFT_TOPICS.orderFulfilled,
+    )
+    const sales = logs.flatMap(decodeOrderFulfilled)
+    expect(sales).toHaveLength(2)
+    const merged = mergeMatchedSales(sales)
+    expect(merged).toHaveLength(1)
+    expect(merged[0]).toMatchObject({
+      contract: "0x47da169e2e85825d3ef9bc73151b39b7af7ef40c",
+      tokenId: 101n,
+      buyer: BUYER,
+      seller: SELLER,
+      priceWei: 100_000_000_000_000n,
+      currency: "WETH",
+      nftSide: "consideration",
+    })
+  })
+
+  it("leaves sales that do not match unchanged and in order", () => {
+    const listing = (id: bigint) =>
+      decodeOrderFulfilled(
+        orderLog({ offer: [nft(NFT_A, id)], consideration: [to(eth(100n), ALICE)] }),
+      )
+    const offer = decodeOrderFulfilled(
+      orderLog({
+        offerer: BOB,
+        recipient: ALICE,
+        offer: [eth(100n)],
+        consideration: [to(nft(NFT_A, 3n), BOB)],
+      }),
+    )
+    const sales = [...listing(1n), ...offer, ...listing(2n)]
+    expect(mergeMatchedSales(sales)).toEqual(sales)
+    expect(mergeMatchedSales([])).toEqual([])
+  })
+
+  it("does not merge a token that is sold twice as a listing in one transaction", () => {
+    const sales = [
+      ...decodeOrderFulfilled(
+        orderLog({ offer: [nft(NFT_A, 1n)], consideration: [to(eth(10n), ALICE)] }),
+      ),
+      ...decodeOrderFulfilled(
+        orderLog({
+          offerer: BOB,
+          recipient: ALICE,
+          offer: [nft(NFT_A, 1n)],
+          consideration: [to(eth(20n), BOB)],
+        }),
+      ),
+    ]
+    expect(mergeMatchedSales(sales)).toEqual(sales)
+  })
+
+  it("keeps the offer's price and takes the listing's offerer as seller", () => {
+    const sales = [
+      ...decodeOrderFulfilled(
+        orderLog({
+          offer: [nft(NFT_A, 5n)],
+          consideration: [to(eth(90n), ALICE), to(eth(5n), BOB)],
+        }),
+      ),
+      ...decodeOrderFulfilled(
+        orderLog({
+          offerer: BOB,
+          recipient: ALICE,
+          offer: [eth(100n)],
+          consideration: [to(nft(NFT_A, 5n), BOB), to(eth(2n), ALICE)],
+        }),
+      ),
+    ]
+    const [m, ...rest] = mergeMatchedSales(sales)
+    expect(rest).toEqual([])
+    expect(m).toMatchObject({ buyer: BOB, seller: ALICE, priceWei: 100n })
   })
 })

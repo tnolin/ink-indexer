@@ -1,7 +1,9 @@
 // Records NFT test fixtures from Ink and OpenSea: chain logs, REST responses and Stream frames.
 // Usage: OPENSEA_API_KEY=<key> INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts [--only <step,step>]
 //        INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts --chimera
+//        INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts --matched <tx hash>
 // --chimera records the Chimera factory's campaign logs from its deployment block to head. It needs only the RPC.
+// --matched records every log of one Seaport transaction in which two orders were matched, as seaport-matched.json. It needs only the RPC.
 // Steps: collections, seaport, erc1155, farm, rest, stream (all by default).
 // Chain logs go to packages/sdk/test/fixtures/nft, OpenSea responses to apps/indexer/test/fixtures/opensea.
 // Run it once while the key is valid, then commit the output. Every file is checked for the API key
@@ -12,8 +14,10 @@ import { createPublicClient, decodeEventLog, type Hex, http, parseAbi } from "vi
 import { ink } from "viem/chains"
 
 const CHIMERA_ONLY = process.argv.includes("--chimera")
+const matchedArg = process.argv.indexOf("--matched")
+const MATCHED_TX = matchedArg > 0 ? (process.argv[matchedArg + 1] ?? "") : ""
 const KEY = process.env.OPENSEA_API_KEY ?? ""
-if (!KEY && !CHIMERA_ONLY) throw new Error("OPENSEA_API_KEY is not set")
+if (!KEY && !CHIMERA_ONLY && !MATCHED_TX) throw new Error("OPENSEA_API_KEY is not set")
 const RPC_URL = process.env.INK_RPC ?? "https://rpc-qnd.inkonchain.com"
 const ROOT = join(import.meta.dirname, "..")
 const CHAIN_DIR = join(ROOT, "packages/sdk/test/fixtures/nft")
@@ -672,6 +676,17 @@ async function recordChimera() {
   )
 }
 
+/** Every log of one transaction, for a fill that settles two matched orders. */
+async function recordMatched(txHash: string) {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) throw new Error("--matched needs a transaction hash")
+  const receipt = await client.getTransactionReceipt({ hash: txHash as Hex })
+  const logs = receipt.logs.map((l) =>
+    toSaved({ ...l, blockNumber: hex(l.blockNumber), logIndex: hex(l.logIndex) }),
+  )
+  save(join(CHAIN_DIR, "seaport-matched.json"), logsJson(logs))
+  console.log(`matched: ${logs.length} logs of ${txHash} in block ${receipt.blockNumber}`)
+}
+
 // ---- main ----
 
 function checkForKey(dir: string) {
@@ -687,6 +702,11 @@ function checkForKey(dir: string) {
 }
 
 try {
+  if (MATCHED_TX) {
+    await recordMatched(MATCHED_TX)
+    console.log(`wrote ${writtenFiles.length} files`)
+    process.exit(0)
+  }
   if (CHIMERA_ONLY) {
     await recordChimera()
     console.log(`wrote ${writtenFiles.length} files`)
