@@ -7,6 +7,7 @@ import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
 import { inkypumpSource } from "./sources/inkypump/index"
+import { nftSource } from "./sources/nft/index"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 
@@ -50,7 +51,7 @@ try {
     chain,
     store,
     logger: log,
-    sources: [inkypumpSource({ sql, chain, logger: log })],
+    sources: [inkypumpSource({ sql, chain, logger: log }), nftSource({ sql, chain, logger: log })],
   })
   await indexer.init()
 } catch (err) {
