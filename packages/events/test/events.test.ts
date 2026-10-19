@@ -1,14 +1,17 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import {
   type Address,
+  type Hash,
   type IndexerEvent,
   type LaunchpadEvent,
   type NftCollectionEvent,
   type NftDropEvent,
   type NftEvent,
+  type NftLaunchEvent,
   type NftListingEvent,
   type NftMintEvent,
   type NftSaleEvent,
+  type NftStatsEvent,
   SCHEMA_VERSION,
   type TradeEvent,
 } from "../src/index"
@@ -90,5 +93,50 @@ describe("@ink-indexer/events", () => {
     expectTypeOf<NftCollectionEvent["gates"]["structure"]>().toEqualTypeOf<
       "pass" | "fail" | "pending" | "n/a"
     >()
+  })
+
+  it("nft.collection carries the creator and their OpenSea account state", () => {
+    expectTypeOf<NftCollectionEvent["creator"]>().toEqualTypeOf<{
+      address: Address
+      username: string | null
+      verified: boolean
+    } | null>()
+  })
+
+  it("nft.launch is a chain event of a Chimera campaign", () => {
+    const e: NftLaunchEvent = {
+      v: 1,
+      chainId: 57073,
+      contract: "0x1",
+      source: "chain",
+      txHash: "0xabc",
+      logIndex: 2,
+      blockNumber: "1",
+      blockTimestamp: 1,
+      type: "nft.launch",
+      launchpad: "chimera",
+      campaignId: "7",
+      token: "0x2",
+      tokenSymbol: null,
+      tokenName: "Token",
+      creator: "0x3",
+      poolId: "0x4",
+    }
+    expect(e.tokenSymbol).toBeNull()
+    expectTypeOf<NftLaunchEvent["launchpad"]>().toEqualTypeOf<"chimera">()
+    expectTypeOf<NftLaunchEvent["campaignId"]>().toEqualTypeOf<string>()
+    expectTypeOf<NftLaunchEvent["tokenSymbol"]>().toEqualTypeOf<string | null>()
+    expectTypeOf<NftLaunchEvent["tokenName"]>().toEqualTypeOf<string | null>()
+    expectTypeOf<NftLaunchEvent["creator"]>().toEqualTypeOf<Address>()
+    expectTypeOf<NftLaunchEvent["poolId"]>().toEqualTypeOf<Hash>()
+    expectTypeOf<NftLaunchEvent>().toExtend<NftEvent>()
+    const onlyLaunches = (x: IndexerEvent) => (x.type === "nft.launch" ? x : null)
+    expectTypeOf(onlyLaunches).returns.toEqualTypeOf<NftLaunchEvent | null>()
+  })
+
+  it("nft.stats carries the cap and the listed count", () => {
+    expectTypeOf<NftStatsEvent["maxSupply"]>().toEqualTypeOf<string | null>()
+    expectTypeOf<NftStatsEvent["listedCount"]>().toEqualTypeOf<number | null>()
+    expectTypeOf<NftStatsEvent["listedCapped"]>().toEqualTypeOf<boolean>()
   })
 })

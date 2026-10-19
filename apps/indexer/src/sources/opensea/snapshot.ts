@@ -29,6 +29,12 @@ export type CollectionRow = {
   opensea_url: string | null
   rarity_calculated_at: Date | null
   max_rank: number | null
+  /** The collection owner OpenSea names. */
+  owner: string | null
+  /** The creator a launchpad campaign names; wins over `owner`. */
+  creator_address: string | null
+  /** The cached OpenSea account of the creator, null when none is cached. Not a column. */
+  creator_account: { username: string | null; verified: boolean } | null
   verdict: string
   gates: NftGates | null
   snapshot_hash: string | null
@@ -37,7 +43,7 @@ export type CollectionRow = {
 
 /** Columns a caller may change together with the snapshot. */
 export type CollectionPatch = Partial<
-  Omit<CollectionRow, "contract" | "snapshot_hash" | "snapshot_n"> & {
+  Omit<CollectionRow, "contract" | "snapshot_hash" | "snapshot_n" | "creator_account"> & {
     discovery_attempts: number
     next_discovery_at: Date | null
     discovered_at: Date | null
@@ -130,6 +136,21 @@ export function composeCollection(
     maxRank: row.max_rank,
     launchpad: chimera ? "chimera" : null,
     launchToken: chimera ? ((row.launch_token as Address | null) ?? null) : null,
+    creator: creatorOf(row),
+  }
+}
+
+/** The address whose account describes the collection's creator. */
+export const creatorAddress = (row: Pick<CollectionRow, "creator_address" | "owner">) =>
+  row.creator_address ?? row.owner
+
+function creatorOf(row: CollectionRow): NftCollectionEvent["creator"] {
+  const address = creatorAddress(row)
+  if (!address || !row.creator_account) return null
+  return {
+    address: address as Address,
+    username: row.creator_account.username,
+    verified: row.creator_account.verified,
   }
 }
 
@@ -150,24 +171,34 @@ export function createSnapshots(deps: { sql: Sql; store: Store; now?: () => numb
   /**
    * Applies `patch` to the collection's row and, if the event the row now makes differs from the
    * last one written, writes it (`txHash` `os:col:<contract>:<n>`) in the same transaction, with the
-   * new hash and count. Nothing is written for a row with no standard yet, or for an unknown
+   * new hash and count. The creator comes from the cached account (`nft_accounts`) of the row's
+   * creator address, so a changed account makes a different event. Nothing is written for a row with no standard yet, or for an unknown
    * contract. True when an event was written. Database writes only: fetch before calling.
    */
   async function emitSnapshotIfChanged(
     contract: string,
     patch: CollectionPatch = {},
   ): Promise<boolean> {
-    const [row] = await sql<CollectionRow[]>`
+    const [row] = await sql<Omit<CollectionRow, "creator_account">[]>`
       select contract, standard, kind, launchpad, launch_token, seadrop, max_supply::text as max_supply,
         slug, name, image_url, twitter, website, discord, safelist, opensea_url,
-        rarity_calculated_at, max_rank, verdict, gates, snapshot_hash, snapshot_n
+        rarity_calculated_at, max_rank, owner, creator_address, verdict, gates, snapshot_hash, snapshot_n
       from indexer.nft_collections where contract = ${contract}`
     if (!row) return false
+    const merged = { ...row, ...patch }
+    const who = creatorAddress(merged)
+    const [account] = who
+      ? await sql<{ username: string | null; verified: boolean }[]>`
+          select username, verified from indexer.nft_accounts where address = ${who}`
+      : []
     const apply = async (tx: Tx) => {
       if (Object.keys(patch).length > 0)
         await tx`update indexer.nft_collections set ${tx(patch as Record<string, never>)} where contract = ${contract}`
     }
-    const event = composeCollection({ ...row, ...patch } as CollectionRow, Math.floor(now() / 1000))
+    const event = composeCollection(
+      { ...merged, creator_account: account ?? null } as CollectionRow,
+      Math.floor(now() / 1000),
+    )
     const hash = event ? snapshotHash(event) : null
     if (!event || hash === row.snapshot_hash) {
       await sql.begin(apply)

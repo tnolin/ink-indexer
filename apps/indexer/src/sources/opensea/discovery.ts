@@ -46,6 +46,7 @@ export function pageColumns(c: OsCollection) {
     opensea_url: c.openseaUrl,
     rarity_calculated_at: rarityTime(c.rarityCalculatedAt),
     max_rank: c.maxRank === null ? null : Math.round(c.maxRank),
+    owner: c.owner,
   } satisfies CollectionPatch
 }
 
@@ -56,7 +57,7 @@ type PageRow = { [K in keyof ReturnType<typeof pageColumns>]: unknown }
 
 /** Collections with no slug whose lookup is due. */
 export function createDiscoveryJob(deps: OsJobDeps): Job {
-  const { sql, rest, snapshots, log } = deps
+  const { sql, rest, snapshots, accounts, log } = deps
   const now = deps.now ?? Date.now
 
   /** The lookup found nothing yet: count it and schedule the next try, or stop. */
@@ -101,9 +102,11 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
           standard: string | null
           seadrop: boolean
           next_drops_at: Date | null
+          creator_address: string | null
         }[]
       >`
-        select slug, standard, seadrop, next_drops_at from indexer.nft_collections where contract = ${contract}`
+        select slug, standard, seadrop, next_drops_at, creator_address
+        from indexer.nft_collections where contract = ${contract}`
       if (!row || row.slug) return
 
       const found = await rest.get(`/chain/ink/contract/${contract}`, 2, parseContract, OS_REQUEST)
@@ -127,6 +130,12 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
       }
       if (!page.value) return void (await failed(contract))
 
+      // The creator's account is read before the snapshot so that the first snapshot carries it. If
+      // it cannot be read now the snapshot goes without it and the page is read again soon.
+      const who = row.creator_address ?? page.value.owner
+      const account = who ? await accounts.getAccount(who) : null
+      const accountFailed = account !== null && !account.ok ? account : null
+
       const t = now()
       const standard = found.value.standard.toLowerCase()
       const patch: CollectionPatch = {
@@ -137,7 +146,7 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
         discovery_attempts: 0,
         next_discovery_at: null,
         discovered_at: new Date(t),
-        next_metadata_at: new Date(t + METADATA_REFRESH_MS),
+        next_metadata_at: new Date(t + (accountFailed ? TRANSIENT_RETRY_MS : METADATA_REFRESH_MS)),
         verdict_dirty: true,
         // A SeaDrop collection gets its drop page now, unless that is already due.
         ...(row.seadrop && (row.next_drops_at === null || row.next_drops_at.getTime() > t)
@@ -145,13 +154,14 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
           : {}),
       }
       await snapshots.emitSnapshotIfChanged(contract, patch)
+      return accountFailed ? commonOutcome(accountFailed) : undefined
     },
   }
 }
 
 /** Collections with a slug whose page is due to be read again. */
 export function createMetadataJob(deps: OsJobDeps): Job {
-  const { sql, rest, snapshots } = deps
+  const { sql, rest, snapshots, accounts } = deps
   const now = deps.now ?? Date.now
 
   const reschedule = (contract: string, ms: number) =>
@@ -170,9 +180,11 @@ export function createMetadataJob(deps: OsJobDeps): Job {
       return rows.map((r) => r.contract)
     },
     async run(contract): Promise<JobOutcome> {
-      const [row] = await sql<(PageRow & { slug: string | null })[]>`
+      const [row] = await sql<
+        (PageRow & { slug: string | null; creator_address: string | null })[]
+      >`
         select slug, name, image_url, twitter, website, discord, safelist, opensea_url,
-          rarity_calculated_at, max_rank
+          rarity_calculated_at, max_rank, owner, creator_address
         from indexer.nft_collections where contract = ${contract}`
       if (!row?.slug) return
 
@@ -189,15 +201,24 @@ export function createMetadataJob(deps: OsJobDeps): Job {
       }
       if (!page.value) return void (await reschedule(contract, TRANSIENT_RETRY_MS))
 
+      // The creator's account is read again when its cache has expired; the snapshot is written
+      // again if the account changed. If it cannot be read, the page is read again soon.
+      const who = row.creator_address ?? page.value.owner
+      const account = who ? await accounts.getAccount(who) : null
+      const accountFailed = account !== null && !account.ok ? account : null
+
       const columns = pageColumns(page.value)
       const changed = (Object.keys(columns) as (keyof typeof columns)[]).some(
         (k) => !same(row[k], columns[k]),
       )
       await snapshots.emitSnapshotIfChanged(contract, {
         ...columns,
-        next_metadata_at: new Date(now() + METADATA_REFRESH_MS),
+        next_metadata_at: new Date(
+          now() + (accountFailed ? TRANSIENT_RETRY_MS : METADATA_REFRESH_MS),
+        ),
         ...(changed ? { verdict_dirty: true } : {}),
       })
+      return accountFailed ? commonOutcome(accountFailed) : undefined
     },
   }
 }

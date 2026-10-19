@@ -184,6 +184,16 @@ describe("viemChain timeouts, stopping and every read", () => {
       expect(await supplyChain.chain.readTotalSupplies([TOKEN], 1n)).toEqual([3n])
       const metaChain = fullChain(flaky([18, "T"]), async () => ({}))
       expect(await metaChain.chain.readErc20Meta(TOKEN)).toEqual({ decimals: 18, symbol: "T" })
+      const namesChain = fullChain(
+        flaky([
+          { status: "success", result: "T" },
+          { status: "failure", error: new Error("reverted") },
+        ]),
+        async () => ({}),
+      )
+      expect(await namesChain.chain.readErc20Names([TOKEN], 5n)).toEqual([
+        { symbol: "T", name: null },
+      ])
       const launchChain = fullChain(
         flaky([
           {

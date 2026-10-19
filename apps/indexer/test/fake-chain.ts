@@ -29,6 +29,9 @@ export class FakeChain implements Chain {
     (block: bigint) => { totalSupply: bigint; maxSupply: bigint } | null
   >()
   erc20 = new Map<string, { decimals: number; symbol: string }>()
+  /** Per token, what `symbol()` and `name()` answer; null is a revert. A token with no entry reverts on both. */
+  erc20Names = new Map<string, { symbol: string | null; name: string | null }>()
+  nameReads: { tokens: Address[]; block: bigint }[] = []
   stateReads: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
   getBlockNumberCalls = 0
@@ -101,6 +104,11 @@ export class FakeChain implements Chain {
     const m = this.erc20.get(token)
     if (!m) throw new Error(`no fake erc20 for ${token}`)
     return m
+  }
+
+  async readErc20Names(tokens: Address[], block: bigint) {
+    this.nameReads.push({ tokens, block })
+    return tokens.map((t) => this.erc20Names.get(t) ?? { symbol: null, name: null })
   }
 
   async readMintStats(contract: Address, _minter: Address, block: bigint) {

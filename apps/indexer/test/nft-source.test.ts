@@ -1,7 +1,9 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
+import type { NftLaunchEvent } from "@ink-indexer/events"
 import {
   type ChainLog,
+  decodeChimeraCampaign,
   decodeNftTransfers,
   decodeOrderFulfilled,
   NFT_TOPICS,
@@ -42,9 +44,10 @@ const firstBlock = (logs: ChainLog[]) =>
   logs.reduce((m, l) => (l.blockNumber < m ? l.blockNumber : m), logs[0]!.blockNumber)
 
 /** A chain holding `logs`, an indexer with only the NFT source, and a backfill over the logs' range. */
-async function ingest(logs: ChainLog[]) {
+async function ingest(logs: ChainLog[], prepare: (chain: FakeChain) => void = () => {}) {
   const chain = new FakeChain(lastBlock(logs) + 5n)
   for (const l of logs) chain.add(l)
+  prepare(chain)
   const idx = new Indexer({
     chain,
     store,
@@ -140,6 +143,74 @@ describe("NFT source", () => {
       token: "0xc7d264d906b488ef6660005af5450c979f58006c",
     })
     expect(await count("nft_collections")).toBe(5)
+  })
+
+  it("chimera launch emits nft.launch with token symbol and name; a reverting symbol gives null", async () => {
+    const campaigns = loadChimeraCampaigns()
+    const decoded = campaigns
+      .map((l) => ({ log: l, d: decodeChimeraCampaign(l)! }))
+      .filter((x) => x.d !== null)
+    const wired = decoded.find((x) => x.d.collection === WIRED)!
+    const other = decoded.find((x) => x.d.collection !== WIRED)!
+    const { chain } = await ingest(campaigns, (c) => {
+      c.erc20Names.set(wired.d.token, { symbol: "WIRED", name: "Wired Token" })
+      c.erc20Names.set(other.d.token, { symbol: null, name: "Other Token" })
+    })
+
+    const rows = await sql<
+      { payload: NftLaunchEvent; sub: string; entity: string; block: string }[]
+    >`
+      select payload, sub, entity, block from indexer.events where type = 'nft.launch' order by id`
+    expect(rows).toHaveLength(5)
+    const w = rows.find((r) => r.entity === WIRED)!
+    expect(w.sub).toBe("")
+    expect(w.payload).toEqual({
+      v: 1,
+      chainId: 57073,
+      type: "nft.launch",
+      source: "chain",
+      contract: WIRED,
+      txHash: wired.log.transactionHash,
+      logIndex: wired.log.logIndex,
+      blockNumber: wired.log.blockNumber.toString(),
+      blockTimestamp: Number(wired.log.blockNumber),
+      launchpad: "chimera",
+      campaignId: wired.d.campaignId.toString(),
+      token: wired.d.token,
+      tokenSymbol: "WIRED",
+      tokenName: "Wired Token",
+      creator: wired.d.creator,
+      poolId: wired.d.poolId,
+    })
+    expect(BigInt(w.block)).toBe(wired.log.blockNumber)
+    const o = rows.find((r) => r.entity === other.d.collection)!
+    expect(o.payload).toMatchObject({ tokenSymbol: null, tokenName: "Other Token" })
+    // Tokens nobody answered for revert on both.
+    const bare = rows.filter(
+      (r) => r.payload.token !== wired.d.token && r.payload.token !== other.d.token,
+    )
+    for (const r of bare) expect(r.payload).toMatchObject({ tokenSymbol: null, tokenName: null })
+
+    // The launch creator is kept on the collection.
+    const [row] =
+      await sql`select creator_address from indexer.nft_collections where contract = ${WIRED}`
+    expect(row!.creator_address).toBe(wired.d.creator)
+    // Names are read once per batch, not once per launch.
+    expect(chain.nameReads.length).toBeGreaterThan(0)
+    expect(chain.nameReads.length).toBeLessThan(5)
+  })
+
+  it("a second campaign for a collection emits its own nft.launch and keeps the first creator", async () => {
+    const [first] = loadChimeraCampaigns().filter((l) => l.blockNumber === 58_346_281n)
+    const second = {
+      ...first!,
+      blockNumber: 58_346_300n,
+      logIndex: 3,
+      transactionHash: `0x${"33".repeat(32)}` as const,
+    }
+    await ingest([first!, second])
+    expect(await count("events", "type = 'nft.launch'")).toBe(2)
+    expect(await count("nft_launches")).toBe(1)
   })
 
   it("chimera launch then mint keeps the launchpad and sets the first mint", async () => {
@@ -424,9 +495,12 @@ describe("NFT source", () => {
     expect(after).toMatchObject({
       launchpad: null,
       launch_token: null,
+      creator_address: null,
       first_mint_block: null,
       first_mint_ts: null,
     })
+    expect(before!.creator_address).not.toBeNull()
+    expect(await count("events", "type = 'nft.launch'")).toBe(0)
   })
 
   it("reorg removes the rows of every raw table above the fork", async () => {

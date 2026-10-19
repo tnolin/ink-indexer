@@ -23,6 +23,13 @@ export type OsCollection = {
   rarityCalculatedAt: string | null
   maxRank: number | null
   openseaUrl: string | null
+  /** The collection owner's address, lowercase. */
+  owner: string | null
+}
+
+export type OsAccount = {
+  username: string | null
+  verified: boolean
 }
 
 export type OsStats = {
@@ -138,7 +145,15 @@ export function parseCollection(j: unknown): OsCollection | null {
     rarityCalculatedAt: rarity ? str(rarity.calculated_at) : null,
     maxRank: rarity ? num(rarity.max_rank) : null,
     openseaUrl: str(o.opensea_url),
+    owner: str(o.owner)?.toLowerCase() ?? null,
   }
+}
+
+/** `GET /accounts/{address}`: the account's username and whether OpenSea verified it. */
+export function parseAccount(j: unknown): OsAccount | null {
+  const o = obj(j)
+  if (!o) return null
+  return { username: str(o.username), verified: o.is_verified === true }
 }
 
 /** `GET /collections/{slug}/stats`. Prices are floats in ETH. */

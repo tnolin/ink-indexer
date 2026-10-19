@@ -42,3 +42,18 @@ export const METADATA_REFRESH_MS = DAY_MS
 export const DROPS_DEBOUNCE_MS = 5 * MINUTE_MS
 /** The drop page is read again this long before its first stage starts. */
 export const DROPS_LEAD_MS = HOUR_MS
+
+/** A creator's OpenSea account is read again this long after the last read. */
+export const ACCOUNT_REFRESH_MS = 7 * DAY_MS
+
+/** New activity on a contract with no slug restarts discovery at most this often. */
+export const DISCOVERY_RESTART_MS = DAY_MS
+/** A collection whose drop page is missing is looked at again this long later, until its first mint. */
+export const DROP_404_RECHECK_MS = DAY_MS
+
+/** How often the scheduled stage starts are looked for. */
+export const STAGE_START_EVERY_MS = 30_000
+/** A stage whose scheduled start is older than this when seen is not announced. */
+export const STAGE_START_WINDOW_MS = 10 * MINUTE_MS
+/** A scheduled stage with no known on-chain index gets this plus its place in the drop's order. */
+export const SYNTHETIC_STAGE_INDEX = 100

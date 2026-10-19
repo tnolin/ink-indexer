@@ -4,6 +4,7 @@ import {
   type LaunchState,
   type NftReader,
   readErc20Meta,
+  readErc20Names,
   readLaunchStates,
   readMintStats,
   readTotalSupplies,
@@ -27,6 +28,11 @@ export type Chain = {
   readLaunchStates(keys: LaunchKey[], block: bigint): Promise<LaunchState[]>
   readTotalSupplies(tokens: Address[], block: bigint): Promise<bigint[]>
   readErc20Meta(token: Address): Promise<{ decimals: number; symbol: string }>
+  /** `symbol()` and `name()` of each token at a block, in the order given. A call that reverts gives null. */
+  readErc20Names(
+    tokens: Address[],
+    block: bigint,
+  ): Promise<{ symbol: string | null; name: string | null }[]>
   /** SeaDrop-style `getMintStats` at a block. null when the contract has no such function. */
   readMintStats(
     contract: Address,
@@ -113,6 +119,8 @@ export function viemChain(
     readTotalSupplies: (tokens, block) =>
       retry("readTotalSupplies", () => readTotalSupplies(client, tokens, block)),
     readErc20Meta: (token) => retry("readErc20Meta", () => readErc20Meta(client, token)),
+    readErc20Names: (tokens, block) =>
+      retry("readErc20Names", () => readErc20Names(client, tokens, block)),
     readMintStats: (contract, minter, block) =>
       retry("readMintStats", () => readMintStats(client, contract, minter, block)),
   }

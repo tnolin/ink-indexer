@@ -7,6 +7,7 @@ import {
   OPENSEA_MAX_WAIT_MS,
   SCHEDULER_TICK_MS,
 } from "../nft/policy"
+import type { Accounts } from "./accounts"
 import type { OpenSeaRest, OsResult } from "./rest"
 import type { Snapshots } from "./snapshot"
 
@@ -40,6 +41,7 @@ export type OsJobDeps = {
   store: Store
   rest: OpenSeaRest
   snapshots: Snapshots
+  accounts: Accounts
   log: Logger
   now?: () => number
 }

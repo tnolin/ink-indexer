@@ -1,5 +1,5 @@
 import type { Sql } from "@ink-indexer/db"
-import { type NftSaleEvent, SCHEMA_VERSION } from "@ink-indexer/events"
+import { type NftLaunchEvent, type NftSaleEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import {
   CHIMERA_FACTORY,
   type ChainLog,
@@ -79,6 +79,8 @@ export type SaleRow = {
   block: bigint
 }
 export type LaunchRow = {
+  txHash: Hash
+  logIndex: number
   collection: Address
   launchpad: "chimera"
   campaignId: bigint
@@ -98,7 +100,7 @@ export type CollectionTouch = {
   firstMint: { block: bigint; ts: number } | null
   /** A SeaDrop log in the batch names the contract. */
   seadrop: boolean
-  launch: { launchpad: "chimera"; token: Address } | null
+  launch: { launchpad: "chimera"; token: Address; creator: Address } | null
 }
 
 export type NftBatch = SourceBatch & {
@@ -119,7 +121,7 @@ export type NftBatch = SourceBatch & {
 
 export type NftDeps = {
   sql: Sql
-  chain: Pick<Chain, "getBlock" | "readMintStats">
+  chain: Pick<Chain, "getBlock" | "readMintStats" | "readErc20Names">
   logger: Logger
 }
 
@@ -268,6 +270,8 @@ export async function processLogs(
     if (!d) continue
     seen(l)
     launches.push({
+      txHash: l.transactionHash,
+      logIndex: l.logIndex,
       collection: d.collection,
       launchpad: "chimera",
       campaignId: d.campaignId,
@@ -291,6 +295,7 @@ export async function processLogs(
   const milestoneContexts = await loadMilestoneContexts(deps.sql, seadropMints)
   const wanted = new Set<bigint>([
     ...firstMintBlock.values(),
+    ...launches.map((l) => l.block),
     ...saleLogs.map((x) => x.log.blockNumber),
     ...milestoneBlocks(milestoneContexts),
   ])
@@ -311,9 +316,19 @@ export async function processLogs(
   for (const contract of seadropContracts) touch(contract).seadrop = true
   // The first launch of a collection wins, as in nft_launches.
   for (const l of launches)
-    touch(l.collection).launch ??= { launchpad: l.launchpad, token: l.token }
+    touch(l.collection).launch ??= { launchpad: l.launchpad, token: l.token, creator: l.creator }
 
   const events: EventRow[] = []
+  // Each campaign is a launch event. The token's names are read once for the batch, at its last
+  // block: the token exists from its campaign's block on.
+  const names = await readTokenNames(deps.chain, launches, toBlock)
+  for (const l of launches)
+    events.push({
+      event: launchEvent(l, names.get(l.token), times.get(l.block)!),
+      block: l.block,
+      blockHash: hashes.get(l.block)!,
+      sub: "",
+    })
   const sales: SaleRow[] = []
   for (const { log, sales: rows } of saleLogs) {
     const ts = times.get(log.blockNumber)!
@@ -351,6 +366,44 @@ export async function processLogs(
     stages: milestones.stages,
     milestones: milestones.updates,
     touched: [...collections.keys()],
+  }
+}
+
+type TokenNames = { symbol: string | null; name: string | null }
+
+/** `symbol()` and `name()` of the launches' tokens, one read for all; null for a call that reverts. */
+async function readTokenNames(
+  chain: Pick<Chain, "readErc20Names">,
+  launches: LaunchRow[],
+  block: bigint,
+): Promise<Map<Address, TokenNames>> {
+  const tokens = [...new Set(launches.map((l) => l.token))]
+  const read = tokens.length > 0 ? await chain.readErc20Names(tokens, block) : []
+  return new Map(tokens.map((t, i) => [t, read[i]!]))
+}
+
+function launchEvent(
+  l: LaunchRow,
+  names: TokenNames | undefined,
+  blockTimestamp: number,
+): NftLaunchEvent {
+  return {
+    v: SCHEMA_VERSION,
+    chainId: INK_CHAIN_ID,
+    type: "nft.launch",
+    contract: l.collection,
+    source: "chain",
+    txHash: l.txHash,
+    logIndex: l.logIndex,
+    blockNumber: s(l.block),
+    blockTimestamp,
+    launchpad: l.launchpad,
+    campaignId: s(l.campaignId),
+    token: l.token,
+    tokenSymbol: names?.symbol ?? null,
+    tokenName: names?.name ?? null,
+    creator: l.creator,
+    poolId: l.poolId,
   }
 }
 

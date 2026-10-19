@@ -101,7 +101,8 @@ const recording: Chain = {
     calls.push({ method: "readErc20Meta", args: [token], result })
     return result
   },
-  // Only the NFT source reads mint stats, and the recording runs without it.
+  // Only the NFT source reads mint stats and token names, and the recording runs without it.
+  readErc20Names: (tokens, block) => live.readErc20Names(tokens, block),
   readMintStats: (contract, minter, block) => live.readMintStats(contract, minter, block),
 }
 

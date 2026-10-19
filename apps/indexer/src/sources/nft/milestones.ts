@@ -8,6 +8,9 @@ import type { EventRow } from "../source"
 import type { CollectionTouch, SeaDropMintRow, TransferRow } from "./index"
 import { MINT_MARKS_BPS } from "./policy"
 
+/** `nft_stages.first_block` of a stage announced from the drop schedule (see stage-starts). */
+export const SCHEDULED_FIRST_BLOCK = 0
+
 // Mint milestones of a SeaDrop collection: each stage's first mint, 25/50/75% of the max supply
 // and the sell-out. `planMilestones` decides; `milestoneEvents` gathers its inputs and turns the
 // drafts into event rows.
@@ -130,6 +133,8 @@ export type MilestoneContext = {
   rows: SeaDropMintRow[]
   /** Stage index to unix seconds of its first mint, as stored. */
   knownStages: Map<number, number>
+  /** Unix seconds of the stages announced from the drop's schedule rather than by a mint. */
+  scheduledStarts: number[]
   lastMarkBps: number
   soldOutBlock: bigint | null
   /** Unix seconds; null when the collection has no first mint yet. */
@@ -152,7 +157,13 @@ export type Milestones = { events: EventRow[]; stages: StageRow[]; updates: Mile
 const byChainOrder = (a: SeaDropMintRow, b: SeaDropMintRow) =>
   a.block === b.block ? a.logIndex - b.logIndex : a.block < b.block ? -1 : 1
 
-/** Reads what the milestones of the batch's SeaDrop contracts start from. */
+/**
+ * Reads what the milestones of the batch's SeaDrop contracts start from.
+ *
+ * shortcut: the stages are read before the batch is written, so a scheduled start recorded between
+ * this read and that write is not seen and its stage can be announced a second time by its first
+ * mint. The window is one batch; closing it would take the read inside the write transaction.
+ */
 export async function loadMilestoneContexts(
   sql: Sql,
   mints: SeaDropMintRow[],
@@ -176,8 +187,10 @@ export async function loadMilestoneContexts(
   >`
     select contract, last_mark_bps, sold_out_block, extract(epoch from first_mint_ts)::bigint as first_ts
     from indexer.nft_collections where contract = any(${contracts}::text[])`
-  const stages = await sql<{ contract: Address; stage_index: number; ts: string }[]>`
-    select contract, stage_index, extract(epoch from first_ts)::bigint as ts
+  const stages = await sql<
+    { contract: Address; stage_index: number; ts: string; first_block: string }[]
+  >`
+    select contract, stage_index, extract(epoch from first_ts)::bigint as ts, first_block::text
     from indexer.nft_stages where contract = any(${contracts}::text[])`
   const drops = await sql<
     { contract: Address; slug: string | null; stages: NftDropStage[]; max_supply: string | null }[]
@@ -192,12 +205,16 @@ export async function loadMilestoneContexts(
     const knownStages = new Map(
       stages.filter((x) => x.contract === contract).map((x) => [x.stage_index, Number(x.ts)]),
     )
+    const scheduledStarts = stages
+      .filter((x) => x.contract === contract && Number(x.first_block) === SCHEDULED_FIRST_BLOCK)
+      .map((x) => Number(x.ts))
     const seen = new Set(knownStages.keys())
     const newStageRows = rows.filter((r) => !seen.has(r.stage) && seen.add(r.stage))
     return {
       contract,
       rows,
       knownStages,
+      scheduledStarts,
       lastMarkBps: c?.last_mark_bps ?? 0,
       soldOutBlock: c?.sold_out_block != null ? BigInt(c.sold_out_block) : null,
       firstMintTs: c?.first_ts != null ? Number(c.first_ts) : null,
@@ -211,6 +228,28 @@ export async function loadMilestoneContexts(
       newStageRows,
     }
   })
+}
+
+/**
+ * True when a stage of the stored drop that holds `ts` (from its start to its end or the next
+ * stage's start) has a scheduled start already announced. Without a stored drop nothing matches.
+ */
+function announcedOnSchedule(ctx: MilestoneContext, ts: number): boolean {
+  const stages = [...(ctx.drop?.stages ?? [])].sort((a, b) => a.startTime - b.startTime)
+  const i = stages.findIndex((st, k) => {
+    const end = Math.min(
+      st.endTime ?? Number.POSITIVE_INFINITY,
+      stages[k + 1]?.startTime ?? Number.POSITIVE_INFINITY,
+    )
+    return st.startTime <= ts && ts < end
+  })
+  if (i < 0) return false
+  const st = stages[i]!
+  const end = Math.min(
+    st.endTime ?? Number.POSITIVE_INFINITY,
+    stages[i + 1]?.startTime ?? Number.POSITIVE_INFINITY,
+  )
+  return ctx.scheduledStarts.some((t) => t >= st.startTime && t < end)
 }
 
 /** The blocks whose times `milestoneEvents` will want: each new stage's first mint, each contract's last. */
@@ -262,6 +301,9 @@ export async function milestoneEvents(
       ts: time(r.block),
       priceWei: r.unitPrice,
     }))
+    // A stage whose scheduled start was already announced is recorded under its on-chain index but
+    // not announced again.
+    const unannounced = newStages.filter((st) => !announcedOnSchedule(ctx, st.ts))
     const stageStartTs = new Map([
       ...ctx.knownStages,
       ...newStages.map((s) => [s.index, s.ts] as const),
@@ -276,7 +318,7 @@ export async function milestoneEvents(
       soldOut: ctx.soldOutBlock !== null,
       totalSupply: stats.totalSupply,
       maxSupply: stats.maxSupply,
-      newStages,
+      newStages: unannounced,
       current: { index: last.stage, priceWei: last.unitPrice },
       drop: ctx.drop,
       mintStartTs,

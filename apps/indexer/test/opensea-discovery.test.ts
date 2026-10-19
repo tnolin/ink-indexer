@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, inject, it, vi } from "vitest"
 import type { Logger } from "../src/log"
 import type { NftBatch } from "../src/sources/nft/index"
 import { writeRows } from "../src/sources/nft/write"
+import { createAccounts } from "../src/sources/opensea/accounts"
 import type { Budget } from "../src/sources/opensea/budget"
 import { createDiscoveryJob, createMetadataJob } from "../src/sources/opensea/discovery"
 import { createDropsJob } from "../src/sources/opensea/drops"
@@ -55,7 +56,8 @@ function setup(routes: Parameters<typeof fakeFetch>[0]) {
   const fetch = fakeFetch(routes)
   const rest = createOpenSeaRest({ key: KEY, budget, fetch, log, report, now })
   const snapshots = createSnapshots({ sql, store, now })
-  const deps = { sql, store, rest, snapshots, log, now }
+  const accounts = createAccounts({ sql, rest, now })
+  const deps = { sql, store, rest, snapshots, accounts, log, now }
   const jobs = [createDiscoveryJob(deps), createMetadataJob(deps), createDropsJob(deps)]
   const scheduler = createScheduler(jobs, { sql, log, report, now })
   return { fetch, rest, snapshots, jobs, scheduler, deps }
@@ -85,10 +87,16 @@ const eventsOf = async <T>(type: string) =>
   })) as (T & { txHash: string })[]
 const at = (ms: number) => new Date(ms).toISOString()
 
-const discoveryRoutes = (contract: string, slug: string) => ({
-  [`/chain/ink/contract/${contract}`]: recorded(`contract/${contract}`),
-  [`/collections/${slug}`]: recorded(`collections/${slug}`),
-})
+const discoveryRoutes = (contract: string, slug: string) => {
+  const owner = (recorded(`collections/${slug}`).body as { owner: string }).owner
+  return {
+    [`/chain/ink/contract/${contract}`]: recorded(`contract/${contract}`),
+    [`/collections/${slug}`]: recorded(`collections/${slug}`),
+    // The creator's account: the recorded one for Hornet's owner, none for the others.
+    [`/accounts/${owner}`]:
+      contract === HORNET ? recorded(`accounts/${owner}`) : { status: 404, body: {} },
+  }
+}
 
 function emptyBatch(over: Partial<NftBatch>): NftBatch {
   return {
@@ -307,17 +315,53 @@ describe("discovery", () => {
     expect(await rowOf(PRTSCN)).toMatchObject({ next_discovery_at: null, discovery_attempts: 0 })
 
     // A pending retry is pulled forward to five minutes, never pushed back.
+    await sql`update indexer.nft_collections set attempts_reset_at = null where contract = ${WIRED}`
     await sql`update indexer.nft_collections set discovery_attempts = 4, next_discovery_at = now() + interval '6 hours' where contract = ${WIRED}`
     await write(emptyBatch({ collections: [touch(WIRED)], sales: [saleOf(WIRED)] }))
     const pulled = await rowOf(WIRED)
     expect(pulled.discovery_attempts).toBe(0)
     expect(pulled.next_discovery_at.getTime()).toBeLessThanOrEqual(Date.now() + 5 * MIN + 1_000)
-    await sql`update indexer.nft_collections set discovery_attempts = 2, next_discovery_at = now() + interval '1 minute' where contract = ${WIRED}`
+    await sql`update indexer.nft_collections set attempts_reset_at = null, discovery_attempts = 2, next_discovery_at = now() + interval '1 minute' where contract = ${WIRED}`
     await write(emptyBatch({ collections: [touch(WIRED)], sales: [saleOf(WIRED)] }))
     const kept = await rowOf(WIRED)
     expect(kept.discovery_attempts).toBe(0)
     expect(kept.next_discovery_at.getTime()).toBeLessThanOrEqual(Date.now() + MIN + 1_000)
     expect(s.fetch.calls).toHaveLength(0)
+  })
+
+  it("mint activity resets attempts at most once per 24h", async () => {
+    await addCollection(WIRED)
+    await sql`update indexer.nft_collections set discovery_attempts = 11, next_discovery_at = null where contract = ${WIRED}`
+    const activity = () =>
+      write(emptyBatch({ collections: [touch(WIRED)], sales: [saleOf(WIRED)] }))
+
+    await activity()
+    const first = await rowOf(WIRED)
+    expect(first.discovery_attempts).toBe(0)
+    expect(first.next_discovery_at).not.toBeNull()
+    expect(first.attempts_reset_at).toBeInstanceOf(Date)
+
+    // It fails again and gives up. Activity within the day changes nothing.
+    await sql`update indexer.nft_collections set discovery_attempts = 11, next_discovery_at = null where contract = ${WIRED}`
+    await activity()
+    expect(await rowOf(WIRED)).toMatchObject({
+      discovery_attempts: 11,
+      next_discovery_at: null,
+      attempts_reset_at: first.attempts_reset_at,
+    })
+
+    // A day after the reset it restarts again.
+    await sql`update indexer.nft_collections set attempts_reset_at = now() - interval '24 hours 1 minute' where contract = ${WIRED}`
+    await activity()
+    const again = await rowOf(WIRED)
+    expect(again.discovery_attempts).toBe(0)
+    expect(again.next_discovery_at).not.toBeNull()
+    expect(again.attempts_reset_at.getTime()).toBeGreaterThan(first.attempts_reset_at.getTime())
+
+    // Just under a day after: not yet.
+    await sql`update indexer.nft_collections set discovery_attempts = 11, next_discovery_at = null, attempts_reset_at = now() - interval '23 hours 59 minutes' where contract = ${WIRED}`
+    await activity()
+    expect(await rowOf(WIRED)).toMatchObject({ discovery_attempts: 11, next_discovery_at: null })
   })
 
   it("a new collection row is due for discovery at once", async () => {
@@ -366,7 +410,7 @@ describe("metadata refresh", () => {
     let safelist = "not_requested"
     const collection = recorded("collections/ink-hornet")
     const s = setup({
-      [`/chain/ink/contract/${HORNET}`]: recorded(`contract/${HORNET}`),
+      ...discoveryRoutes(HORNET, "ink-hornet"),
       "/collections/ink-hornet": () => ({
         status: 200,
         body: { ...(collection.body as object), safelist_status: safelist },
@@ -378,14 +422,15 @@ describe("metadata refresh", () => {
     await sql`update indexer.nft_collections set verdict_dirty = false where contract = ${HORNET}`
 
     // Not yet due.
+    // (Discovery read the contract, the page and the creator's account.)
     clock = T0 + DAY - 2 * MIN
     await s.scheduler.tick()
-    expect(s.fetch.calls).toHaveLength(2)
+    expect(s.fetch.calls).toHaveLength(3)
 
-    // Due, unchanged.
+    // Due, unchanged. The creator's account is cached for a week and is not read again.
     clock = T0 + DAY
     await s.scheduler.tick()
-    expect(s.fetch.calls).toHaveLength(3)
+    expect(s.fetch.calls).toHaveLength(4)
     let row = await rowOf(HORNET)
     expect(at(row.next_metadata_at.getTime())).toBe(at(T0 + 2 * DAY))
     expect(row.verdict_dirty).toBe(false)
@@ -543,7 +588,7 @@ describe("drops", () => {
     expect(at(row.next_drops_at.getTime())).toBe(at(start - HOUR))
   })
 
-  it("a collection with no drop page is not asked again until a config log", async () => {
+  it("drop 404 rechecks daily until first mint", async () => {
     const s = setup({ "/drops/prtscn-ink": recorded("drops/prtscn-ink") })
     await addCollection(PRTSCN, {
       slug: "prtscn-ink",
@@ -551,11 +596,70 @@ describe("drops", () => {
       next_drops_at: new Date(T0),
     })
     await s.scheduler.tick()
-    expect(await rowOf(PRTSCN)).toMatchObject({ next_drops_at: null, drop_n: 0 })
+    expect(await rowOf(PRTSCN)).toMatchObject({
+      drop_404_at: new Date(T0),
+      next_drops_at: new Date(T0 + DAY),
+      drop_n: 0,
+    })
     expect(await eventsOf("nft.drop")).toHaveLength(0)
     expect(await sql`select 1 from indexer.nft_drops`).toHaveLength(0)
-    clock += DAY
+
+    // Not before the day is up; then asked again, and again a day later.
+    clock = T0 + DAY - MIN
     await s.scheduler.tick()
+    expect(s.fetch.calls).toHaveLength(1)
+    clock = T0 + DAY
+    await s.scheduler.tick()
+    expect(s.fetch.calls).toHaveLength(2)
+    expect(await rowOf(PRTSCN)).toMatchObject({
+      drop_404_at: new Date(T0 + DAY),
+      next_drops_at: new Date(T0 + 2 * DAY),
+    })
+
+    // The collection mints: the next check is the last.
+    await sql`update indexer.nft_collections set first_mint_block = 90, first_mint_ts = ${new Date(T0 + DAY + MIN)} where contract = ${PRTSCN}`
+    clock = T0 + 2 * DAY
+    await s.scheduler.tick()
+    expect(s.fetch.calls).toHaveLength(3)
+    expect(await rowOf(PRTSCN)).toMatchObject({
+      drop_404_at: new Date(T0 + 2 * DAY),
+      next_drops_at: null,
+    })
+    clock = T0 + 5 * DAY
+    await s.scheduler.tick()
+    expect(s.fetch.calls).toHaveLength(3)
+  })
+
+  it("a config log still makes a collection with a 404 drop page due again", async () => {
+    const s = setup({ "/drops/prtscn-ink": recorded("drops/prtscn-ink") })
+    await addCollection(PRTSCN, {
+      slug: "prtscn-ink",
+      next_discovery_at: null,
+      next_drops_at: new Date(T0),
+      first_mint_block: 90,
+      first_mint_ts: new Date(T0 - DAY),
+    })
+    await s.scheduler.tick()
+    expect((await rowOf(PRTSCN)).next_drops_at).toBeNull()
+    await sql.begin((tx) =>
+      writeRows(
+        tx,
+        emptyBatch({
+          collections: [touch(PRTSCN, { seadrop: true })],
+          seadropConfig: [
+            {
+              txHash: `0x${"ee".repeat(32)}`,
+              logIndex: 1,
+              contract: PRTSCN as `0x${string}`,
+              event: "PublicDropUpdated",
+              fields: {},
+              block: 95n,
+            },
+          ],
+        }),
+      ),
+    )
+    expect((await rowOf(PRTSCN)).next_drops_at).not.toBeNull()
     expect(s.fetch.calls).toHaveLength(1)
   })
 

@@ -9,7 +9,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - pnpm monorepo with `sdk`, `events`, `db` and `indexer` packages, CI on Node 22 and 24, and gitleaks secret scanning.
 - SDK: InkyPump V2 event decoders for native and xStocks hooks, curve math, event builders and multicall readers.
 - Events schema v1: `launchpad.launch`, `launchpad.trade` and `launchpad.bond`.
-- Events: NFT types `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale` and `nft.stats`, with `NftEvent` and `LaunchpadEvent` unions. Schema version stays 1 and existing types are unchanged.
+- Events: NFT types `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`, with `NftEvent` and `LaunchpadEvent` unions. Schema version stays 1 and existing types are unchanged.
 - Trade event `soldBps`: tokens sold over sale supply in basis points, capped at 10,000, beside the curve-based `progressBpsBefore` and `progressBpsAfter`.
 - Indexer: backfill and live following of InkyPump V2 on Ink, getLogs routing across RPC providers, confirmation tracking and reorg rollback.
 - Optional Sentry reporting for fatal and stall exits (`SENTRY_DSN`, `SENTRY_RELEASE`).

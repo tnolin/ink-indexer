@@ -113,6 +113,11 @@ export type NftCollectionEvent = NftBase & {
   launchpad: "chimera" | null
   /** The Chimera token of a collection launched there. */
   launchToken: Address | null
+  /**
+   * Who made the collection: the launch creator for a Chimera collection, else the owner OpenSea
+   * names, with the OpenSea account's username and verified flag. Null while none is known.
+   */
+  creator: { address: Address; username: string | null; verified: boolean } | null
 }
 
 export type NftDropStage = {
@@ -213,6 +218,27 @@ export type NftStatsEvent = NftBase & {
   sales24h: number
   /** Decimal string. */
   totalSupply: string
+  /** Decimal string. The supply cap, where the collection has one; null when it is not known. */
+  maxSupply: string | null
+  /** Active listings counted, null when not counted. */
+  listedCount: number | null
+  /** True when `listedCount` stopped at the counting limit and the real number is higher. */
+  listedCapped: boolean
+}
+
+/** A Chimera campaign was created: the launch of a collection and its token. */
+export type NftLaunchEvent = NftBase & {
+  type: "nft.launch"
+  launchpad: "chimera"
+  /** Decimal string. */
+  campaignId: string
+  token: Address
+  /** The token's `symbol()` at launch; null when the call reverts. */
+  tokenSymbol: string | null
+  /** The token's `name()` at launch; null when the call reverts. */
+  tokenName: string | null
+  creator: Address
+  poolId: Hash
 }
 
 export type NftEvent =
@@ -222,6 +248,7 @@ export type NftEvent =
   | NftListingEvent
   | NftSaleEvent
   | NftStatsEvent
+  | NftLaunchEvent
 
 export type IndexerEvent = LaunchpadEvent | NftEvent
 export type IndexerEventType = IndexerEvent["type"]

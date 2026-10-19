@@ -2,7 +2,13 @@ import type { NftDropEvent, NftDropStage } from "@ink-indexer/events"
 import { SCHEMA_VERSION } from "@ink-indexer/events"
 import { type OsDrop, parseDrop } from "@ink-indexer/sdk"
 import type { Address } from "viem"
-import { DROPS_LEAD_MS, JOBS_PER_TICK, SCHEDULER_TICK_MS, TRANSIENT_RETRY_MS } from "../nft/policy"
+import {
+  DROP_404_RECHECK_MS,
+  DROPS_LEAD_MS,
+  JOBS_PER_TICK,
+  SCHEDULER_TICK_MS,
+  TRANSIENT_RETRY_MS,
+} from "../nft/policy"
 import type { Tx } from "../source"
 import { commonOutcome, type Job, type JobOutcome, OS_REQUEST, type OsJobDeps } from "./scheduler"
 import { canonicalJson } from "./snapshot"
@@ -20,7 +26,8 @@ const stagesOf = (d: OsDrop): NftDropStage[] =>
 
 /**
  * Collections with a slug whose drop page is due. The page is read when a SeaDrop configuration log
- * names the collection, and once more an hour before the first stage starts.
+ * names the collection, and once more an hour before the first stage starts. A collection with no
+ * drop page yet is read again daily until its first mint.
  */
 export function createDropsJob(deps: OsJobDeps): Job {
   const { sql, store, rest } = deps
@@ -28,6 +35,13 @@ export function createDropsJob(deps: OsJobDeps): Job {
 
   const reschedule = (contract: string, at: Date | null) =>
     sql`update indexer.nft_collections set next_drops_at = ${at} where contract = ${contract}`
+
+  /** No drop page: record it, and look again a day later unless the collection has minted. */
+  const missing = (contract: string, minted: boolean) =>
+    sql`
+      update indexer.nft_collections set drop_404_at = ${new Date(now())},
+        next_drops_at = ${minted ? null : new Date(now() + DROP_404_RECHECK_MS)}
+      where contract = ${contract}`
 
   return {
     name: "opensea-drops",
@@ -46,9 +60,11 @@ export function createDropsJob(deps: OsJobDeps): Job {
           drop_n: number
           stages: NftDropStage[] | null
           max_supply: string | null
+          first_mint_block: string | null
         }[]
       >`
-        select c.slug, c.drop_n, d.stages, d.max_supply::text as max_supply
+        select c.slug, c.drop_n, d.stages, d.max_supply::text as max_supply,
+          c.first_mint_block::text as first_mint_block
         from indexer.nft_collections c left join indexer.nft_drops d on d.contract = c.contract
         where c.contract = ${contract}`
       if (!row?.slug) return
@@ -57,12 +73,10 @@ export function createDropsJob(deps: OsJobDeps): Job {
       if (!page.ok) {
         const early = commonOutcome(page)
         if (early) return early
-        // No drop page: not asked again until a configuration log names the collection. Another
-        // error: soon.
-        await reschedule(
-          contract,
-          page.reason === "not_found" ? null : new Date(now() + TRANSIENT_RETRY_MS),
-        )
+        // No drop page: asked again daily until the collection's first mint, then not until a
+        // configuration log names it. Another error: soon.
+        if (page.reason === "not_found") await missing(contract, row.first_mint_block !== null)
+        else await reschedule(contract, new Date(now() + TRANSIENT_RETRY_MS))
         return
       }
       if (!page.value)
@@ -91,7 +105,7 @@ export function createDropsJob(deps: OsJobDeps): Job {
             fetched_at = excluded.fetched_at`
         await tx`
           update indexer.nft_collections
-          set drop_first_start = ${firstStart}, next_drops_at = ${refetch},
+          set drop_first_start = ${firstStart}, next_drops_at = ${refetch}, drop_404_at = null,
             verdict_dirty = verdict_dirty or ${changed}
           where contract = ${contract}`
       }

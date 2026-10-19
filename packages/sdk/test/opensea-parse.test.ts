@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
   ethToWei,
+  parseAccount,
   parseCollection,
   parseContract,
   parseDrop,
@@ -97,7 +98,14 @@ describe("parseCollection", () => {
       rarityCalculatedAt: "2026-10-18T12:08:38.783124",
       maxRank: 2222,
       openseaUrl: "https://opensea.io/collection/ink-hornet",
+      owner: "0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2",
     })
+  })
+
+  it("lowercases the owner and leaves it null when absent", () => {
+    expect(parseCollection({ collection: "x", owner: "0xABCDEF" })?.owner).toBe("0xabcdef")
+    expect(parseCollection({ collection: "x", owner: "" })?.owner).toBeNull()
+    expect(parseCollection({ collection: "x" })?.owner).toBeNull()
   })
 
   it("leaves rank fields null for a collection without rarity, and empty socials null", () => {
@@ -314,5 +322,33 @@ describe("parseNft", () => {
       rank: null,
       traits: [],
     })
+  })
+})
+
+describe("parseAccount", () => {
+  it("reads the username and verified flag of the Hornet owner", () => {
+    expect(parseAccount(body("accounts/0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2"))).toEqual({
+      username: "INKHornetDEV",
+      verified: false,
+    })
+  })
+
+  it("an account with no username has none, and verified needs a literal true", () => {
+    expect(parseAccount({ address: "0x1", username: "", is_verified: true })).toEqual({
+      username: null,
+      verified: true,
+    })
+    expect(parseAccount({ address: "0x1", username: null })).toEqual({
+      username: null,
+      verified: false,
+    })
+    expect(parseAccount({ username: "a", is_verified: "true" })).toEqual({
+      username: "a",
+      verified: false,
+    })
+  })
+
+  it("returns null for anything that is not an object and never throws", () => {
+    for (const bad of [null, undefined, 3, "x", []]) expect(parseAccount(bad)).toBeNull()
   })
 })

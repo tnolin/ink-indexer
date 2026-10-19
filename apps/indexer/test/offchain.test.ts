@@ -74,6 +74,9 @@ function stats(n: number): NftStatsEvent {
     volume24hWei: "0",
     sales24h: 0,
     totalSupply: "2222",
+    maxSupply: null,
+    listedCount: null,
+    listedCapped: false,
   }
 }
 

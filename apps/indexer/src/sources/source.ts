@@ -42,6 +42,7 @@ export function entityOf(e: IndexerEvent): string {
     case "nft.listing":
     case "nft.sale":
     case "nft.stats":
+    case "nft.launch":
       return e.contract
   }
 }

@@ -8,7 +8,7 @@ import type {
   SeaDropMintRow,
   TransferRow,
 } from "./index"
-import { DISCOVERY_RETRY_MS, DROPS_DEBOUNCE_MS, ROW_CHUNK } from "./policy"
+import { DISCOVERY_RESTART_MS, DISCOVERY_RETRY_MS, DROPS_DEBOUNCE_MS, ROW_CHUNK } from "./policy"
 
 // The NFT source's tables, written inside the loop's transaction.
 
@@ -26,6 +26,7 @@ const collectionRecord = (c: CollectionTouch) => ({
   kind: c.launch ? "continuous" : null,
   launchpad: c.launch?.launchpad ?? null,
   launch_token: c.launch?.token ?? null,
+  creator_address: c.launch?.creator ?? null,
 })
 
 const transferRecord = (t: TransferRow, holder: "recipient" | "holder") => ({
@@ -100,12 +101,14 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
         seadrop = indexer.nft_collections.seadrop or excluded.seadrop,
         kind = coalesce(excluded.kind, indexer.nft_collections.kind),
         launchpad = coalesce(excluded.launchpad, indexer.nft_collections.launchpad),
-        launch_token = coalesce(indexer.nft_collections.launch_token, excluded.launch_token)`
+        launch_token = coalesce(indexer.nft_collections.launch_token, excluded.launch_token),
+        creator_address = coalesce(indexer.nft_collections.creator_address, excluded.creator_address)`
 
   // OpenSea triggers. A new row is due for discovery by its column default. New activity on a
   // contract with no slug restarts discovery: the failures are forgotten, and the next lookup is
-  // at most five minutes away (at once if it had given up). A SeaDrop configuration log makes the
-  // drop page due soon, unless it is already due sooner.
+  // at most five minutes away (at once if it had given up). That happens at most once a day per
+  // contract, so a contract OpenSea never lists is not asked about for good by its own mints. A
+  // SeaDrop configuration log makes the drop page due soon, unless it is already due sooner.
   const active = [
     ...new Set([...batch.mints.map((m) => m.contract), ...batch.sales.map((r) => r.contract)]),
   ]
@@ -113,9 +116,12 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
     await tx`
       update indexer.nft_collections set
         discovery_attempts = 0,
+        attempts_reset_at = now(),
         next_discovery_at = least(coalesce(next_discovery_at, now()), now() + make_interval(secs => ${DISCOVERY_RETRY_MS[0] / 1000}::float8))
       where contract = any(${tx.array(active)}::text[]) and slug is null
-        and (discovery_attempts > 0 or next_discovery_at is null)`
+        and (discovery_attempts > 0 or next_discovery_at is null)
+        and (attempts_reset_at is null
+          or attempts_reset_at <= now() - make_interval(secs => ${DISCOVERY_RESTART_MS / 1000}::float8))`
   const configured = [...new Set(batch.seadropConfig.map((c) => c.contract))]
   if (configured.length > 0)
     await tx`
@@ -171,7 +177,7 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
 
 /**
  * Deletes rows above `fork`. A collection whose first mint was above it loses its first-mint
- * fields; one whose launch was above it loses the launchpad, token and kind that launch gave it.
+ * fields; one whose launch was above it loses the launchpad, token, creator and kind that launch gave it.
  *
  * shortcut: a collection whose only logs were above the fork keeps its row, `standard` and
  * `seadrop = true`. Deleting it would need a first-seen block column on nft_collections.
@@ -185,7 +191,7 @@ export async function rollbackRows(tx: Tx, fork: bigint) {
   await tx`delete from indexer.nft_sales where block > ${f}`
   await tx`
     update indexer.nft_collections
-    set launchpad = null, launch_token = null, kind = null
+    set launchpad = null, launch_token = null, creator_address = null, kind = null
     where contract in (select collection from indexer.nft_launches where block > ${f})`
   await tx`delete from indexer.nft_launches where block > ${f}`
   await tx`
