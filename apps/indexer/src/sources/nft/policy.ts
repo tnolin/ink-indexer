@@ -132,3 +132,26 @@ export const LISTED_RETRY_MS = HOUR_MS
 export const LISTED_NOT_FOUND_GIVE_UP = 3
 /** The floor change in `nft.stats` is measured against the newest row at or before this long ago. */
 export const FLOOR_CHANGE_WINDOW_MS = DAY_MS
+
+// The OpenSea Stream (spec "Stream shards").
+
+/** Collection topics one Stream connection accepts (measured: exactly 50). */
+export const STREAM_PER_CONN = 50
+/** Stream connections at most; beyond this the tracked set goes to the firehose. */
+export const STREAM_MAX_CONNS = 20
+/** Collections streamed at most, in the order of `trackedSlugs`. */
+export const TRACKED_MAX = 1_000
+/** Waits before each reconnect of a connection; the last one repeats. */
+export const STREAM_BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000] as const
+/** A connection that stayed up this long starts its backoff again from the first wait. */
+export const STREAM_BACKOFF_RESET_MS = 60_000
+/** A heartbeat goes out this often; one with no reply by the next closes the connection. */
+export const STREAM_HEARTBEAT_MS = 25_000
+/** A connection down for longer than this is reported once per outage. */
+export const STREAM_DOWN_REPORT_MS = 5 * MINUTE_MS
+/** New shard connections refused (or all of whose joins failed) in a row before the firehose. */
+export const STREAM_REFUSED_TO_FIREHOSE = 2
+/** How long the startup cap probe waits for its join replies before it gives up. */
+export const STREAM_PROBE_TIMEOUT_MS = 30_000
+/** How often the firehose logs its messages and bytes per minute. */
+export const FIREHOSE_METER_EVERY_MS = 10 * MINUTE_MS

@@ -1,5 +1,6 @@
 /**
- * Parsers for OpenSea REST v2 responses. Each takes the parsed JSON body and is tolerant: a field
+ * Parsers for OpenSea REST v2 responses and Stream frames. Each REST parser takes the parsed JSON
+ * body and is tolerant: a field
  * that is missing or the wrong type comes back null (or empty), and input that is not usable at all
  * gives null. None of them throws.
  */
@@ -245,4 +246,25 @@ export function parseNft(j: unknown): OsNft | null {
     name: str(o.name),
     imageUrl: str(o.image_url),
   }
+}
+
+export type OsStreamFrame = { topic: string; event: string; ref: string | null; body: unknown }
+
+/**
+ * One Stream message as received: a Phoenix v2 array frame `[join_ref, ref, topic, event, payload]`.
+ * Null for anything that is not JSON of that shape. Never throws.
+ */
+export function parseStreamFrame(raw: string): OsStreamFrame | null {
+  let j: unknown
+  try {
+    j = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(j) || j.length !== 5) return null
+  const [joinRef, ref, topic, event, body] = j as unknown[]
+  const refLike = (v: unknown) => v === null || typeof v === "string"
+  if (!refLike(joinRef) || !refLike(ref)) return null
+  if (typeof topic !== "string" || typeof event !== "string") return null
+  return { topic, event, ref: ref as string | null, body }
 }

@@ -9,6 +9,7 @@ import {
   parseDrop,
   parseNft,
   parseStats,
+  parseStreamFrame,
 } from "../src/index"
 
 const HORNET = "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b"
@@ -352,5 +353,55 @@ describe("parseAccount", () => {
 
   it("returns null for anything that is not an object and never throws", () => {
     for (const bad of [null, undefined, 3, "x", []]) expect(parseAccount(bad)).toBeNull()
+  })
+})
+
+describe("parseStreamFrame", () => {
+  /** A recorded Stream fixture (frames as received). */
+  const stream = (name: string) =>
+    JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dirname,
+          "../../../apps/indexer/test/fixtures/opensea/stream",
+          `${name}.json`,
+        ),
+        "utf8",
+      ),
+    )
+
+  it("reads the topic, event, ref and body of a recorded heartbeat reply", () => {
+    const { reply } = stream("heartbeat")
+    expect(parseStreamFrame(JSON.stringify(reply))).toEqual({
+      topic: "phoenix",
+      event: "phx_reply",
+      ref: "100",
+      body: { status: "ok", response: {} },
+    })
+  })
+
+  it("reads a pushed event, whose ref is null", () => {
+    const { frames } = stream("collections") as { frames: { frame: unknown[] }[] }
+    const listed = frames.find((f) => f.frame[3] === "item_listed")!.frame
+    const out = parseStreamFrame(JSON.stringify(listed))!
+    expect(out.topic).toBe("collection:prtscn-ink")
+    expect(out.event).toBe("item_listed")
+    expect(out.ref).toBeNull()
+    expect((out.body as { event_type: string }).event_type).toBe("item_listed")
+  })
+
+  it("returns null for anything that is not a five-element frame and never throws", () => {
+    for (const bad of [
+      "",
+      "not json",
+      "{}",
+      "null",
+      "[]",
+      '[null, "1", "phoenix", "phx_reply"]',
+      '[null, "1", 5, "phx_reply", {}]',
+      '[null, "1", "phoenix", null, {}]',
+      '[null, 7, "phoenix", "phx_reply", {}]',
+    ])
+      expect(parseStreamFrame(bad)).toBeNull()
   })
 })
