@@ -48,7 +48,8 @@ export class FakeSocket implements WebSocketLike {
   /** Frames delivered to the client, and their bytes. */
   received = 0
   receivedBytes = 0
-  private readonly cap: number
+  /** Topics this socket accepts (the server's `joinCap` when it was created). */
+  cap: number
 
   constructor(
     private readonly server: FakeStream,

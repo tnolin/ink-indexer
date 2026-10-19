@@ -1,8 +1,7 @@
 /**
  * Parsers for OpenSea REST v2 responses and Stream frames. Each REST parser takes the parsed JSON
- * body and is tolerant: a field
- * that is missing or the wrong type comes back null (or empty), and input that is not usable at all
- * gives null. None of them throws.
+ * body and is tolerant: a field that is missing or the wrong type comes back null (or empty), and
+ * input that is not usable at all gives null. None of them throws.
  */
 
 export type OsContract = { slug: string | null; standard: string }

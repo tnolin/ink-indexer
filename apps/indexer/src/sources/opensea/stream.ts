@@ -130,6 +130,8 @@ type Conn = {
   downSince: number | null
   /** A join of this connection has been accepted once: it is no longer a new shard. */
   proven: boolean
+  /** The connection has not failed yet: a failure now is its first. */
+  fresh: boolean
   retired: boolean
 }
 
@@ -152,15 +154,15 @@ export type Stream = {
  *
  * Firehose: one connection joining `collection:*`, kept to Ink events of tracked slugs, when the
  * set is larger than the shards hold, when the startup probe (`perConn + 1` throwaway joins on one
- * connection) sees fewer than `perConn` accepted, or when two new shards in a row are refused or
- * have every join fail. It logs its messages and bytes per minute every 10 minutes.
+ * connection) sees fewer than `perConn` accepted, or when two distinct new shards in a row are
+ * refused or have every join fail on their first connection while another shard is connected. It logs its messages and bytes per minute every 10 minutes.
  * shortcut: the switch lasts until restart; a refusal that turns out to be transient keeps the
  * firehose. Add a periodic shard retry if that happens.
  * shortcut: events sent while a connection is down are lost; OpenSea does not replay them. Read
  * the REST listings of the affected collections after a reconnect if the gaps matter.
  *
- * The key is part of the connection URL: neither the URL nor the key is ever logged or reported,
- * and error text has the key replaced with `***`.
+ * The key is part of the connection URL. It is never logged or reported: the URL is only passed to
+ * the socket factory, and any error or close text has the key replaced with `***`.
  */
 export function createStream(deps: {
   key: string
@@ -247,6 +249,7 @@ export function createStream(deps: {
       openedAt: null,
       downSince: null,
       proven: false,
+      fresh: true,
       retired: false,
     }
     markDown(c)
@@ -326,11 +329,20 @@ export function createStream(deps: {
     }, STREAM_HEARTBEAT_MS)
   }
 
-  /** The connection is gone: count a refused new shard, or reconnect after the backoff. */
+  /**
+   * The connection is gone: count a refused new shard, or reconnect after the backoff.
+   *
+   * A refusal is the first failure of a new shard (its first connection, or every join on it)
+   * while another shard is connected, so the server is known to be reachable: that points at a
+   * connection cap. Retries of the same shard, and failures while no shard is connected (an
+   * outage), never count.
+   */
   function lost(c: Conn) {
     detach(c)
     if (stopped || c.retired) return
-    if (c.kind === "shard" && !c.proven) {
+    const first = c.fresh
+    c.fresh = false
+    if (c.kind === "shard" && !c.proven && first && shards.some((s) => s !== c && s.open)) {
       refusedInARow++
       log("warn", "opensea stream shard refused", { conn: c.name, inARow: refusedInARow })
       if (refusedInARow >= STREAM_REFUSED_TO_FIREHOSE) {
@@ -392,6 +404,12 @@ export function createStream(deps: {
       slug,
       status: typeof status === "string" ? status : null,
     })
+    if (c.kind === "shard" && c.proven) {
+      // Free the slot: the next setSlugs places the slug again.
+      c.topics.delete(slug)
+      c.joinRefs.delete(slug)
+      return
+    }
     if (!c.proven && c.pending.size === 0) {
       log("warn", "opensea stream joins all failed", { conn: c.name })
       lost(c)
@@ -525,7 +543,7 @@ export function createStream(deps: {
 /**
  * The collections to stream, in order: manual marks other than `junk`, then `real` collections,
  * then `pending` collections minting now (a mint in the last 10 minutes), then any collection with
- * an on-chain sale in 7 days. A manual `junk` mark leaves the collection out entirely. Within each
+ * an on-chain sale in 7 days. A manual `junk` mark on any contract leaves its slug out entirely. Within each
  * group the most 7-day sales come first, ties by slug. Only collections with a slug.
  *
  * At most `TRACKED_CAP + 1` (1,001): when more than the cap qualify, the extra one makes the set
@@ -542,21 +560,28 @@ export async function trackedSlugs(sql: Sql): Promise<string[]> {
     head === null ? null : (head - BigInt(Math.floor(seconds / BLOCK_S))).toString()
   const salesCut = blockBefore(RANK_WINDOW_S)
   const mintCut = blockBefore(STILL_MINTING_S)
+  // Slugs are not unique per contract: rank by slug, before the limit, so the overflow row and
+  // a junk mark on any contract of the slug both count.
   const rows = await sql<{ slug: string }[]>`
     with sales as (
       select contract, count(*)::int as n from indexer.nft_sales
-      where block >= ${salesCut}::bigint group by contract)
-    select c.slug from indexer.nft_collections c
-    left join indexer.nft_overrides o on o.contract = c.contract
-    left join sales s on s.contract = c.contract
-    cross join lateral (select case
-      when o.contract is not null then 1
-      when c.verdict = 'real' then 2
-      when c.verdict = 'pending' and exists (select 1 from indexer.nft_mints m
-        where m.contract = c.contract and m.block >= ${mintCut}::bigint) then 3
-      when s.n > 0 then 4 end as rank) r
-    where c.slug is not null and r.rank is not null and o.verdict is distinct from 'junk'
-    order by r.rank, coalesce(s.n, 0) desc, c.slug
+      where block >= ${salesCut}::bigint group by contract),
+    ranked as (
+      select c.slug, r.rank, coalesce(s.n, 0) as n, o.verdict = 'junk' as junk_mark
+      from indexer.nft_collections c
+      left join indexer.nft_overrides o on o.contract = c.contract
+      left join sales s on s.contract = c.contract
+      cross join lateral (select case
+        when o.contract is not null then 1
+        when c.verdict = 'real' then 2
+        when c.verdict = 'pending' and exists (select 1 from indexer.nft_mints m
+          where m.contract = c.contract and m.block >= ${mintCut}::bigint) then 3
+        when s.n > 0 then 4 end as rank) r
+      where c.slug is not null)
+    select slug from ranked
+    group by slug
+    having min(rank) is not null and bool_and(junk_mark is not true)
+    order by min(rank), sum(n) desc, slug
     limit ${TRACKED_CAP + 1}`
-  return [...new Set(rows.map((r) => r.slug))]
+  return rows.map((r) => r.slug)
 }

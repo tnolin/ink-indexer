@@ -152,7 +152,10 @@ export const STREAM_BACKOFF_RESET_MS = 60_000
 export const STREAM_HEARTBEAT_MS = 25_000
 /** A connection down for longer than this is reported once per outage. */
 export const STREAM_DOWN_REPORT_MS = 5 * MINUTE_MS
-/** New shard connections refused (or all of whose joins failed) in a row before the firehose. */
+/**
+ * Distinct new shards refused in a row (their first connection failed, or all its joins did, while
+ * another shard was connected) before the firehose.
+ */
 export const STREAM_REFUSED_TO_FIREHOSE = 2
 /** How long the startup cap probe waits for its join replies before it gives up. */
 export const STREAM_PROBE_TIMEOUT_MS = 30_000

@@ -3,7 +3,12 @@ import { resetDb } from "@ink-indexer/db/testing"
 import { afterEach, beforeEach, describe, expect, inject, it, vi } from "vitest"
 import type { Level } from "../src/log"
 import { TRACKED_CAP } from "../src/sources/nft/policy"
-import { createStream, type StreamEvent, trackedSlugs } from "../src/sources/opensea/stream"
+import {
+  createStream,
+  type StreamEvent,
+  trackedSlugs,
+  type WebSocketLike,
+} from "../src/sources/opensea/stream"
 import { createStore } from "../src/store"
 import { FakeStream, type Frame } from "./opensea/fake-ws"
 import { loadOpenSeaFixture } from "./opensea/fixtures"
@@ -259,8 +264,11 @@ describe("Stream shards", () => {
 
   it("two refused new shards switch to firehose", async () => {
     const s = await start()
+    s.setSlugs(slugs(50))
+    await flush()
+    // Shard 1 is up, so the server is reachable: shards 2 and 3 are refused.
     server.refuse = 2
-    s.setSlugs(slugs(120))
+    s.setSlugs(slugs(150))
     await flush()
     expect(s.mode()).toBe("firehose")
     const open = server.openSockets()
@@ -268,12 +276,37 @@ describe("Stream shards", () => {
     expect(open[0]!.joins()).toEqual(["collection:*"])
   })
 
-  it("a shard of a new connection whose joins all fail counts as refused", async () => {
+  it("a new shard whose joins all fail while another is up counts as refused", async () => {
     const s = await start()
+    s.setSlugs(slugs(50))
+    await flush()
     server.joinCap = 0
-    s.setSlugs(slugs(120))
+    s.setSlugs(slugs(150))
     await flush()
     expect(s.mode()).toBe("firehose")
+  })
+
+  it("one new shard failing again and again does not switch", async () => {
+    const s = await start()
+    s.setSlugs(slugs(50))
+    await flush()
+    server.refuse = 6
+    s.setSlugs(slugs(60))
+    await advance(1 * SEC + 2 * SEC + 5 * SEC + 10 * SEC + 30 * SEC + 30 * SEC)
+    expect(s.mode()).toBe("shards")
+    expect(server.openSockets().map((x) => x.joined.size)).toEqual([50, 10])
+  })
+
+  it("a startup with the Stream unreachable does not switch, and the shards come up later", async () => {
+    server.refuse = 1000
+    const s = await start()
+    s.setSlugs(slugs(120))
+    await advance(3 * MIN)
+    expect(s.mode()).toBe("shards")
+    server.refuse = 0
+    await advance(30 * SEC)
+    expect(s.mode()).toBe("shards")
+    expect(server.openSockets().map((x) => x.joined.size)).toEqual([50, 50, 20])
   })
 
   it("reconnects of a shard that was up do not count as refusals", async () => {
@@ -379,6 +412,86 @@ describe("Stream shards", () => {
     await advance(10 * MIN)
     expect(server.openSockets()).toHaveLength(0)
     expect(server.sockets).toHaveLength(3)
+  })
+
+  it("stop during a backoff wait or during the probe opens nothing more", async () => {
+    const s = await start()
+    s.setSlugs(["a"])
+    await flush()
+    shards()[0]!.serverClose(1006)
+    s.stop()
+    await advance(10 * MIN)
+    expect(server.sockets).toHaveLength(2)
+
+    const other = new FakeStream()
+    const msgs: string[] = []
+    const t = createStream({
+      key: KEY,
+      socket: other.factory,
+      onEvent: () => {},
+      log: (_level, msg) => msgs.push(msg),
+      report: () => {},
+    })
+    t.setSlugs(["a"])
+    t.stop()
+    await advance(10 * MIN)
+    expect(other.sockets).toHaveLength(1)
+    expect(other.sockets[0]!.state).toBe("closed")
+    expect(msgs).toEqual([])
+  })
+
+  it("the probe reads the recorded join-limit replies as 50 accepted", async () => {
+    const rec = loadOpenSeaFixture("stream/join-limit") as Recorded
+    // The probe is the first thing the stream sends, so its join refs are 1 to 51 as in the recording.
+    const recorded: WebSocketLike = {
+      onopen: null,
+      onmessage: null,
+      onclose: null,
+      send(data) {
+        if ((JSON.parse(data) as Frame)[1] === "51")
+          for (const { frame } of rec.frames)
+            queueMicrotask(() => recorded.onmessage?.(JSON.stringify(frame)))
+      },
+      close() {},
+    }
+    queueMicrotask(() => recorded.onopen?.())
+    let first = true
+    const s = createStream({
+      key: KEY,
+      socket: (url) => {
+        if (!first) return server.factory(url)
+        first = false
+        return recorded
+      },
+      onEvent: () => {},
+      log: (level, msg, fields) => logs.push({ level, msg, fields }),
+      report: () => {},
+    })
+    stream = s
+    await flush()
+    expect(logs.find((l) => l.msg === "opensea stream probe")?.fields).toEqual({
+      joins: 51,
+      accepted: 50,
+    })
+    expect(s.mode()).toBe("shards")
+  })
+
+  it("a slug whose join failed on a shard that is up is joined again by the next setSlugs", async () => {
+    const s = await start()
+    server.joinCap = 1
+    s.setSlugs(["a", "b"])
+    await flush()
+    const sock = shards()[0]!
+    const failed = () =>
+      logs.filter((l) => l.msg === "opensea stream join failed").map((l) => l.fields?.slug)
+    expect(failed()).toEqual(["b"])
+    sock.cap = 50
+    s.setSlugs(["a", "b"])
+    await flush()
+    expect(sock.joins()).toEqual(topics(["a", "b", "b"]))
+    expect([...sock.joined]).toEqual(topics(["a", "b"]))
+    expect(failed()).toEqual(["b"])
+    expect(shards()).toHaveLength(1)
   })
 
   it("the key never appears in any log call", async () => {
@@ -498,6 +611,17 @@ describe("trackedSlugs", () => {
     await add(12, { verdict: "junk" }) // junk by the gates, not by a mark: a 7-day seller
     await sales(12, 1, DAY_S)
     expect(await trackedSlugs(sql)).toEqual(["c-11", "c-12"])
+  })
+
+  it("contracts that share a slug count once, and a junk mark on any of them leaves the slug out", async () => {
+    await add(60, { verdict: "real", slug: "shared" })
+    await add(61, { slug: "shared" })
+    await sales(61, 9, DAY_S)
+    await add(62, { verdict: "real", slug: "marked" })
+    await add(63, { slug: "marked" })
+    await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(63)}, 'junk')`
+    await add(64, { verdict: "real" })
+    expect(await trackedSlugs(sql)).toEqual(["shared", "c-64"])
   })
 
   it("returns one past the cap, so 1,001 eligible collections switch the stream to the firehose", async () => {
