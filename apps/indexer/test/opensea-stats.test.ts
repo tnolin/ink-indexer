@@ -391,13 +391,13 @@ describe("stats job", () => {
     })
   })
 
-  it("writes the row but no event while the supply is unknown", async () => {
+  it("a collection with unknown supply still gets its stats event", async () => {
     const s = setup({ [statsPath(A)]: osStats({ floor: 1 }) })
     await addCollection(A, { stats_tier: "cold", next_stats_at: new Date(T0) })
     await s.stats.job.run(A)
-    expect(await statRows(A)).toHaveLength(1)
     expect((await statRows(A))[0]?.total_supply).toBeNull()
-    expect(await statsEvents()).toHaveLength(0)
+    expect(await statsEvents()).toHaveLength(1)
+    expect((await statsEvents())[0]).toMatchObject({ totalSupply: null, maxSupply: null })
   })
 
   it("defers when the budget is empty and leaves the collection due", async () => {
@@ -601,6 +601,47 @@ describe("listed count", () => {
     expect(await s.stats.job.due(sql, new Date(clock + DAY))).toEqual([])
     await sql.begin((tx) => writeRows(tx, batch))
     expect((await rowOf(A)).listed_due_at).toBeNull()
+  })
+
+  it("unchanged floor, owners and volume with a changed listed count writes one event", async () => {
+    let listed = listings(5, null)
+    const s = setup({
+      [statsPath(A)]: osStats({ floor: 1, owners: 5, volume: 2 }),
+      [listedPath(A)]: () => listed,
+    })
+    await addCollection(A, { stats_tier: "hot", next_stats_at: new Date(T0), total_supply: 10 })
+    await s.stats.job.run(A)
+    expect(await statsEvents()).toHaveLength(1)
+    expect((await statRows(A))[0]).toMatchObject({ listed_count: 5, listed_capped: false })
+
+    // An hour on: counted again, same count, nothing else changed. No event.
+    clock += HOUR
+    await s.stats.job.run(A)
+    expect(callsTo(s.fetch, listedPath(A))).toBe(2)
+    expect(await statsEvents()).toHaveLength(1)
+
+    // A poll that does not count does not compare listed counts, and keeps null in its row.
+    clock += 20 * MIN
+    await s.stats.job.run(A)
+    expect(await statsEvents()).toHaveLength(1)
+    expect((await statRows(A))[2]?.listed_count).toBeNull()
+
+    // The count changes: one event with it.
+    clock += 40 * MIN
+    listed = listings(8, null)
+    await s.stats.job.run(A)
+    const events = await statsEvents()
+    expect(events).toHaveLength(2)
+    expect(events[1]).toMatchObject({ listedCount: 8, listedCapped: false })
+
+    // Past the cap: 300, capped.
+    clock += HOUR
+    const capped = setup({
+      [statsPath(A)]: osStats({ floor: 1, owners: 5, volume: 2 }),
+      [listedPath(A)]: () => listings(100, "more"),
+    })
+    await capped.stats.job.run(A)
+    expect((await statsEvents())[2]).toMatchObject({ listedCount: 300, listedCapped: true })
   })
 
   it("a failed listing page leaves the stats written and the count for later", async () => {

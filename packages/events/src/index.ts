@@ -217,8 +217,8 @@ export type NftStatsEvent = NftBase & {
   /** Decimal string. */
   volume24hWei: string
   sales24h: number
-  /** Decimal string. */
-  totalSupply: string
+  /** Decimal string. Null when the supply is not known. */
+  totalSupply: string | null
   /** Decimal string. The supply cap, where the collection has one; null when it is not known. */
   maxSupply: string | null
   /** Active listings counted, null when not counted. */

@@ -135,6 +135,7 @@ describe("@ink-indexer/events", () => {
   })
 
   it("nft.stats carries the cap and the listed count", () => {
+    expectTypeOf<NftStatsEvent["totalSupply"]>().toEqualTypeOf<string | null>()
     expectTypeOf<NftStatsEvent["maxSupply"]>().toEqualTypeOf<string | null>()
     expectTypeOf<NftStatsEvent["listedCount"]>().toEqualTypeOf<number | null>()
     expectTypeOf<NftStatsEvent["listedCapped"]>().toEqualTypeOf<boolean>()

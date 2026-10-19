@@ -286,6 +286,10 @@ export function createStats(deps: StatsDeps) {
     >`
       select floor_wei::text as floor_wei, owners, volume_24h_wei::text as volume
       from indexer.nft_stats where contract = ${contract} order by at desc limit 1`
+    // The listed count is compared with the last poll that counted, which may be an older one.
+    const [counted] = await sql<{ listed_count: number; listed_capped: boolean }[]>`
+      select listed_count, listed_capped from indexer.nft_stats
+      where contract = ${contract} and listed_count is not null order by at desc limit 1`
     const [ago] = await sql<{ floor_wei: string | null }[]>`
       select floor_wei::text as floor_wei from indexer.nft_stats
       where contract = ${contract} and at <= ${new Date(at.getTime() - 24 * 3_600_000)}
@@ -300,37 +304,39 @@ export function createStats(deps: StatsDeps) {
       sales_24h: int(stats.sales24h),
       total_supply:
         supply.total !== null && supply.total <= BigInt(INT_MAX) ? Number(supply.total) : null,
+      listed_count: listed ? listed.count : null,
+      listed_capped: listed ? listed.capped : null,
     }
     const changed =
       !prev ||
       prev.floor_wei !== values.floor_wei ||
       prev.owners !== values.owners ||
-      prev.volume !== values.volume_24h_wei
-    // The event has a supply field that is not nullable: a collection of unknown supply keeps its rows.
-    const event: NftStatsEvent | null =
-      changed && supply.total !== null
-        ? {
-            v: SCHEMA_VERSION,
-            chainId: INK_CHAIN_ID,
-            contract: contract as Address,
-            source: "opensea",
-            txHash: `os:stats:${contract}:${row.stats_n + 1}`,
-            logIndex: 0,
-            // The store stamps the block of the chain cursor.
-            blockNumber: "0",
-            blockTimestamp: Math.floor(at.getTime() / 1000),
-            type: "nft.stats",
-            floorWei: values.floor_wei,
-            floor24hAgoWei: ago?.floor_wei ?? null,
-            owners: values.owners ?? 0,
-            volume24hWei: values.volume_24h_wei ?? "0",
-            sales24h: values.sales_24h ?? 0,
-            totalSupply: supply.total.toString(),
-            maxSupply: supply.max === null ? null : supply.max.toString(),
-            listedCount: listed ? listed.count : null,
-            listedCapped: listed ? listed.capped : false,
-          }
-        : null
+      prev.volume !== values.volume_24h_wei ||
+      (listed !== null &&
+        (counted?.listed_count !== listed.count || counted?.listed_capped !== listed.capped))
+    const event: NftStatsEvent | null = changed
+      ? {
+          v: SCHEMA_VERSION,
+          chainId: INK_CHAIN_ID,
+          contract: contract as Address,
+          source: "opensea",
+          txHash: `os:stats:${contract}:${row.stats_n + 1}`,
+          logIndex: 0,
+          // The store stamps the block of the chain cursor.
+          blockNumber: "0",
+          blockTimestamp: Math.floor(at.getTime() / 1000),
+          type: "nft.stats",
+          floorWei: values.floor_wei,
+          floor24hAgoWei: ago?.floor_wei ?? null,
+          owners: values.owners ?? 0,
+          volume24hWei: values.volume_24h_wei ?? "0",
+          sales24h: values.sales_24h ?? 0,
+          totalSupply: supply.total === null ? null : supply.total.toString(),
+          maxSupply: supply.max === null ? null : supply.max.toString(),
+          listedCount: listed ? listed.count : null,
+          listedCapped: listed ? listed.capped : false,
+        }
+      : null
 
     const nextAt =
       row.stats_tier === null

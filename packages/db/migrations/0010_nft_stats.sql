@@ -10,6 +10,9 @@ create table indexer.nft_stats (
   sales_24h int,
   -- The supply the poll reported (see the stats job); null when none was known.
   total_supply int,
+  -- Listings counted by this poll (see the stats job); null when it did not count.
+  listed_count int,
+  listed_capped bool,
   primary key (contract, at)
 );
 
