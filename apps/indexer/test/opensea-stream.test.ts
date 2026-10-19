@@ -2,6 +2,7 @@ import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import { afterEach, beforeEach, describe, expect, inject, it, vi } from "vitest"
 import type { Level } from "../src/log"
+import { TRACKED_CAP } from "../src/sources/nft/policy"
 import { createStream, type StreamEvent, trackedSlugs } from "../src/sources/opensea/stream"
 import { createStore } from "../src/store"
 import { FakeStream, type Frame } from "./opensea/fake-ws"
@@ -488,14 +489,45 @@ describe("trackedSlugs", () => {
     expect(await trackedSlugs(sql)).toEqual(["c-10", "c-21", "c-20", "c-30", "c-41", "c-40"])
   })
 
-  it("caps the set at 1,000", async () => {
-    const rows = Array.from({ length: 1001 }, (_, i) => ({
+  it("a manual junk mark leaves the collection out, however much it sells", async () => {
+    await add(10, { verdict: "junk" })
+    await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(10)}, 'junk')`
+    await sales(10, 50, DAY_S)
+    await add(11, { verdict: "real" })
+    await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(11)}, 'real')`
+    await add(12, { verdict: "junk" }) // junk by the gates, not by a mark: a 7-day seller
+    await sales(12, 1, DAY_S)
+    expect(await trackedSlugs(sql)).toEqual(["c-11", "c-12"])
+  })
+
+  it("returns one past the cap, so 1,001 eligible collections switch the stream to the firehose", async () => {
+    const rows = Array.from({ length: 1002 }, (_, i) => ({
       contract: addr(1000 + i),
       standard: "erc721",
       slug: `r-${i}`,
       verdict: "real",
     }))
     await sql`insert into indexer.nft_collections ${sql(rows)}`
-    expect(await trackedSlugs(sql)).toHaveLength(1000)
+    const tracked = await trackedSlugs(sql)
+    expect(tracked).toHaveLength(TRACKED_CAP + 1)
+
+    const server = new FakeStream()
+    const stream = createStream({
+      key: KEY,
+      socket: server.factory,
+      onEvent: () => {},
+      log: () => {},
+      report: () => {},
+    })
+    try {
+      for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r))
+      expect(stream.mode()).toBe("shards")
+      stream.setSlugs(tracked)
+      expect(stream.mode()).toBe("firehose")
+      stream.setSlugs(tracked.slice(0, TRACKED_CAP))
+      expect(stream.mode()).toBe("firehose")
+    } finally {
+      stream.stop()
+    }
   })
 })

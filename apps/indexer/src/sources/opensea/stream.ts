@@ -16,7 +16,7 @@ import {
   STREAM_PER_CONN,
   STREAM_PROBE_TIMEOUT_MS,
   STREAM_REFUSED_TO_FIREHOSE,
-  TRACKED_MAX,
+  TRACKED_CAP,
 } from "../nft/policy"
 
 const STREAM_URL = "wss://stream-api.opensea.io/socket/websocket"
@@ -523,10 +523,13 @@ export function createStream(deps: {
 }
 
 /**
- * The collections to stream, in order, at most 1,000: manual marks, then `real` collections, then
- * `pending` collections minting now (a mint in the last 10 minutes), then any collection with an
- * on-chain sale in 7 days. Within each group the most 7-day sales come first, ties by slug. Only
- * collections with a slug.
+ * The collections to stream, in order: manual marks other than `junk`, then `real` collections,
+ * then `pending` collections minting now (a mint in the last 10 minutes), then any collection with
+ * an on-chain sale in 7 days. A manual `junk` mark leaves the collection out entirely. Within each
+ * group the most 7-day sales come first, ties by slug. Only collections with a slug.
+ *
+ * At most `TRACKED_CAP + 1` (1,001): when more than the cap qualify, the extra one makes the set
+ * larger than the shards hold, and `setSlugs` switches the stream to the firehose.
  *
  * "Now" for the block windows is the chain cursor (see `assignTiers`); with no cursor yet, only
  * marks and `real` collections qualify.
@@ -552,8 +555,8 @@ export async function trackedSlugs(sql: Sql): Promise<string[]> {
       when c.verdict = 'pending' and exists (select 1 from indexer.nft_mints m
         where m.contract = c.contract and m.block >= ${mintCut}::bigint) then 3
       when s.n > 0 then 4 end as rank) r
-    where c.slug is not null and r.rank is not null
+    where c.slug is not null and r.rank is not null and o.verdict is distinct from 'junk'
     order by r.rank, coalesce(s.n, 0) desc, c.slug
-    limit ${TRACKED_MAX}`
+    limit ${TRACKED_CAP + 1}`
   return [...new Set(rows.map((r) => r.slug))]
 }

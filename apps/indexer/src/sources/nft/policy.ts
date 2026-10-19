@@ -139,8 +139,11 @@ export const FLOOR_CHANGE_WINDOW_MS = DAY_MS
 export const STREAM_PER_CONN = 50
 /** Stream connections at most; beyond this the tracked set goes to the firehose. */
 export const STREAM_MAX_CONNS = 20
-/** Collections streamed at most, in the order of `trackedSlugs`. */
-export const TRACKED_MAX = 1_000
+/**
+ * Collections the shards stream at most. `trackedSlugs` returns one more than this when more
+ * qualify, so the overflow reaches the stream and switches it to the firehose.
+ */
+export const TRACKED_CAP = 1_000
 /** Waits before each reconnect of a connection; the last one repeats. */
 export const STREAM_BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000] as const
 /** A connection that stayed up this long starts its backoff again from the first wait. */
