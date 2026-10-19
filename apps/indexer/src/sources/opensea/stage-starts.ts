@@ -1,8 +1,9 @@
 import type { Sql } from "@ink-indexer/db"
 import { type NftDropStage, type NftMintEvent, SCHEMA_VERSION } from "@ink-indexer/events"
+import { INK_CHAIN_ID } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import type { Store } from "../../store"
-import { SCHEDULED_FIRST_BLOCK } from "../nft/milestones"
+import { SCHEDULED_FIRST_BLOCK, stageWindows } from "../nft/milestones"
 import {
   JOBS_PER_TICK,
   STAGE_START_EVERY_MS,
@@ -32,18 +33,13 @@ export function startingStages(
   known: KnownStage[],
   nowMs: number,
 ): { index: number; stage: NftDropStage }[] {
-  const ordered = [...stages].sort((a, b) => a.startTime - b.startTime)
   const out: { index: number; stage: NftDropStage }[] = []
   const used = new Set(known.map((k) => k.index))
-  ordered.forEach((stage, position) => {
-    const startMs = stage.startTime * 1000
+  stageWindows(stages).forEach(({ stage, start, end }, position) => {
+    const startMs = start * 1000
     if (startMs > nowMs || startMs <= nowMs - STAGE_START_WINDOW_MS) return
     const index = isPublic(stage) ? 0 : SYNTHETIC_STAGE_INDEX + position
-    const end = Math.min(
-      stage.endTime ?? Number.POSITIVE_INFINITY,
-      ordered[position + 1]?.startTime ?? Number.POSITIVE_INFINITY,
-    )
-    const inWindow = known.some((k) => k.ts >= stage.startTime && k.ts < end)
+    const inWindow = known.some((k) => k.ts >= start && k.ts < end)
     if (used.has(index) || inWindow) return
     used.add(index)
     out.push({ index, stage })
@@ -82,9 +78,10 @@ async function plan(sql: Sql, contract: string, nowMs: number) {
  * `nft_stages` row goes in with it (first block 0, first time = the scheduled start), so the first
  * mint of the stage, which looks the row up, announces nothing. See `startingStages` for the index.
  *
- * shortcut: `minted` is the sum of the stored mints (or the supply of the latest `nft.mint` event),
- * which is the supply before the stage starts to within a mint or two, and `mintStartTs` is the
- * first scheduled start, not the first mint. A stage that never starts on schedule (the drop page
+ * shortcut: `minted` is the greater of the stored mints' total and the `minted` of the latest
+ * `nft.mint` event (a milestone, so it can lag by up to a quarter of the cap; the stored mints can
+ * be missing after pruning). It is not read from the contract; a `readMintStats` call would make
+ * it exact. `mintStartTs` is the first scheduled start, not the first mint. A stage that never starts on schedule (the drop page
  * changed after it was stored) is announced by its first mint as before.
  */
 export function createStageStartsJob(deps: { sql: Sql; store: Store; now?: () => number }): Job {
@@ -118,11 +115,10 @@ export function createStageStartsJob(deps: { sql: Sql; store: Store; now?: () =>
         { minted: string; minters: number; first_ts: Date | null; max_supply: string | null }[]
       >`
         select
-          coalesce(
-            (select e.payload->>'minted' from indexer.events e
-              where e.type = 'nft.mint' and e.entity = ${contract} order by e.id desc limit 1),
-            (select sum(qty)::text from indexer.nft_mints where contract = ${contract}),
-            '0') as minted,
+          greatest(
+            coalesce((select e.payload->>'minted' from indexer.events e
+              where e.type = 'nft.mint' and e.entity = ${contract} order by e.id desc limit 1)::numeric, 0),
+            coalesce((select sum(qty) from indexer.nft_mints where contract = ${contract}), 0))::text as minted,
           (select count(distinct recipient)::int from indexer.nft_mints where contract = ${contract}) as minters,
           c.first_mint_ts as first_ts,
           c.max_supply::text as max_supply
@@ -136,7 +132,7 @@ export function createStageStartsJob(deps: { sql: Sql; store: Store; now?: () =>
       const rows = starting.map(({ index, stage }) => {
         const event: NftMintEvent = {
           v: SCHEMA_VERSION,
-          chainId: 57073,
+          chainId: INK_CHAIN_ID,
           contract: contract as Address,
           source: "opensea",
           txHash: `nft:stage:${contract}:${index}`,
@@ -170,7 +166,8 @@ export function createStageStartsJob(deps: { sql: Sql; store: Store; now?: () =>
           if (stored.length !== starting.length) throw new StageRaced(contract)
         })
       } catch (err) {
-        // The first mint got there first: nothing was written, and the next look finds the row.
+        // The first mint recorded this very index first: nothing was written, and the next look
+        // finds the row. (A signed stage's first mint has another index; see the shortcut above.)
         if (!(err instanceof StageRaced)) throw err
       }
     },

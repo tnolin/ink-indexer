@@ -92,9 +92,9 @@ const discoveryRoutes = (contract: string, slug: string) => {
   return {
     [`/chain/ink/contract/${contract}`]: recorded(`contract/${contract}`),
     [`/collections/${slug}`]: recorded(`collections/${slug}`),
-    // The creator's account: the recorded one for Hornet's owner, none for the others.
+    // The creator's account: the hand-built one for Hornet's owner, none for the others.
     [`/accounts/${owner}`]:
-      contract === HORNET ? recorded(`accounts/${owner}`) : { status: 404, body: {} },
+      contract === HORNET ? recorded(`accounts/${owner}-handmade`) : { status: 404, body: {} },
   }
 }
 

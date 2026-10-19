@@ -162,7 +162,10 @@ const byChainOrder = (a: SeaDropMintRow, b: SeaDropMintRow) =>
  *
  * shortcut: the stages are read before the batch is written, so a scheduled start recorded between
  * this read and that write is not seen and its stage can be announced a second time by its first
- * mint. The window is one batch; closing it would take the read inside the write transaction.
+ * mint. The reverse also holds: a first mint written between the stage-start job's plan and its
+ * write is not seen by the job, and for a signed stage (synthetic index, so no key clash) the
+ * stage is announced twice. Each window is one batch or one job run; closing them takes the
+ * reads inside the write transactions, under the same lock.
  */
 export async function loadMilestoneContexts(
   sql: Sql,
@@ -231,25 +234,32 @@ export async function loadMilestoneContexts(
 }
 
 /**
- * True when a stage of the stored drop that holds `ts` (from its start to its end or the next
- * stage's start) has a scheduled start already announced. Without a stored drop nothing matches.
+ * The stages of a drop in order of start, each with its window `[start, end)` in unix seconds: it
+ * ends at its own end time or when the next stage starts, whichever is first. This one rule decides
+ * both when a scheduled start and a first mint count as the same stage (see stage-starts), so the
+ * two paths cannot disagree about announced stages.
+ */
+export function stageWindows(
+  stages: NftDropStage[],
+): { stage: NftDropStage; start: number; end: number }[] {
+  const ordered = [...stages].sort((a, b) => a.startTime - b.startTime)
+  return ordered.map((stage, k) => ({
+    stage,
+    start: stage.startTime,
+    end: Math.min(
+      stage.endTime ?? Number.POSITIVE_INFINITY,
+      ordered[k + 1]?.startTime ?? Number.POSITIVE_INFINITY,
+    ),
+  }))
+}
+
+/**
+ * True when a stage of the stored drop that holds `ts` has a scheduled start already announced.
+ * Without a stored drop nothing matches.
  */
 function announcedOnSchedule(ctx: MilestoneContext, ts: number): boolean {
-  const stages = [...(ctx.drop?.stages ?? [])].sort((a, b) => a.startTime - b.startTime)
-  const i = stages.findIndex((st, k) => {
-    const end = Math.min(
-      st.endTime ?? Number.POSITIVE_INFINITY,
-      stages[k + 1]?.startTime ?? Number.POSITIVE_INFINITY,
-    )
-    return st.startTime <= ts && ts < end
-  })
-  if (i < 0) return false
-  const st = stages[i]!
-  const end = Math.min(
-    st.endTime ?? Number.POSITIVE_INFINITY,
-    stages[i + 1]?.startTime ?? Number.POSITIVE_INFINITY,
-  )
-  return ctx.scheduledStarts.some((t) => t >= st.startTime && t < end)
+  const w = stageWindows(ctx.drop?.stages ?? []).find((x) => x.start <= ts && ts < x.end)
+  return w !== undefined && ctx.scheduledStarts.some((t) => t >= w.start && t < w.end)
 }
 
 /** The blocks whose times `milestoneEvents` will want: each new stage's first mint, each contract's last. */

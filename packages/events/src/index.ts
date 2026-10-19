@@ -116,6 +116,7 @@ export type NftCollectionEvent = NftBase & {
   /**
    * Who made the collection: the launch creator for a Chimera collection, else the owner OpenSea
    * names, with the OpenSea account's username and verified flag. Null while none is known.
+   * Absent (undefined) on snapshots written before this field existed, so test with `== null`.
    */
   creator: { address: Address; username: string | null; verified: boolean } | null
 }

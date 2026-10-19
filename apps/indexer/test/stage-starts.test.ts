@@ -204,6 +204,53 @@ describe("scheduled stage starts", () => {
     expect(e?.payload).toMatchObject({ minted: "4", maxSupply: "2222", minters: 2 })
   })
 
+  it("minted is the real count when an earlier stage minted without crossing a mark", async () => {
+    // An allowlist stage started with 0 minted and has since minted 200 of 1,000: no mark crossed,
+    // so the latest nft.mint event still says 0. The public stage then starts on schedule.
+    const allow = T0
+    const publicStart = T0 + HOUR
+    await addDrop(HORNET, [
+      stage({
+        type: "signed_presale",
+        label: "Allowlist",
+        startTime: sec(allow),
+        endTime: sec(publicStart),
+      }),
+      stage({ type: "public_sale", label: "Public", startTime: sec(publicStart) }),
+    ])
+    const s = jobScheduler()
+    await s.tick()
+    expect((await startEvents()).map((e) => e.payload.minted)).toEqual(["0"])
+    const rows = Array.from({ length: 200 }, (_, i) => ({
+      tx_hash: `0xb${i}`,
+      log_index: 0,
+      idx: 0,
+      contract: HORNET,
+      token_id: i,
+      recipient: `0x${(i % 40).toString(16).padStart(40, "0")}`,
+      qty: 1,
+      block: 90,
+    }))
+    await sql`insert into indexer.nft_mints ${sql(rows)}`
+    clock = publicStart
+    await s.tick()
+    const events = await startEvents()
+    expect(events.map((e) => [e.sub, e.payload.minted])).toEqual([
+      ["mint:stage_start:100", "0"],
+      ["mint:stage_start:0", "200"],
+    ])
+    expect(events[1]?.payload.minters).toBe(40)
+  })
+
+  it("minted keeps the latest milestone's count when it is higher than the stored mints", async () => {
+    await addDrop(HORNET, [stage({ startTime: sec(T0) })])
+    await sql`insert into indexer.events (type, entity, payload, block, block_hash, tx_hash, log_index, confirmed, sub)
+      values ('nft.mint', ${HORNET}, ${sql.json({ minted: "250" })}, 90, '0x01', '0xm1', 0, false, 'mint:progress:2500')`
+    await jobScheduler().tick()
+    const events = await startEvents()
+    expect(events.at(-1)?.payload.minted).toBe("250")
+  })
+
   it("a contract with no drop, or a drop with no stages, is left alone", async () => {
     await addDrop(HORNET, [])
     await jobScheduler().tick()

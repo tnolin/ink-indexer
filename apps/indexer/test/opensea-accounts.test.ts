@@ -16,7 +16,8 @@ const HORNET = "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b"
 const OWNER = "0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2"
 const CREATOR = "0x00000000000000000000000000000000000000cc"
 const KEY = "test-key-0123456789abcdef"
-const DAY = 24 * 60 * 60_000
+const HOUR = 60 * 60_000
+const DAY = 24 * HOUR
 const T0 = Date.parse("2026-10-19T00:00:00Z")
 
 let sql: Sql
@@ -74,7 +75,7 @@ const addCollection = (extra: Record<string, unknown> = {}) =>
 describe("creator accounts", () => {
   it("an account is fetched once and cached for 7 days; a 404 caches no username", async () => {
     const s = setup({
-      [`/accounts/${OWNER}`]: recorded(`accounts/${OWNER}`),
+      [`/accounts/${OWNER}`]: recorded(`accounts/${OWNER}-handmade`),
       [`/accounts/${CREATOR}`]: { status: 404, body: { errors: ["not found"] } },
     })
     expect(await s.accounts.getAccount(OWNER)).toEqual({
@@ -107,7 +108,7 @@ describe("creator accounts", () => {
   })
 
   it("addresses are cached in lowercase", async () => {
-    const s = setup({ [`/accounts/${OWNER}`]: recorded(`accounts/${OWNER}`) })
+    const s = setup({ [`/accounts/${OWNER}`]: recorded(`accounts/${OWNER}-handmade`) })
     await s.accounts.getAccount(OWNER.toUpperCase().replace("0X", "0x"))
     await s.accounts.getAccount(OWNER)
     expect(s.fetch.calls).toHaveLength(1)
@@ -125,7 +126,10 @@ describe("creator accounts", () => {
   })
 
   it("discovery stores the owner and the snapshot carries the creator", async () => {
-    const s = setup({ ...hornetRoutes, [`/accounts/${OWNER}`]: recorded(`accounts/${OWNER}`) })
+    const s = setup({
+      ...hornetRoutes,
+      [`/accounts/${OWNER}`]: recorded(`accounts/${OWNER}-handmade`),
+    })
     await addCollection()
     await s.scheduler.tick()
     const [row] = await sql`select owner, snapshot_n from indexer.nft_collections`
@@ -195,7 +199,23 @@ describe("creator accounts", () => {
     expect(events).toHaveLength(1)
     expect(events[0]?.creator).toBeNull()
     const [row] = await sql`select next_metadata_at from indexer.nft_collections`
-    expect(row?.next_metadata_at).toEqual(new Date(T0 + 5 * 60_000))
+    expect(row?.next_metadata_at).toEqual(new Date(T0 + HOUR))
+  })
+
+  it("an account that keeps failing costs two requests an hour, not one every few minutes", async () => {
+    const s = setup({ ...hornetRoutes, [`/accounts/${OWNER}`]: { status: 500, body: {} } })
+    await addCollection()
+    // Three hours of ticks every five minutes.
+    for (let i = 0; i <= 36; i++) {
+      clock = T0 + i * 5 * 60_000
+      await s.scheduler.tick()
+    }
+    const paths = s.fetch.calls.map((c) => c.path)
+    // Discovery read the contract once. Then the page and the account at 0, 1h, 2h and 3h.
+    expect(paths.filter((p) => p === "/collections/ink-hornet")).toHaveLength(4)
+    expect(paths.filter((p) => p === `/accounts/${OWNER}`)).toHaveLength(4)
+    // Snapshot written once; the failing account changes nothing in it.
+    expect(await collectionEvents()).toHaveLength(1)
   })
 
   it("an account OpenSea does not have gives a creator with no username", async () => {

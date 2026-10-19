@@ -1,6 +1,6 @@
 import type { NftDropEvent, NftDropStage } from "@ink-indexer/events"
 import { SCHEMA_VERSION } from "@ink-indexer/events"
-import { type OsDrop, parseDrop } from "@ink-indexer/sdk"
+import { INK_CHAIN_ID, type OsDrop, parseDrop } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import {
   DROP_404_RECHECK_MS,
@@ -114,7 +114,7 @@ export function createDropsJob(deps: OsJobDeps): Job {
 
       const event: NftDropEvent = {
         v: SCHEMA_VERSION,
-        chainId: 57073,
+        chainId: INK_CHAIN_ID,
         contract: contract as Address,
         source: "opensea",
         txHash: `os:drop:${contract}:${row.drop_n + 1}`,

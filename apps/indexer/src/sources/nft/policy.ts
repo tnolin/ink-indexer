@@ -45,6 +45,11 @@ export const DROPS_LEAD_MS = HOUR_MS
 
 /** A creator's OpenSea account is read again this long after the last read. */
 export const ACCOUNT_REFRESH_MS = 7 * DAY_MS
+/**
+ * After an account read fails with an error (not a budget deferral), the collection page and the
+ * account are tried again this much later, so an account that keeps failing costs two requests an hour.
+ */
+export const ACCOUNT_RETRY_MS = HOUR_MS
 
 /** New activity on a contract with no slug restarts discovery at most this often. */
 export const DISCOVERY_RESTART_MS = DAY_MS

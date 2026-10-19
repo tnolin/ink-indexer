@@ -1,5 +1,6 @@
 import { type OsCollection, parseCollection, parseContract } from "@ink-indexer/sdk"
 import {
+  ACCOUNT_RETRY_MS,
   DISCOVERY_DAILY_MS,
   DISCOVERY_GIVE_UP_S,
   DISCOVERY_RETRY_MS,
@@ -9,6 +10,7 @@ import {
   SLOW_JOB_EVERY_MS,
   TRANSIENT_RETRY_MS,
 } from "../nft/policy"
+import type { OsResult } from "./rest"
 import { commonOutcome, type Job, type JobOutcome, OS_REQUEST, type OsJobDeps } from "./scheduler"
 import type { CollectionPatch } from "./snapshot"
 
@@ -49,6 +51,10 @@ export function pageColumns(c: OsCollection) {
     owner: c.owner,
   } satisfies CollectionPatch
 }
+
+/** When the page is read again after the creator's account could not be read. */
+const accountRetryMs = (failed: Extract<OsResult<unknown>, { ok: false }>) =>
+  failed.reason === "error" ? ACCOUNT_RETRY_MS : TRANSIENT_RETRY_MS
 
 const same = (a: unknown, b: unknown) =>
   a instanceof Date && b instanceof Date ? a.getTime() === b.getTime() : a === b
@@ -146,7 +152,9 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
         discovery_attempts: 0,
         next_discovery_at: null,
         discovered_at: new Date(t),
-        next_metadata_at: new Date(t + (accountFailed ? TRANSIENT_RETRY_MS : METADATA_REFRESH_MS)),
+        next_metadata_at: new Date(
+          t + (accountFailed ? accountRetryMs(accountFailed) : METADATA_REFRESH_MS),
+        ),
         verdict_dirty: true,
         // A SeaDrop collection gets its drop page now, unless that is already due.
         ...(row.seadrop && (row.next_drops_at === null || row.next_drops_at.getTime() > t)
@@ -214,7 +222,7 @@ export function createMetadataJob(deps: OsJobDeps): Job {
       await snapshots.emitSnapshotIfChanged(contract, {
         ...columns,
         next_metadata_at: new Date(
-          now() + (accountFailed ? TRANSIENT_RETRY_MS : METADATA_REFRESH_MS),
+          now() + (accountFailed ? accountRetryMs(accountFailed) : METADATA_REFRESH_MS),
         ),
         ...(changed ? { verdict_dirty: true } : {}),
       })

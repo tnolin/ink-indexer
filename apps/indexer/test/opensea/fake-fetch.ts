@@ -6,7 +6,7 @@ export type Route = FakeResponse | Error | ((req: FakeRequest) => FakeResponse |
 export type FakeRequest = { path: string; url: string; headers: Record<string, string> }
 export type FakeFetch = typeof fetch & { calls: FakeRequest[] }
 
-/** The recorded response saved under `name` (for example "collections/ink-hornet"). */
+/** The saved response under `name` (for example "collections/ink-hornet"): a recording unless the name ends in `-handmade`. */
 export function recorded(name: string): FakeResponse {
   return loadOpenSeaFixture(name) as FakeResponse
 }

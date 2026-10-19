@@ -6,6 +6,7 @@ import {
   type NftGates,
   SCHEMA_VERSION,
 } from "@ink-indexer/events"
+import { INK_CHAIN_ID } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import type { Store } from "../../store"
 import type { Tx } from "../source"
@@ -109,7 +110,7 @@ export function composeCollection(
   const chimera = row.launchpad === "chimera"
   return {
     v: SCHEMA_VERSION,
-    chainId: 57073,
+    chainId: INK_CHAIN_ID,
     contract: row.contract as Address,
     source: "opensea",
     txHash: `os:col:${row.contract}:${row.snapshot_n + 1}`,

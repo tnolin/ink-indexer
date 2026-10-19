@@ -327,7 +327,9 @@ describe("parseNft", () => {
 
 describe("parseAccount", () => {
   it("reads the username and verified flag of the Hornet owner", () => {
-    expect(parseAccount(body("accounts/0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2"))).toEqual({
+    expect(
+      parseAccount(body("accounts/0x7a24f0206ed3493fa89ffb8a6e937e1f6378cbb2-handmade")),
+    ).toEqual({
       username: "INKHornetDEV",
       verified: false,
     })
