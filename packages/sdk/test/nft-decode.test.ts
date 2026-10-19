@@ -146,10 +146,12 @@ describe("constants", () => {
     expect(NFT_SELECTORS.MAX_SUPPLY).toBe(toFunctionSelector("MAX_SUPPLY()"))
     expect(NFT_SELECTORS.maxSupply).toBe(toFunctionSelector("maxSupply()"))
     expect(NFT_SELECTORS.getMintStats).toBe(toFunctionSelector("getMintStats(address)"))
+    expect(NFT_SELECTORS.totalSupply).toBe(toFunctionSelector("totalSupply()"))
     expect(NFT_SELECTORS).toEqual({
       getMintStats: "0x840e15d4",
       maxSupply: "0xd5abeb01",
       MAX_SUPPLY: "0x32cb6b0c",
+      totalSupply: "0x18160ddd",
     })
   })
 

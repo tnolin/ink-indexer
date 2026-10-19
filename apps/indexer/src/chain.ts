@@ -1,5 +1,7 @@
 import {
   type ChainLog,
+  type CodeReader,
+  hasCodeAt,
   type LaunchKey,
   type LaunchState,
   type NftReader,
@@ -8,6 +10,7 @@ import {
   readLaunchStates,
   readMaxSupply,
   readMintStats,
+  readNftTotalSupply,
   readTotalSupplies,
   type StateReader,
 } from "@ink-indexer/sdk"
@@ -42,6 +45,10 @@ export type Chain = {
   ): Promise<{ totalSupply: bigint; maxSupply: bigint } | null>
   /** `maxSupply()`, else `MAX_SUPPLY()`, at a block. null when the contract has neither. */
   readMaxSupply(contract: Address, block: bigint): Promise<bigint | null>
+  /** An NFT contract's `totalSupply()` at a block. null when it reverts or has none. */
+  readTotalSupplyAt(contract: Address, block: bigint): Promise<bigint | null>
+  /** Whether the address had contract code at a block. */
+  hasCodeAt(address: Address, block: bigint): Promise<boolean>
 }
 
 /** The slice of a PublicClient that viemChain reads blocks with. Structural, so chain-specific block shapes (Ink's deposit transactions) still fit. */
@@ -94,7 +101,7 @@ async function retryOnTransportError<T>(
 }
 
 export function viemChain(
-  client: StateReader & NftReader & BlockReader,
+  client: StateReader & NftReader & CodeReader & BlockReader,
   router: LogRouter,
   opts: {
     logger?: Logger
@@ -128,5 +135,8 @@ export function viemChain(
       retry("readMintStats", () => readMintStats(client, contract, minter, block)),
     readMaxSupply: (contract, block) =>
       retry("readMaxSupply", () => readMaxSupply(client, contract, block)),
+    readTotalSupplyAt: (contract, block) =>
+      retry("readTotalSupplyAt", () => readNftTotalSupply(client, contract, block)),
+    hasCodeAt: (address, block) => retry("hasCodeAt", () => hasCodeAt(client, address, block)),
   }
 }

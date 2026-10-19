@@ -69,6 +69,7 @@ const kindFacts = (over: Partial<KindFacts> = {}): KindFacts => ({
   maxSupplyChecked: true,
   firstMintTs: 2_000_000,
   historyStartTs: 1_000_000,
+  priorMinted: false,
   ...over,
 })
 
@@ -125,7 +126,8 @@ function dropStagesOf(slug: string) {
 function traitsOf(contract: string, id: string): GateFacts["traits"] {
   const nft = parseNft(body(`nfts/${contract}/${id}`))!
   return {
-    state: nft.traits.length > 0 ? "pass" : nft.rank === null ? "empty" : "pending",
+    // As the traits job stores it: traits or a rank pass, neither is empty.
+    state: nft.traits.length > 0 || nft.rank !== null ? "pass" : "empty",
     checks: 4,
   }
 }
@@ -344,6 +346,18 @@ describe("kind", () => {
     expect(classifyKind(kindFacts({ mints7d: 21, burns7d: 1 }))).toBe("drop")
     expect(classifyKind(kindFacts({ mints7d: 20, burns7d: 1, seadrop: true }))).toBe("drop")
     expect(classifyKind(kindFacts({ mints7d: 20, burns7d: 0 }))).toBe("drop")
+  })
+
+  it("legacy when the collection had a supply before its first stored mint", () => {
+    // An old collection that mints again: its first stored mint is inside the history.
+    expect(classifyKind(kindFacts({ priorMinted: true }))).toBe("legacy")
+    expect(classifyKind(kindFacts({ priorMinted: true, seadrop: true }))).toBe("legacy")
+    expect(classifyKind(kindFacts({ priorMinted: true, mints7d: 969, burns7d: 971 }))).toBe(
+      "legacy",
+    )
+    // Chimera stays continuous, and a manual mark still wins.
+    expect(classifyKind(kindFacts({ priorMinted: true, launchpad: "chimera" }))).toBe("continuous")
+    expect(classifyKind(kindFacts({ priorMinted: true, override: "drop" }))).toBe("drop")
   })
 
   it("legacy when the first mint predates history", () => {

@@ -122,6 +122,8 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
       update indexer.nft_collections set
         discovery_attempts = 0,
         attempts_reset_at = now(),
+        -- A failed gate 1 waits on discovery again.
+        verdict_dirty = true,
         next_discovery_at = least(coalesce(next_discovery_at, now()), now() + make_interval(secs => ${DISCOVERY_RETRY_MS[0] / 1000}::float8))
       where contract = any(${tx.array(active)}::text[]) and slug is null
         and (discovery_attempts > 0 or next_discovery_at is null)
@@ -218,7 +220,7 @@ export async function rollbackRows(tx: Tx, fork: bigint) {
   await tx`delete from indexer.nft_launches where block > ${f}`
   await tx`
     update indexer.nft_collections set first_mint_block = null, first_mint_ts = null,
-      verdict_dirty = true
+      prior_supply = null, prior_minted = null, verdict_dirty = true
     where first_mint_block > ${f}`
 
   // Stages first seen above the fork start again on replay. A collection's marks and sell-out

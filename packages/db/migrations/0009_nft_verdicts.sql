@@ -21,7 +21,11 @@ alter table indexer.nft_collections
   -- maxSupply() has been read once (max_supply holds the answer, null when it reverted).
   add column max_supply_checked bool not null default false,
   -- The MINT LIVE stage start of a mint with no SeaDrop stages has been written.
-  add column mint_start_emitted bool not null default false;
+  add column mint_start_emitted bool not null default false,
+  -- totalSupply() the block before the first stored mint (null when it reverted), and whether the
+  -- collection minted before the mint history: null until decided (see verdict.ts).
+  add column prior_supply numeric(78, 0),
+  add column prior_minted bool;
 
 create index nft_collections_verdict_due on indexer.nft_collections (next_verdict_at)
   where next_verdict_at is not null;

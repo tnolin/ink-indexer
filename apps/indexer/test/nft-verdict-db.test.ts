@@ -16,7 +16,7 @@ import { createVerdictJob, farmShareBps } from "../src/sources/nft/verdict"
 import { writeRows } from "../src/sources/nft/write"
 import { createAccounts } from "../src/sources/opensea/accounts"
 import type { Budget } from "../src/sources/opensea/budget"
-import { createDiscoveryJob } from "../src/sources/opensea/discovery"
+import { createDiscoveryJob, createMetadataJob } from "../src/sources/opensea/discovery"
 import { createOpenSeaRest } from "../src/sources/opensea/rest"
 import { createScheduler } from "../src/sources/opensea/scheduler"
 import { createSnapshots } from "../src/sources/opensea/snapshot"
@@ -38,6 +38,9 @@ const T0 = Date.parse("2026-10-19T00:00:00Z")
 /** Block of the first mint in these tests; one block a second from T0. */
 const B0 = 1_000_000
 const blockAt = (ms: number) => B0 + (ms - T0) / 1000
+/** The mint history starts ten days before T0. */
+const HISTORY_MS = T0 - 10 * DAY
+const HISTORY_BLOCK = BigInt(blockAt(HISTORY_MS))
 const sec = (ms: number) => Math.floor(ms / 1000)
 
 let sql: Sql
@@ -78,14 +81,16 @@ function setup(routes: Parameters<typeof fakeFetch>[0] = {}) {
     store,
     snapshots,
     chain,
-    historyStartTs: sec(T0 - 30 * DAY),
+    historyStartTs: sec(HISTORY_MS),
+    historyStartBlock: HISTORY_BLOCK,
     log,
     now,
   })
   const traits = createTraitsJob({ sql, store, rest, snapshots, accounts, log, now })
   const discovery = createDiscoveryJob({ sql, store, rest, snapshots, accounts, log, now })
+  const metadata = createMetadataJob({ sql, store, rest, snapshots, accounts, log, now })
   const scheduler = createScheduler([verdict, traits], { sql, log, report, now })
-  return { fetch, verdict, traits, discovery, scheduler, snapshots }
+  return { fetch, verdict, traits, discovery, metadata, scheduler, snapshots }
 }
 
 /** A collection row as the chain and OpenSea sources leave it: a page that passes gate 1. */
@@ -426,6 +431,123 @@ describe("the verdict job", () => {
     })
     await s.discovery.run(INKVERSE)
     expect(await rowOf(INKVERSE)).toMatchObject({ next_discovery_at: null, verdict_dirty: true })
+
+    // New activity restarts discovery, and gate 1 waits on it again.
+    await sql`update indexer.nft_collections set verdict_dirty = false where contract = ${INKVERSE}`
+    await sql.begin((tx) =>
+      writeRows(tx, {
+        ...emptyBatch(),
+        mints: [
+          {
+            txHash: `0x${"ab".repeat(32)}`,
+            logIndex: 0,
+            idx: 0,
+            contract: INKVERSE as Address,
+            tokenId: 7n,
+            account: FRESH as Address,
+            qty: 1n,
+            block: 90n,
+          },
+        ],
+      }),
+    )
+    expect(await rowOf(INKVERSE)).toMatchObject({ discovery_attempts: 0, verdict_dirty: true })
+  })
+
+  it("a creator account that turns verified marks the verdict dirty", async () => {
+    const page = recorded("collections/ink-hornet")
+    const owner = (page.body as { owner: string }).owner
+    let verified = false
+    const s = setup({
+      "/collections/ink-hornet": page,
+      [`/accounts/${owner}`]: () => ({
+        status: 200,
+        body: { address: owner, username: "maker", is_verified: verified },
+      }),
+    })
+    await addCollection(HORNET, { slug: "ink-hornet", next_metadata_at: new Date(T0) })
+    await s.metadata.run(HORNET)
+    await sql`update indexer.nft_collections set verdict_dirty = false,
+      next_metadata_at = ${new Date(T0)} where contract = ${HORNET}`
+    // The page is unchanged and the account still unverified: nothing to look at.
+    clock = T0 + 8 * DAY
+    await s.metadata.run(HORNET)
+    expect((await rowOf(HORNET)).verdict_dirty).toBe(false)
+    verified = true
+    clock = T0 + 16 * DAY
+    await s.metadata.run(HORNET)
+    expect((await rowOf(HORNET)).verdict_dirty).toBe(true)
+  })
+})
+
+describe("legacy collections", () => {
+  const minter = (i: number) => `0x${i.toString(16).padStart(40, "b")}`
+  /** A mint every minute for 30 minutes from T0, then a verdict run at 30 minutes. */
+  async function mintFor30Minutes(contract: string, extra: Record<string, unknown> = {}) {
+    const s = setup()
+    await addCollection(contract, extra)
+    await addMints(
+      contract,
+      Array.from({ length: 30 }, (_, i) => minter(i)),
+      Array.from({ length: 30 }, (_, i) => blockAt(T0 + i * MIN)),
+    )
+    clock = T0 + 30 * MIN + 5_000
+    await s.scheduler.tick()
+    return s
+  }
+
+  it("a collection whose totalSupply() before its first stored mint is 100 is legacy, with no MINT LIVE", async () => {
+    chain.totalSupplyAt.set(PRTSCN, (b) => (b < B0 ? 100n : 130n))
+    const s = await mintFor30Minutes(PRTSCN)
+    const row = await rowOf(PRTSCN)
+    expect(row).toMatchObject({ kind: "legacy", prior_supply: "100", prior_minted: true })
+    expect(row.gates).toMatchObject({ structure: "n/a", farm: "n/a" })
+    expect(await eventsOf("nft.mint")).toHaveLength(0)
+    expect(chain.priorReads).toEqual([
+      { method: "totalSupply", address: PRTSCN, block: BigInt(B0 - 1) },
+    ])
+    // Decided once.
+    await sql`update indexer.nft_collections set verdict_dirty = true where contract = ${PRTSCN}`
+    await s.verdict.run(PRTSCN)
+    expect(chain.priorReads).toHaveLength(1)
+  })
+
+  it("a new SeaDrop drop (no supply before its first mint) stays a drop", async () => {
+    chain.totalSupplyAt.set(HORNET, (b) => (b < B0 ? 0n : 30n))
+    await mintFor30Minutes(HORNET, { seadrop: true })
+    expect(await rowOf(HORNET)).toMatchObject({
+      kind: "drop",
+      prior_supply: "0",
+      prior_minted: false,
+    })
+  })
+
+  it("without totalSupply(): legacy when the contract had code before the history started", async () => {
+    chain.deployedAt.set(PRTSCN, HISTORY_BLOCK - 100n)
+    await mintFor30Minutes(PRTSCN)
+    expect(await rowOf(PRTSCN)).toMatchObject({
+      kind: "legacy",
+      prior_supply: null,
+      prior_minted: true,
+    })
+    expect(chain.priorReads).toEqual([
+      { method: "totalSupply", address: PRTSCN, block: BigInt(B0 - 1) },
+      { method: "code", address: PRTSCN, block: HISTORY_BLOCK - 1n },
+    ])
+    expect(await eventsOf("nft.mint")).toHaveLength(0)
+  })
+
+  it("without totalSupply(): a drop when the contract was deployed after the history started", async () => {
+    chain.deployedAt.set(PRTSCN, HISTORY_BLOCK + 100n)
+    await mintFor30Minutes(PRTSCN)
+    expect(await rowOf(PRTSCN)).toMatchObject({ kind: "drop", prior_minted: false })
+    expect(await eventsOf("nft.mint")).toHaveLength(1)
+  })
+
+  it("a Chimera collection needs no read", async () => {
+    await mintFor30Minutes(PRTSCN, { launchpad: "chimera" })
+    expect(await rowOf(PRTSCN)).toMatchObject({ kind: "continuous", prior_minted: null })
+    expect(chain.priorReads).toEqual([])
   })
 })
 

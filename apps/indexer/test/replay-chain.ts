@@ -122,4 +122,12 @@ export class ReplayChain implements Chain {
   async readMaxSupply(): Promise<null> {
     throw new Error("readMaxSupply was not recorded")
   }
+
+  async readTotalSupplyAt(): Promise<null> {
+    throw new Error("readTotalSupplyAt was not recorded")
+  }
+
+  async hasCodeAt(): Promise<boolean> {
+    throw new Error("hasCodeAt was not recorded")
+  }
 }

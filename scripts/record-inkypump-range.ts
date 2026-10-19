@@ -101,11 +101,13 @@ const recording: Chain = {
     calls.push({ method: "readErc20Meta", args: [token], result })
     return result
   },
-  // Only the NFT source and its verdict job read mint stats, max supplies and token names, and the
-  // recording runs without them.
+  // Only the NFT source and its verdict job read mint stats, supplies, contract code and token
+  // names, and the recording runs without them.
   readErc20Names: (tokens, block) => live.readErc20Names(tokens, block),
   readMintStats: (contract, minter, block) => live.readMintStats(contract, minter, block),
   readMaxSupply: (contract, block) => live.readMaxSupply(contract, block),
+  readTotalSupplyAt: (contract, block) => live.readTotalSupplyAt(contract, block),
+  hasCodeAt: (address, block) => live.hasCodeAt(address, block),
 }
 
 let stopDb = async () => {}

@@ -18,6 +18,8 @@ export type KindFacts = {
   firstMintTs: number | null
   /** Unix seconds of the start of the indexer's mint history. */
   historyStartTs: number
+  /** The collection had a supply before its first stored mint: it minted before the history. */
+  priorMinted: boolean
   /** A manual mark. */
   override?: Kind
 }
@@ -28,8 +30,10 @@ const atLeastBps = (part: number, whole: number, bps: number) => part * 10_000 >
  * The kind of a collection, in this order:
  * - a manual mark wins;
  * - a Chimera collection is `continuous` from its first block;
- * - `legacy` when the first mint predates the mint history, or when no mint is stored and nothing
- *   says a mint is coming (a SeaDrop collection before its first mint is a `drop`);
+ * - `legacy` when the collection minted before the mint history (a supply before its first
+ *   stored mint, so an old collection that mints again stays legacy), when its first mint predates
+ *   the history, or when no mint is stored and nothing says a mint is coming (a SeaDrop collection
+ *   before its first mint is a `drop`);
  * - `continuous` by the burn-ratio fallback: enough mints, enough burns, no SeaDrop and a
  *   `maxSupply()` that reverts;
  * - `pending_kind` for a contract without SeaDrop whose burns are already a notable share of its
@@ -39,6 +43,7 @@ const atLeastBps = (part: number, whole: number, bps: number) => part * 10_000 >
 export function classifyKind(f: KindFacts): Kind | "pending_kind" {
   if (f.override) return f.override
   if (f.launchpad === "chimera") return "continuous"
+  if (f.priorMinted) return "legacy"
   if (f.firstMintTs === null ? !f.seadrop : f.firstMintTs < f.historyStartTs) return "legacy"
   if (
     !f.seadrop &&

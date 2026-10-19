@@ -30,4 +30,5 @@ export const NFT_SELECTORS = {
   getMintStats: "0x840e15d4",
   maxSupply: "0xd5abeb01",
   MAX_SUPPLY: "0x32cb6b0c",
+  totalSupply: "0x18160ddd",
 } as const satisfies Record<string, Hex>

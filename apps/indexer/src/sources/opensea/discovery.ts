@@ -212,8 +212,13 @@ export function createMetadataJob(deps: OsJobDeps): Job {
       if (!page.value) return void (await reschedule(contract, TRANSIENT_RETRY_MS))
 
       // The creator's account is read again when its cache has expired; the snapshot is written
-      // again if the account changed. If it cannot be read, the page is read again soon.
+      // again if the account changed, and a change of its verified flag (gates 1 and 2) marks the
+      // verdict dirty. If it cannot be read, the page is read again soon.
       const who = row.creator_address ?? page.value.owner
+      const [cached] = who
+        ? await sql<{ verified: boolean }[]>`
+            select verified from indexer.nft_accounts where address = ${who.toLowerCase()}`
+        : []
       const account = who ? await accounts.getAccount(who) : null
       const accountFailed = account !== null && !account.ok ? account : null
 
@@ -226,7 +231,9 @@ export function createMetadataJob(deps: OsJobDeps): Job {
         next_metadata_at: new Date(
           now() + (accountFailed ? accountRetryMs(accountFailed) : METADATA_REFRESH_MS),
         ),
-        ...(changed ? { verdict_dirty: true } : {}),
+        ...(changed || (account?.ok && account.value.verified !== (cached?.verified ?? false))
+          ? { verdict_dirty: true }
+          : {}),
       })
       return accountFailed ? commonOutcome(accountFailed) : undefined
     },

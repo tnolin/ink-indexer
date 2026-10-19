@@ -60,6 +60,8 @@ export type CollectionPatch = Partial<
     next_traits_at: Date | null
     traits_checks: number
     max_supply_checked: boolean
+    prior_supply: string | null
+    prior_minted: boolean | null
   }
 >
 

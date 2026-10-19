@@ -241,6 +241,29 @@ describe("viemChain timeouts, stopping and every read", () => {
     expect(await reverting.readMintStats(TOKEN, TOKEN, 1n)).toBeNull()
   })
 
+  it("reads an NFT total supply and contract code at a block, retrying socket errors", async () => {
+    const words = (n: bigint) => `0x${n.toString(16).padStart(64, "0")}` as const
+    let calls = 0
+    const asked: unknown[] = []
+    const client = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => ({}),
+      call: async () => {
+        if (++calls === 1) throw socketError()
+        return { data: words(100n) }
+      },
+      getCode: async (p: unknown) => {
+        asked.push(p)
+        return "0x6080"
+      },
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const chain = viemChain(client, {} as LogRouter, { logger: () => {}, sleep: async () => {} })
+    expect(await chain.readTotalSupplyAt(TOKEN, 9n)).toBe(100n)
+    expect(calls).toBe(2)
+    expect(await chain.hasCodeAt(TOKEN, 9n)).toBe(true)
+    expect(asked).toEqual([{ address: TOKEN, blockNumber: 9n }])
+  })
+
   it("still fails fast from every read on a non-socket error", async () => {
     const boom = new ContractFunctionExecutionError(new Error("execution reverted") as never, {
       abi: [],

@@ -3,6 +3,7 @@ import { type Address, decodeAbiParameters, encodeFunctionData, type Hex, parseA
 import { NFT_SELECTORS } from "./constants"
 
 export type NftReader = Pick<PublicClient, "call">
+export type CodeReader = Pick<PublicClient, "getCode">
 
 const mintStatsAbi = parseAbi([
   "function getMintStats(address minter) view returns (uint256 minterNumMinted, uint256 currentTotalSupply, uint256 maxSupply)",
@@ -72,4 +73,24 @@ export async function readMaxSupply(
     if (out && (out.length - 2) / 2 >= WORD) return BigInt(out.slice(0, 2 + 2 * WORD))
   }
   return null
+}
+
+/** `totalSupply()` at a block. Null when the contract reverts or has no such function. */
+export async function readNftTotalSupply(
+  client: NftReader,
+  contract: Address,
+  block: bigint,
+): Promise<bigint | null> {
+  const out = await callAt(client, contract, NFT_SELECTORS.totalSupply, block)
+  return out && (out.length - 2) / 2 >= WORD ? BigInt(out.slice(0, 2 + 2 * WORD)) : null
+}
+
+/** Whether the address had contract code at a block. A transport failure throws. */
+export async function hasCodeAt(
+  client: CodeReader,
+  address: Address,
+  block: bigint,
+): Promise<boolean> {
+  const code = await client.getCode({ address, blockNumber: block })
+  return code !== undefined && code !== "0x"
 }

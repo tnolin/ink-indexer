@@ -31,6 +31,11 @@ export class FakeChain implements Chain {
   /** Per contract, what `maxSupply()` answers. A contract with no entry has none (null). */
   maxSupplies = new Map<string, bigint>()
   maxSupplyReads: { contract: Address; block: bigint }[] = []
+  /** Per contract, its `totalSupply()` at a block; null is a revert. A contract with no entry reverts. */
+  totalSupplyAt = new Map<string, (block: bigint) => bigint | null>()
+  /** Per address, the block its code was deployed at. An address with no entry has no code. */
+  deployedAt = new Map<string, bigint>()
+  priorReads: { method: "totalSupply" | "code"; address: Address; block: bigint }[] = []
   erc20 = new Map<string, { decimals: number; symbol: string }>()
   /** Per token, what `symbol()` and `name()` answer; null is a revert. A token with no entry reverts on both. */
   erc20Names = new Map<string, { symbol: string | null; name: string | null }>()
@@ -121,5 +126,16 @@ export class FakeChain implements Chain {
   async readMaxSupply(contract: Address, block: bigint) {
     this.maxSupplyReads.push({ contract, block })
     return this.maxSupplies.get(contract) ?? null
+  }
+
+  async readTotalSupplyAt(contract: Address, block: bigint) {
+    this.priorReads.push({ method: "totalSupply", address: contract, block })
+    return this.totalSupplyAt.get(contract)?.(block) ?? null
+  }
+
+  async hasCodeAt(address: Address, block: bigint) {
+    this.priorReads.push({ method: "code", address, block })
+    const deployed = this.deployedAt.get(address)
+    return deployed !== undefined && block >= deployed
   }
 }

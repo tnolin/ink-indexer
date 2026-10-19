@@ -6,7 +6,15 @@ import {
   HttpRequestError,
 } from "viem"
 import { describe, expect, it } from "vitest"
-import { NFT_SELECTORS, type NftReader, readMaxSupply, readMintStats } from "../src/index"
+import {
+  type CodeReader,
+  hasCodeAt,
+  NFT_SELECTORS,
+  type NftReader,
+  readMaxSupply,
+  readMintStats,
+  readNftTotalSupply,
+} from "../src/index"
 
 const CONTRACT = "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b"
 const MINTER = "0x00000000000000000000000000000000000a11ce"
@@ -87,5 +95,42 @@ describe("readMaxSupply", () => {
 
   it("returns null when neither exists", async () => {
     expect(await readMaxSupply(stub(revert(), revert()).client, CONTRACT, 99n)).toBeNull()
+  })
+})
+
+describe("readNftTotalSupply", () => {
+  it("reads totalSupply() at a block", async () => {
+    const { client, calls } = stub(words(100n))
+    expect(await readNftTotalSupply(client, CONTRACT, 99n)).toBe(100n)
+    expect(calls).toEqual([{ to: CONTRACT, data: NFT_SELECTORS.totalSupply, blockNumber: 99n }])
+  })
+
+  it("returns null when it reverts or answers nothing", async () => {
+    expect(await readNftTotalSupply(stub(revert()).client, CONTRACT, 99n)).toBeNull()
+    expect(await readNftTotalSupply(stub("0x").client, CONTRACT, 99n)).toBeNull()
+  })
+})
+
+describe("hasCodeAt", () => {
+  const code = (answer: Hex | undefined) => {
+    const asked: unknown[] = []
+    const client = {
+      getCode: async (p: unknown) => {
+        asked.push(p)
+        return answer
+      },
+    } as unknown as CodeReader
+    return { client, asked }
+  }
+
+  it("is true when the address had code at the block", async () => {
+    const { client, asked } = code("0x6080")
+    expect(await hasCodeAt(client, CONTRACT, 99n)).toBe(true)
+    expect(asked).toEqual([{ address: CONTRACT, blockNumber: 99n }])
+  })
+
+  it("is false for no code", async () => {
+    expect(await hasCodeAt(code(undefined).client, CONTRACT, 99n)).toBe(false)
+    expect(await hasCodeAt(code("0x").client, CONTRACT, 99n)).toBe(false)
   })
 })

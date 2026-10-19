@@ -97,8 +97,8 @@ function hasStages(f: Pick<GateFacts, "dropStages" | "stageIndexes">): boolean {
   return (
     f.dropStages.length > 1 ||
     f.dropStages.some((s) => /signed|allowlist/.test(s.type)) ||
-    new Set(f.stageIndexes).size > 1 ||
-    // SeaDrop's public stage is index 0; every other index is a signed or allowlist stage.
+    // SeaDrop's public stage is index 0; every other index is a signed or allowlist stage (two or
+    // more indexes include one).
     f.stageIndexes.some((i) => i !== 0)
   )
 }
@@ -313,6 +313,7 @@ type FactsRow = {
   traits_state: TraitsState
   traits_checks: number
   mint_start_emitted: boolean
+  prior_minted: boolean | null
   creator_verified: boolean
   override_kind: string | null
   override_verdict: string | null
@@ -332,7 +333,7 @@ async function loadFacts(sql: Sql, contract: string): Promise<FactsRow | undefin
       c.first_mint_block::text as first_block, c.sold_out_block::text as sold_out_block,
       c.slug, c.name, c.image_url, c.twitter, c.website, c.safelist,
       c.slug is null and c.next_discovery_at is not null as discovery_retrying,
-      c.traits_state, c.traits_checks, c.mint_start_emitted,
+      c.traits_state, c.traits_checks, c.mint_start_emitted, c.prior_minted,
       coalesce(a.verified, false) as creator_verified,
       o.kind as override_kind, o.verdict as override_verdict,
       m.last_block::text as last_block, coalesce(m.minted, 0)::text as minted,
@@ -362,9 +363,11 @@ export type VerdictDeps = {
   sql: Sql
   store: Store
   snapshots: Snapshots
-  chain: Pick<Chain, "readMaxSupply">
+  chain: Pick<Chain, "readMaxSupply" | "readTotalSupplyAt" | "hasCodeAt">
   /** Unix seconds of the start of the mint history: a collection that first minted earlier is `legacy`. */
   historyStartTs: number
+  /** The first block of the mint history. */
+  historyStartBlock: bigint
   log: Logger
   now?: () => number
 }
@@ -414,6 +417,26 @@ export function createVerdictJob(deps: VerdictDeps): Job {
 
     const overrideKind = asKind(row.override_kind)
     const chimera = row.launchpad === "chimera"
+
+    // Whether the collection minted before the history, decided once at its first stored mint:
+    // a supply the block before it means an old collection minting again. Without totalSupply()
+    // (a contract that does not enumerate), a contract that already had code when the history
+    // started counts as old. A launchpad or a manual kind decides the kind without it.
+    //
+    // shortcut: the code fallback calls a contract deployed before the history but first minted
+    // after it legacy. Count the stored mints against the token ids to tell the two apart.
+    let priorMinted = row.prior_minted
+    if (priorMinted === null && firstBlock !== null && !chimera && overrideKind === undefined) {
+      const supply =
+        firstBlock > 0n ? await chain.readTotalSupplyAt(contract as Address, firstBlock - 1n) : 0n
+      priorMinted =
+        supply !== null
+          ? supply > 0n
+          : deps.historyStartBlock > 0n &&
+            (await chain.hasCodeAt(contract as Address, deps.historyStartBlock - 1n))
+      patch.prior_supply = supply === null ? null : supply.toString()
+      patch.prior_minted = priorMinted
+    }
     const kind = classifyKind({
       launchpad: chimera ? "chimera" : null,
       mints7d: Number(row.mints_7d),
@@ -423,6 +446,7 @@ export function createVerdictJob(deps: VerdictDeps): Job {
       maxSupplyChecked: row.max_supply_checked || patch.max_supply_checked === true,
       firstMintTs: firstTs,
       historyStartTs: deps.historyStartTs,
+      priorMinted: priorMinted === true,
       override: overrideKind,
     })
     const farm =
@@ -519,7 +543,7 @@ export function createVerdictJob(deps: VerdictDeps): Job {
       const rows = await sql<{ contract: string }[]>`
         select contract from indexer.nft_collections
         where verdict_dirty or next_verdict_at <= ${at}
-        order by next_verdict_at nulls first limit ${JOBS_PER_TICK}`
+        order by verdict_dirty desc, next_verdict_at nulls first limit ${JOBS_PER_TICK}`
       return rows.map((r) => r.contract)
     },
     async run(contract) {
