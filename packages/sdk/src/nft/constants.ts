@@ -31,4 +31,7 @@ export const NFT_SELECTORS = {
   maxSupply: "0xd5abeb01",
   MAX_SUPPLY: "0x32cb6b0c",
   totalSupply: "0x18160ddd",
+  // Chimera collections: the supply of permanent (non-burnable) tokens and its cap.
+  permanentSupply: "0x16a5b1bb",
+  maxPermanent: "0xd156a766",
 } as const satisfies Record<string, Hex>

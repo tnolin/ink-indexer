@@ -316,6 +316,44 @@ describe("NFT source", () => {
     expect(await count("nft_collections")).toBe(0)
   })
 
+  describe("a sale's floor", () => {
+    const stat = (at: string, floor: string | null, contract = SWEEP_COLLECTION) => ({
+      contract,
+      at: new Date(at),
+      floor_wei: floor,
+      owners: 1,
+      volume_24h_wei: "0",
+      sales_24h: 0,
+      total_supply: null,
+    })
+    const saleFloors = async () => {
+      const roles = loadSeaportRoles()
+      await ingest(loadNftFixture("seaport-fills").filter((l) => l.transactionHash === roles.sweep))
+      const rows = await sql<{ payload: { floorWei: string | null } }[]>`
+        select payload from indexer.events where type = 'nft.sale'`
+      expect(rows).toHaveLength(50)
+      return new Set(rows.map((r) => r.payload.floorWei))
+    }
+
+    it("is the collection's latest stats floor", async () => {
+      await sql`insert into indexer.nft_stats ${sql([
+        stat("2026-10-18T00:00:00Z", "111"),
+        stat("2026-10-19T00:00:00Z", "222"),
+        // Another collection's floor is not this one's.
+        stat("2026-10-19T01:00:00Z", "999", NFT_A),
+      ])}`
+      expect(await saleFloors()).toEqual(new Set(["222"]))
+    })
+
+    it("is null when the newest stats row has no floor, whatever older rows had", async () => {
+      await sql`insert into indexer.nft_stats ${sql([
+        stat("2026-10-18T00:00:00Z", "111"),
+        stat("2026-10-19T00:00:00Z", null),
+      ])}`
+      expect(await saleFloors()).toEqual(new Set([null]))
+    })
+  })
+
   it("an offer, a listing and a multi-order transaction each become sales; unsupported currencies none", async () => {
     const logs = loadNftFixture("seaport-fills")
     await ingest(logs)

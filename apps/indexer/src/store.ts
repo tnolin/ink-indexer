@@ -11,7 +11,7 @@ export type TxStep = (tx: Tx) => Promise<void>
 
 // shortcut: the shared cursor keeps its historical name, 'inkypump', for every source. Renaming it
 // needs a migration and a coordinated deploy.
-const CURSOR_ROW = "inkypump"
+export const CURSOR_ROW = "inkypump"
 const RECENT_BLOCKS = 128
 /**
  * `pg_advisory_xact_lock` key that serialises every store write across processes (the indexer and

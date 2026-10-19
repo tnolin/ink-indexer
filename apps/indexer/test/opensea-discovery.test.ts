@@ -141,6 +141,7 @@ describe("discovery", () => {
       safelist: "not_requested",
       opensea_url: "https://opensea.io/collection/ink-hornet",
       max_rank: 2222,
+      total_supply: 2222,
       discovery_attempts: 0,
       next_discovery_at: null,
       verdict_dirty: true,
@@ -445,6 +446,40 @@ describe("metadata refresh", () => {
     const events = await eventsOf<NftCollectionEvent>("nft.collection")
     expect(events.map((e) => e.txHash)).toEqual([`os:col:${HORNET}:1`, `os:col:${HORNET}:2`])
     expect(events[1]?.safelist).toBe("verified")
+  })
+})
+
+describe("total supply", () => {
+  it("the metadata refresh keeps the page's total supply, and a changed supply alone leaves the verdict and the snapshot alone", async () => {
+    let supply: number | null = 2222
+    const collection = recorded("collections/ink-hornet")
+    const s = setup({
+      ...discoveryRoutes(HORNET, "ink-hornet"),
+      "/collections/ink-hornet": () => ({
+        status: 200,
+        body: { ...(collection.body as object), total_supply: supply },
+      }),
+    })
+    await addCollection(HORNET)
+    await s.scheduler.tick()
+    expect((await rowOf(HORNET)).total_supply).toBe(2222)
+    await sql`update indexer.nft_collections set verdict_dirty = false where contract = ${HORNET}`
+
+    supply = 2300
+    clock = T0 + DAY
+    await s.scheduler.tick()
+    expect(await rowOf(HORNET)).toMatchObject({
+      total_supply: 2300,
+      verdict_dirty: false,
+      snapshot_n: 1,
+    })
+
+    // A page without a supply keeps the one stored.
+    supply = null
+    clock = T0 + 2 * DAY
+    await s.scheduler.tick()
+    expect((await rowOf(HORNET)).total_supply).toBe(2300)
+    expect(await eventsOf("nft.collection")).toHaveLength(1)
   })
 })
 

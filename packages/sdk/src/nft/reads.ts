@@ -26,7 +26,7 @@ async function callAt(
   client: NftReader,
   to: Address,
   data: Hex,
-  blockNumber: bigint,
+  blockNumber: bigint | undefined,
 ): Promise<Hex | null> {
   try {
     const { data: out } = await client.call({ to, data, blockNumber })
@@ -73,6 +73,26 @@ export async function readMaxSupply(
     if (out && (out.length - 2) / 2 >= WORD) return BigInt(out.slice(0, 2 + 2 * WORD))
   }
   return null
+}
+
+/**
+ * A Chimera collection's `permanentSupply()` and its cap `maxPermanent()`, at a block (the latest
+ * when none is given). Null when either reverts or answers nothing. A transport failure throws.
+ */
+export async function readChimeraSupply(
+  client: NftReader,
+  contract: Address,
+  block?: bigint,
+): Promise<{ permanentSupply: bigint; maxPermanent: bigint } | null> {
+  const [supply, cap] = [
+    await callAt(client, contract, NFT_SELECTORS.permanentSupply, block),
+    await callAt(client, contract, NFT_SELECTORS.maxPermanent, block),
+  ]
+  if (!supply || !cap || (supply.length - 2) / 2 < WORD || (cap.length - 2) / 2 < WORD) return null
+  return {
+    permanentSupply: BigInt(supply.slice(0, 2 + 2 * WORD)),
+    maxPermanent: BigInt(cap.slice(0, 2 + 2 * WORD)),
+  }
 }
 
 /** `totalSupply()` at a block. Null when the contract reverts or has no such function. */

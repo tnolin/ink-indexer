@@ -15,6 +15,7 @@ import type { Job } from "../opensea/scheduler"
 import type { CollectionPatch, Snapshots } from "../opensea/snapshot"
 import { classifyKind, type Kind } from "./kind"
 import {
+  BLOCK_S,
   FARM_MIN_MINTERS,
   FARM_MIN_OTHER,
   FARM_SHARE_MAX_BPS,
@@ -255,11 +256,6 @@ export function mintLiveDue(
 }
 
 // ---- The verdict job ----
-
-// shortcut: mint times are derived from block numbers, one block a second from the collection's
-// first mint, because the mint tables store blocks, not times. Ink's block time is fixed; store a
-// block-time column if that ever changes.
-const BLOCK_S = 1
 
 /**
  * Farm wallets' share of the contract's distinct minters, in basis points. A farm wallet is a

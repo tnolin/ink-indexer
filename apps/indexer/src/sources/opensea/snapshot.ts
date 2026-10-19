@@ -60,6 +60,8 @@ export type CollectionPatch = Partial<
     next_traits_at: Date | null
     traits_checks: number
     max_supply_checked: boolean
+    /** The total supply the OpenSea collection page states; not part of the snapshot. */
+    total_supply: number | null
     prior_supply: string | null
     prior_minted: boolean | null
   }

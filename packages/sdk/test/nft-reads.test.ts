@@ -11,6 +11,7 @@ import {
   hasCodeAt,
   NFT_SELECTORS,
   type NftReader,
+  readChimeraSupply,
   readMaxSupply,
   readMintStats,
   readNftTotalSupply,
@@ -108,6 +109,32 @@ describe("readNftTotalSupply", () => {
   it("returns null when it reverts or answers nothing", async () => {
     expect(await readNftTotalSupply(stub(revert()).client, CONTRACT, 99n)).toBeNull()
     expect(await readNftTotalSupply(stub("0x").client, CONTRACT, 99n)).toBeNull()
+  })
+})
+
+describe("readChimeraSupply", () => {
+  it("reads permanentSupply() and maxPermanent() at the latest block", async () => {
+    const { client, calls } = stub(words(729n), words(999n))
+    expect(await readChimeraSupply(client, CONTRACT)).toEqual({
+      permanentSupply: 729n,
+      maxPermanent: 999n,
+    })
+    expect(calls).toEqual([
+      { to: CONTRACT, data: NFT_SELECTORS.permanentSupply, blockNumber: undefined },
+      { to: CONTRACT, data: NFT_SELECTORS.maxPermanent, blockNumber: undefined },
+    ])
+  })
+
+  it("reads at a block when given one", async () => {
+    const { client, calls } = stub(words(1n), words(2n))
+    await readChimeraSupply(client, CONTRACT, 99n)
+    expect(calls.map((c) => c.blockNumber)).toEqual([99n, 99n])
+  })
+
+  it("returns null when either read reverts or answers nothing", async () => {
+    expect(await readChimeraSupply(stub(revert(), words(9n)).client, CONTRACT)).toBeNull()
+    expect(await readChimeraSupply(stub(words(9n), revert()).client, CONTRACT)).toBeNull()
+    expect(await readChimeraSupply(stub("0x", words(9n)).client, CONTRACT)).toBeNull()
   })
 })
 

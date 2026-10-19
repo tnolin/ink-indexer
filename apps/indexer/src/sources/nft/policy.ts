@@ -96,3 +96,33 @@ export const TRAITS_CHECKPOINTS_S = [0, 86400, 2 * 86400, TRAITS_GRACE_S] as con
 export const MINT_LIVE_VERIFIED_MINTS = 10
 /** The verdict is looked at again this often while the collection mints. */
 export const VERDICT_RECHECK_S = 3600
+
+// Collection stats (spec "Stats tiers").
+
+/** How often the stats tiers are assigned again. */
+export const TIER_EVERY_MS = 10 * MINUTE_MS
+/** A collection with a mint this recent is hot. */
+export const HOT_MINT_S = 600
+/** Sales are counted over this long (7 days) to rank collections. */
+export const RANK_WINDOW_S = 7 * 86400
+/** The hot tier: this many of the most-sold tracked collections, plus those minting now. */
+export const HOT_TOP = 30
+/** The warm tier: the next this many of the tracked collections. */
+export const WARM_SIZE = 70
+/** A collection with a sale or a listing this recent (30 days) and no other tier is cold. */
+export const COLD_WINDOW_S = 30 * 86400
+// shortcut: times in the NFT tables are derived from block numbers, one block a second (from a
+// collection's first mint, or from the chain cursor for "now"), because those tables store blocks,
+// not times. Ink's block time is fixed; store a block-time column if that ever changes.
+/** Seconds per Ink block. */
+export const BLOCK_S = 1
+/** Seconds between two stats polls of a collection, by tier. */
+export const STATS_INTERVAL_S = { hot: 1200, warm: 7200, cold: 43200 } as const
+/** How long the listed count of a collection stays fresh, by tier; cold collections are not counted. */
+export const LISTED_INTERVAL_S = { hot: 3600, warm: 6 * 3600 } as const
+/** Listing pages read for a listed count. */
+export const LISTED_PAGES = 3
+/** Listings in one page. */
+export const LISTED_PAGE_SIZE = 100
+/** A collection's on-demand stats refresh runs at most this often. */
+export const STATS_REQUEST_THROTTLE_MS = 30 * MINUTE_MS

@@ -33,6 +33,9 @@ export class FakeChain implements Chain {
   maxSupplyReads: { contract: Address; block: bigint }[] = []
   /** Per contract, its `totalSupply()` at a block; null is a revert. A contract with no entry reverts. */
   totalSupplyAt = new Map<string, (block: bigint) => bigint | null>()
+  /** Per Chimera collection, what `permanentSupply()` and `maxPermanent()` answer. A collection with no entry reverts. */
+  chimeraSupplies = new Map<string, { permanentSupply: bigint; maxPermanent: bigint }>()
+  chimeraReads: Address[] = []
   /** Per address, the block its code was deployed at. An address with no entry has no code. */
   deployedAt = new Map<string, bigint>()
   priorReads: { method: "totalSupply" | "code"; address: Address; block: bigint }[] = []
@@ -131,6 +134,11 @@ export class FakeChain implements Chain {
   async readTotalSupplyAt(contract: Address, block: bigint) {
     this.priorReads.push({ method: "totalSupply", address: contract, block })
     return this.totalSupplyAt.get(contract)?.(block) ?? null
+  }
+
+  async readChimeraSupply(contract: Address) {
+    this.chimeraReads.push(contract)
+    return this.chimeraSupplies.get(contract) ?? null
   }
 
   async hasCodeAt(address: Address, block: bigint) {

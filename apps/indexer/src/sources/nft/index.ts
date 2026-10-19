@@ -21,6 +21,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import { latestFloors } from "../opensea/stats"
 import type { EventRow, Source, SourceBatch } from "../source"
 import {
   loadMilestoneContexts,
@@ -329,6 +330,10 @@ export async function processLogs(
       blockHash: hashes.get(l.block)!,
       sub: "",
     })
+  // A sale carries the collection's latest known floor (a read of our own stats, no network).
+  const floors = await latestFloors(deps.sql, [
+    ...new Set(saleLogs.flatMap((x) => x.sales.map((r) => r.contract))),
+  ])
   const sales: SaleRow[] = []
   for (const { log, sales: rows } of saleLogs) {
     const ts = times.get(log.blockNumber)!
@@ -340,7 +345,12 @@ export async function processLogs(
       owner.set(r.tokenId, first)
       const sub = first === r.contract ? `sale:${r.tokenId}` : `sale:${r.tokenId}:${r.contract}`
       sales.push(r)
-      events.push({ event: saleEvent(r, ts), block: r.block, blockHash: log.blockHash, sub })
+      events.push({
+        event: saleEvent(r, ts, floors.get(r.contract) ?? null),
+        block: r.block,
+        blockHash: log.blockHash,
+        sub,
+      })
     }
   }
 
@@ -442,7 +452,7 @@ function linesToSales(log: ChainLog, decoded: SeaportSale[]): SaleRow[] {
   }))
 }
 
-function saleEvent(r: SaleRow, blockTimestamp: number): NftSaleEvent {
+function saleEvent(r: SaleRow, blockTimestamp: number, floorWei: bigint | null): NftSaleEvent {
   return {
     v: SCHEMA_VERSION,
     chainId: INK_CHAIN_ID,
@@ -464,8 +474,8 @@ function saleEvent(r: SaleRow, blockTimestamp: number): NftSaleEvent {
     imageUrl: null,
     rank: null,
     maxRank: null,
-    // Null until nft_stats holds a floor to read.
-    floorWei: null,
+    // The collection's latest stats floor; null while it has none.
+    floorWei: floorWei === null ? null : s(floorWei),
   }
 }
 

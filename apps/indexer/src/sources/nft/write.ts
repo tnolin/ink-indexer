@@ -185,6 +185,9 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
       update indexer.nft_collections set
         max_supply = ${s(m.maxSupply)},
         last_mark_bps = greatest(last_mark_bps, ${m.lastMarkBps}),
+        -- A sell-out has the stats job count the listings once.
+        listed_due_at = case when sold_out_block is null and ${m.soldOutBlock !== null}
+          then now() else listed_due_at end,
         sold_out_block = coalesce(sold_out_block, ${m.soldOutBlock === null ? null : s(m.soldOutBlock)}),
         verdict_dirty = verdict_dirty or ${m.lastMarkBps} > last_mark_bps
           or (sold_out_block is null and ${m.soldOutBlock !== null})

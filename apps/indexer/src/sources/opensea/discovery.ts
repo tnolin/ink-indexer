@@ -52,6 +52,18 @@ export function pageColumns(c: OsCollection) {
   } satisfies CollectionPatch
 }
 
+/**
+ * The page's total supply, for the stats job. Left out when the page has none (the stored value
+ * stays) or when it does not fit the column. It is not a page column: a changing supply must not
+ * mark the verdict dirty.
+ */
+export function supplyColumn(c: OsCollection): { total_supply?: number } {
+  const n = c.totalSupply
+  return n !== null && Number.isInteger(n) && n >= 0 && n <= 2_147_483_647
+    ? { total_supply: n }
+    : {}
+}
+
 /** When the page is read again after the creator's account could not be read. */
 const accountRetryMs = (failed: Extract<OsResult<unknown>, { ok: false }>) =>
   failed.reason === "error" ? ACCOUNT_RETRY_MS : TRANSIENT_RETRY_MS
@@ -148,6 +160,7 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
       const standard = found.value.standard.toLowerCase()
       const patch: CollectionPatch = {
         ...pageColumns(page.value),
+        ...supplyColumn(page.value),
         ...(row.standard === null && (standard === "erc721" || standard === "erc1155")
           ? { standard }
           : {}),
@@ -228,6 +241,7 @@ export function createMetadataJob(deps: OsJobDeps): Job {
       )
       await snapshots.emitSnapshotIfChanged(contract, {
         ...columns,
+        ...supplyColumn(page.value),
         next_metadata_at: new Date(
           now() + (accountFailed ? accountRetryMs(accountFailed) : METADATA_REFRESH_MS),
         ),
