@@ -75,9 +75,11 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
       if (!r) return undefined
       const failures = r.n + 1
       const wait = nextDiscoveryDelay(failures)
+      // Giving up decides gate 1, so the verdict is looked at again.
       await tx`
         update indexer.nft_collections
-        set discovery_attempts = ${failures}, next_discovery_at = ${wait === null ? null : new Date(t + wait)}
+        set discovery_attempts = ${failures}, next_discovery_at = ${wait === null ? null : new Date(t + wait)},
+          verdict_dirty = verdict_dirty or ${wait === null}
         where contract = ${contract}`
       return wait
     })

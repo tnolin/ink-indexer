@@ -82,7 +82,7 @@ const launchRecord = (l: LaunchRow) => ({
 /** Raw rows, collections, launches and the listing state of sold items. Events are the store's. */
 export async function writeRows(tx: Tx, batch: NftBatch) {
   // Collections first: the first mint is the earliest block seen, a SeaDrop flag stays once set,
-  // and a launch sets the kind.
+  // and a launch sets the kind. A new first mint or a launch marks the verdict dirty.
   for (const part of chunks(batch.collections.map(collectionRecord)))
     await tx`
       insert into indexer.nft_collections ${tx(part)}
@@ -102,7 +102,12 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
         kind = coalesce(excluded.kind, indexer.nft_collections.kind),
         launchpad = coalesce(excluded.launchpad, indexer.nft_collections.launchpad),
         launch_token = coalesce(indexer.nft_collections.launch_token, excluded.launch_token),
-        creator_address = coalesce(indexer.nft_collections.creator_address, excluded.creator_address)`
+        creator_address = coalesce(indexer.nft_collections.creator_address, excluded.creator_address),
+        verdict_dirty = indexer.nft_collections.verdict_dirty
+          or excluded.launchpad is not null
+          or (excluded.first_mint_block is not null
+            and (indexer.nft_collections.first_mint_block is null
+              or excluded.first_mint_block < indexer.nft_collections.first_mint_block))`
 
   // OpenSea triggers. A new row is due for discovery by its column default. New activity on a
   // contract with no slug restarts discovery: the failures are forgotten, and the next lookup is
@@ -131,6 +136,19 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
 
   for (const part of chunks(batch.mints.map((t) => transferRecord(t, "recipient"))))
     await tx`insert into indexer.nft_mints ${tx(part)} on conflict do nothing`
+  // A verified collection's (or creator's) drop with no SeaDrop stages is announced after its
+  // first few mints, so each new mint has the verdict job look until it has been. Other kinds get
+  // no such announcement.
+  const minted = [...new Set(batch.mints.map((m) => m.contract))]
+  if (minted.length > 0)
+    await tx`
+      update indexer.nft_collections c set verdict_dirty = true
+      where c.contract = any(${tx.array(minted)}::text[])
+        and not c.verdict_dirty and not c.seadrop and not c.mint_start_emitted
+        and (c.kind is null or c.kind = 'drop')
+        and (c.safelist = 'verified' or exists (
+          select 1 from indexer.nft_accounts a
+          where a.address = coalesce(c.creator_address, c.owner) and a.verified))`
   for (const part of chunks(batch.burns.map((t) => transferRecord(t, "holder"))))
     await tx`insert into indexer.nft_burns ${tx(part)} on conflict do nothing`
   for (const part of chunks(batch.seadropMints.map(seadropMintRecord)))
@@ -150,7 +168,8 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
   for (const part of chunks(batch.launches.map(launchRecord)))
     await tx`insert into indexer.nft_launches ${tx(part)} on conflict do nothing`
 
-  // Milestones: stages first seen, and where each contract's marks and sell-out stand.
+  // Milestones: stages first seen, and where each contract's marks and sell-out stand. A new mark
+  // or the sell-out marks the verdict dirty (gate 4 is looked at again at every mark).
   const stage = (r: NftBatch["stages"][number]) => ({
     contract: r.contract,
     stage_index: r.index,
@@ -164,7 +183,9 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
       update indexer.nft_collections set
         max_supply = ${s(m.maxSupply)},
         last_mark_bps = greatest(last_mark_bps, ${m.lastMarkBps}),
-        sold_out_block = coalesce(sold_out_block, ${m.soldOutBlock === null ? null : s(m.soldOutBlock)})
+        sold_out_block = coalesce(sold_out_block, ${m.soldOutBlock === null ? null : s(m.soldOutBlock)}),
+        verdict_dirty = verdict_dirty or ${m.lastMarkBps} > last_mark_bps
+          or (sold_out_block is null and ${m.soldOutBlock !== null})
       where contract = ${m.contract}`
 
   // A sold item has no live listing.
@@ -191,11 +212,13 @@ export async function rollbackRows(tx: Tx, fork: bigint) {
   await tx`delete from indexer.nft_sales where block > ${f}`
   await tx`
     update indexer.nft_collections
-    set launchpad = null, launch_token = null, creator_address = null, kind = null
+    set launchpad = null, launch_token = null, creator_address = null, kind = null,
+      verdict_dirty = true
     where contract in (select collection from indexer.nft_launches where block > ${f})`
   await tx`delete from indexer.nft_launches where block > ${f}`
   await tx`
-    update indexer.nft_collections set first_mint_block = null, first_mint_ts = null
+    update indexer.nft_collections set first_mint_block = null, first_mint_ts = null,
+      verdict_dirty = true
     where first_mint_block > ${f}`
 
   // Stages first seen above the fork start again on replay. A collection's marks and sell-out

@@ -28,6 +28,9 @@ export class FakeChain implements Chain {
     string,
     (block: bigint) => { totalSupply: bigint; maxSupply: bigint } | null
   >()
+  /** Per contract, what `maxSupply()` answers. A contract with no entry has none (null). */
+  maxSupplies = new Map<string, bigint>()
+  maxSupplyReads: { contract: Address; block: bigint }[] = []
   erc20 = new Map<string, { decimals: number; symbol: string }>()
   /** Per token, what `symbol()` and `name()` answer; null is a revert. A token with no entry reverts on both. */
   erc20Names = new Map<string, { symbol: string | null; name: string | null }>()
@@ -113,5 +116,10 @@ export class FakeChain implements Chain {
 
   async readMintStats(contract: Address, _minter: Address, block: bigint) {
     return this.mintStats.get(contract)?.(block) ?? null
+  }
+
+  async readMaxSupply(contract: Address, block: bigint) {
+    this.maxSupplyReads.push({ contract, block })
+    return this.maxSupplies.get(contract) ?? null
   }
 }

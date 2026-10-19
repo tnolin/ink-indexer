@@ -118,4 +118,8 @@ export class ReplayChain implements Chain {
   async readMintStats(): Promise<null> {
     throw new Error("readMintStats was not recorded")
   }
+
+  async readMaxSupply(): Promise<null> {
+    throw new Error("readMaxSupply was not recorded")
+  }
 }

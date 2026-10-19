@@ -38,19 +38,28 @@ export type CollectionRow = {
   creator_account: { username: string | null; verified: boolean } | null
   verdict: string
   gates: NftGates | null
+  /** A manual verdict mark is set (`nft_overrides`). Not a column. */
+  manual: boolean
   snapshot_hash: string | null
   snapshot_n: number
 }
 
 /** Columns a caller may change together with the snapshot. */
 export type CollectionPatch = Partial<
-  Omit<CollectionRow, "contract" | "snapshot_hash" | "snapshot_n" | "creator_account"> & {
+  Omit<
+    CollectionRow,
+    "contract" | "snapshot_hash" | "snapshot_n" | "creator_account" | "manual"
+  > & {
     discovery_attempts: number
     next_discovery_at: Date | null
     discovered_at: Date | null
     next_metadata_at: Date | null
     next_drops_at: Date | null
     verdict_dirty: boolean
+    next_verdict_at: Date | null
+    next_traits_at: Date | null
+    traits_checks: number
+    max_supply_checked: boolean
   }
 >
 
@@ -104,7 +113,9 @@ export function composeCollection(
 ): NftCollectionEvent | null {
   if (row.standard !== "erc721" && row.standard !== "erc1155") return null
   // shortcut: a row with no kind yet is reported as a drop. Its verdict stays pending, so no feed
-  // alert follows; kind detection re-emits the snapshot once it sets the kind.
+  // alert follows; kind detection re-emits the snapshot once it sets the kind. A `pending_kind`
+  // row is reported as a drop too (the event has no such kind); its gates hold structure pending
+  // and farm n/a, so it is never judged on mint grounds.
   const kind = KINDS.find((k) => k === row.kind) ?? "drop"
   const verdict = VERDICTS.find((v) => v === row.verdict) ?? "pending"
   const chimera = row.launchpad === "chimera"
@@ -126,7 +137,7 @@ export function composeCollection(
     kind,
     verdict,
     gates: row.gates ?? pendingGates(kind),
-    manual: false,
+    manual: row.manual,
     safelist: row.safelist,
     maxSupply: row.max_supply,
     seadrop: row.seadrop,
@@ -183,8 +194,10 @@ export function createSnapshots(deps: { sql: Sql; store: Store; now?: () => numb
     const [row] = await sql<Omit<CollectionRow, "creator_account">[]>`
       select contract, standard, kind, launchpad, launch_token, seadrop, max_supply::text as max_supply,
         slug, name, image_url, twitter, website, discord, safelist, opensea_url,
-        rarity_calculated_at, max_rank, owner, creator_address, verdict, gates, snapshot_hash, snapshot_n
-      from indexer.nft_collections where contract = ${contract}`
+        rarity_calculated_at, max_rank, owner, creator_address, verdict, gates, snapshot_hash, snapshot_n,
+        exists (select 1 from indexer.nft_overrides o
+          where o.contract = c.contract and o.verdict is not null) as manual
+      from indexer.nft_collections c where contract = ${contract}`
     if (!row) return false
     const merged = { ...row, ...patch }
     const who = creatorAddress(merged)
@@ -193,8 +206,13 @@ export function createSnapshots(deps: { sql: Sql; store: Store; now?: () => numb
           select username, verified from indexer.nft_accounts where address = ${who}`
       : []
     const apply = async (tx: Tx) => {
-      if (Object.keys(patch).length > 0)
-        await tx`update indexer.nft_collections set ${tx(patch as Record<string, never>)} where contract = ${contract}`
+      if (Object.keys(patch).length === 0) return
+      // The gates go in as jsonb.
+      const columns =
+        patch.gates === undefined
+          ? patch
+          : { ...patch, gates: patch.gates === null ? null : tx.json(patch.gates) }
+      await tx`update indexer.nft_collections set ${tx(columns as Record<string, never>)} where contract = ${contract}`
     }
     const event = composeCollection(
       { ...merged, creator_account: account ?? null } as CollectionRow,

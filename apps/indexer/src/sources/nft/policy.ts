@@ -62,3 +62,37 @@ export const STAGE_START_EVERY_MS = 30_000
 export const STAGE_START_WINDOW_MS = 10 * MINUTE_MS
 /** A scheduled stage with no known on-chain index gets this plus its place in the drop's order. */
 export const SYNTHETIC_STAGE_INDEX = 100
+
+// Collection kinds and quality gates (spec "Collection verdicts").
+
+/** The burn-ratio fallback for `continuous`: at least this many mints in the kind window... */
+export const CONTINUOUS_MIN_MINTS = 100
+/** ...and burns at least this share of them, in basis points. */
+export const CONTINUOUS_BURN_BPS = 2000
+/** A contract without SeaDrop whose burns reach this share of its mints is held as `pending_kind`. */
+export const PENDING_KIND_BURN_BPS = 500
+/** Mints and burns counted for the kind: this long after the first mint. */
+export const KIND_WINDOW_S = 7 * 86400
+/** Gate 2: a mint with one public stage passes when it runs longer than this. */
+export const STRUCTURE_MIN_MINT_S = 1800
+/** A mint counts as still running when its latest mint is at most this old. */
+export const STILL_MINTING_S = 600
+/** Gate 3 fails only this long after the mint ended (allows a late reveal). */
+export const TRAITS_GRACE_S = 72 * 3600
+/** A mint with no mints for this long has ended. */
+export const MINT_END_IDLE_S = 86400
+/** Gate 4: a farm wallet received mints from at least this many other `drop` collections... */
+export const FARM_MIN_OTHER = 5
+/** ...within this window. */
+export const FARM_WINDOW_S = 7 * 86400
+/** Gate 4 fails when farm wallets are more than this share of the minters, in basis points... */
+export const FARM_SHARE_MAX_BPS = 3000
+/** ...and is decided only once the collection has this many distinct minters. */
+export const FARM_MIN_MINTERS = 50
+
+/** When the traits sample is taken, after the mint ended: at the end, then a day apart up to the grace. */
+export const TRAITS_CHECKPOINTS_S = [0, 86400, 2 * 86400, TRAITS_GRACE_S] as const
+/** A verified collection's (or creator's) mint with no SeaDrop stages is announced after this many mints. */
+export const MINT_LIVE_VERIFIED_MINTS = 10
+/** The verdict is looked at again this often while the collection mints. */
+export const VERDICT_RECHECK_S = 3600

@@ -6,6 +6,7 @@ import {
   readErc20Meta,
   readErc20Names,
   readLaunchStates,
+  readMaxSupply,
   readMintStats,
   readTotalSupplies,
   type StateReader,
@@ -39,6 +40,8 @@ export type Chain = {
     minter: Address,
     block: bigint,
   ): Promise<{ totalSupply: bigint; maxSupply: bigint } | null>
+  /** `maxSupply()`, else `MAX_SUPPLY()`, at a block. null when the contract has neither. */
+  readMaxSupply(contract: Address, block: bigint): Promise<bigint | null>
 }
 
 /** The slice of a PublicClient that viemChain reads blocks with. Structural, so chain-specific block shapes (Ink's deposit transactions) still fit. */
@@ -123,5 +126,7 @@ export function viemChain(
       retry("readErc20Names", () => readErc20Names(client, tokens, block)),
     readMintStats: (contract, minter, block) =>
       retry("readMintStats", () => readMintStats(client, contract, minter, block)),
+    readMaxSupply: (contract, block) =>
+      retry("readMaxSupply", () => readMaxSupply(client, contract, block)),
   }
 }
