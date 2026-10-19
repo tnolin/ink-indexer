@@ -126,3 +126,9 @@ export const LISTED_PAGES = 3
 export const LISTED_PAGE_SIZE = 100
 /** A collection's on-demand stats refresh runs at most this often. */
 export const STATS_REQUEST_THROTTLE_MS = 30 * MINUTE_MS
+/** A listed count that was due and could not be taken (the poll or its listing pages failed) is tried again this much later. */
+export const LISTED_RETRY_MS = HOUR_MS
+/** A due listed count of a collection OpenSea does not know is dropped after this many polls. */
+export const LISTED_NOT_FOUND_GIVE_UP = 3
+/** The floor change in `nft.stats` is measured against the newest row at or before this long ago. */
+export const FLOOR_CHANGE_WINDOW_MS = DAY_MS

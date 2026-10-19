@@ -29,6 +29,8 @@ alter table indexer.nft_collections
   -- A listed count is wanted from this time on (set at a sell-out); cleared once counted.
   add column listed_due_at timestamptz,
   add column listed_counted_at timestamptz,
+  -- Polls that wanted that count and found the collection unknown to OpenSea (404).
+  add column listed_failures int not null default 0,
   -- Number of `nft.stats` events written.
   add column stats_n int not null default 0;
 

@@ -424,6 +424,41 @@ describe("stats job", () => {
     expect(await statRows(B)).toHaveLength(0)
   })
 
+  describe("a due listed count with no tier", () => {
+    /** Ticks the scheduler every minute for a day; returns the stats requests made. */
+    async function day(status: number) {
+      const s = setup({ [statsPath(A)]: { status, body: {} }, [listedPath(A)]: listings(3, null) })
+      await addCollection(A, { total_supply: 10, listed_due_at: new Date(T0) })
+      const scheduler = createScheduler([s.stats.job], { sql, log, report, now })
+      for (let m = 0; m <= 24 * 60; m++) {
+        clock = T0 + m * MIN
+        await scheduler.tick()
+      }
+      return { calls: callsTo(s.fetch, statsPath(A)), row: await rowOf(A) }
+    }
+
+    it("a sold-out collection whose stats fetch 404s is polled a few times, then dropped", async () => {
+      const { calls, row } = await day(404)
+      expect(calls).toBe(3)
+      expect(row.listed_due_at).toBeNull()
+      expect(row.listed_failures).toBe(0)
+    })
+
+    it("a sold-out collection whose stats fetch keeps failing is polled hourly at most", async () => {
+      const { calls, row } = await day(500)
+      expect(calls).toBeLessThanOrEqual(25)
+      expect(row.listed_due_at).not.toBeNull()
+    })
+
+    it("a budget deferral also moves the count back", async () => {
+      takeBudget = async () => false
+      const s = setup({ [statsPath(A)]: osStats({ floor: 1 }) })
+      await addCollection(A, { total_supply: 10, listed_due_at: new Date(T0) })
+      expect(await s.stats.job.run(A)).toBe("deferred")
+      expect((await rowOf(A)).listed_due_at.getTime()).toBe(T0 + HOUR)
+    })
+  })
+
   it("the scheduler assigns tiers, then polls what they make due", async () => {
     const s = setup({ [statsPath(A)]: osStats({ floor: 1, owners: 2 }) })
     await addCollection(A, { total_supply: 10 })

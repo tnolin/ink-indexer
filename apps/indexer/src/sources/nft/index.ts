@@ -331,6 +331,8 @@ export async function processLogs(
       sub: "",
     })
   // A sale carries the collection's latest known floor (a read of our own stats, no network).
+  // shortcut: this is the floor when the sale is processed, not when it happened, so a replay of old
+  // sales stamps today's floor on them. Read the newest row at or before the sale's time to fix it.
   const floors = await latestFloors(deps.sql, [
     ...new Set(saleLogs.flatMap((x) => x.sales.map((r) => r.contract))),
   ])

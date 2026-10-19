@@ -7,12 +7,15 @@ import { CURSOR_ROW } from "../../store"
 import {
   BLOCK_S,
   COLD_WINDOW_S,
+  FLOOR_CHANGE_WINDOW_MS,
   HOT_MINT_S,
   HOT_TOP,
   JOBS_PER_TICK,
   LISTED_INTERVAL_S,
+  LISTED_NOT_FOUND_GIVE_UP,
   LISTED_PAGE_SIZE,
   LISTED_PAGES,
+  LISTED_RETRY_MS,
   OPENSEA_MAX_WAIT_MS,
   RANK_WINDOW_S,
   SCHEDULER_TICK_MS,
@@ -239,6 +242,24 @@ export function createStats(deps: StatsDeps) {
   }
 
   /**
+   * A scheduled poll failed before it could count: a listed count that is due moves back by
+   * `LISTED_RETRY_MS`, so a collection with no tier (only `listed_due_at` makes it due) is not
+   * polled on every tick. A collection OpenSea does not know is dropped after a few tries.
+   */
+  async function holdListed(contract: string, notFound: boolean): Promise<void> {
+    const t = now()
+    await sql`
+      update indexer.nft_collections set
+        listed_failures = case
+          when not ${notFound} then listed_failures
+          when listed_failures + 1 >= ${LISTED_NOT_FOUND_GIVE_UP} then 0
+          else listed_failures + 1 end,
+        listed_due_at = case when ${notFound} and listed_failures + 1 >= ${LISTED_NOT_FOUND_GIVE_UP}
+          then null else ${new Date(t + LISTED_RETRY_MS)}::timestamptz end
+      where contract = ${contract} and listed_due_at <= ${new Date(t)}`
+  }
+
+  /**
    * One poll. `scheduled` polls (the job's) move the collection's schedule on failure too and may
    * count listings; an on-demand refresh does neither.
    */
@@ -259,8 +280,12 @@ export function createStats(deps: StatsDeps) {
     const stats: OsStats | null = res.ok ? res.value : null
     if (!stats) {
       const early = res.ok ? undefined : commonOutcome(res)
-      if (early) return { wrote: false, outcome: early }
+      if (early) {
+        if (opts.scheduled) await holdListed(contract, false)
+        return { wrote: false, outcome: early }
+      }
       if (opts.scheduled) {
+        await holdListed(contract, !res.ok && res.reason === "not_found")
         // Unknown to OpenSea: look again at the tier's own pace. Any other failure: soon.
         const unknown = !res.ok && res.reason === "not_found"
         await reschedule(
@@ -292,7 +317,7 @@ export function createStats(deps: StatsDeps) {
       where contract = ${contract} and listed_count is not null order by at desc limit 1`
     const [ago] = await sql<{ floor_wei: string | null }[]>`
       select floor_wei::text as floor_wei from indexer.nft_stats
-      where contract = ${contract} and at <= ${new Date(at.getTime() - 24 * 3_600_000)}
+      where contract = ${contract} and at <= ${new Date(at.getTime() - FLOOR_CHANGE_WINDOW_MS)}
       order by at desc limit 1`
 
     const values = {
@@ -342,7 +367,7 @@ export function createStats(deps: StatsDeps) {
       row.stats_tier === null
         ? null
         : new Date(at.getTime() + STATS_INTERVAL_S[row.stats_tier] * 1000)
-    const retryListed = new Date(at.getTime() + TRANSIENT_RETRY_MS)
+    const retryListed = new Date(at.getTime() + LISTED_RETRY_MS)
     const step = async (tx: Tx) => {
       await tx`insert into indexer.nft_stats ${tx(values)} on conflict (contract, at) do nothing`
       const moved = await tx`
@@ -350,6 +375,7 @@ export function createStats(deps: StatsDeps) {
           stats_n = stats_n + ${event ? 1 : 0},
           next_stats_at = coalesce(${nextAt}::timestamptz, next_stats_at),
           listed_counted_at = case when ${listed !== null} then ${at}::timestamptz else listed_counted_at end,
+          listed_failures = case when ${listed !== null} then 0 else listed_failures end,
           listed_due_at = case
             when ${listed !== null} then null
             when ${listingFailed !== null} and listed_due_at is not null then ${retryListed}::timestamptz
