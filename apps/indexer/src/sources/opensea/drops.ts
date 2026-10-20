@@ -45,6 +45,7 @@ export function createDropsJob(deps: OsJobDeps): Job {
 
   return {
     name: "opensea-drops",
+    usesApi: true,
     everyMs: SCHEDULER_TICK_MS,
     async due(sql, at) {
       const rows = await sql<{ contract: string }[]>`

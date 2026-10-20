@@ -377,6 +377,7 @@ export function createStats(deps: StatsDeps) {
 
   const job: Job = {
     name: "opensea-stats",
+    usesApi: true,
     everyMs: SCHEDULER_TICK_MS,
     async due(sql, at) {
       const rows = await sql<{ contract: string }[]>`
@@ -398,6 +399,7 @@ export function createStats(deps: StatsDeps) {
    */
   const tierJob: Job = {
     name: "opensea-stats-tiers",
+    usesApi: true,
     everyMs: TIER_EVERY_MS,
     async due(sql, at) {
       await assignTiers(sql, at)

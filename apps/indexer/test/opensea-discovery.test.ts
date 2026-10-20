@@ -880,6 +880,41 @@ describe("scheduler", () => {
     expect(s.fetch.calls.length).toBeGreaterThan(1)
   })
 
+  it("a key refusal pauses the jobs that call OpenSea and not the others", async () => {
+    const ran: string[] = []
+    const jobs: Job[] = [
+      {
+        name: "refused",
+        everyMs: 10_000,
+        usesApi: true,
+        due: async () => ["a"],
+        run: async (c) => {
+          ran.push(c)
+          return "rejected"
+        },
+      },
+      {
+        name: "api",
+        everyMs: 10_000,
+        usesApi: true,
+        due: async () => ["b"],
+        run: async (c) => void ran.push(c),
+      },
+      {
+        name: "local",
+        everyMs: 10_000,
+        due: async () => ["z"],
+        run: async (c) => void ran.push(c),
+      },
+    ]
+    const sch = createScheduler(jobs, { sql, log, report, now })
+    await sch.tick()
+    expect(ran).toEqual(["a", "z"])
+    clock += 10_000
+    await sch.tick()
+    expect(ran).toEqual(["a", "z", "z"])
+  })
+
   it("a job error is logged and reported, the other contracts still run, and it retries next tick", async () => {
     let fail = true
     const ran: string[] = []

@@ -107,6 +107,7 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
 
   return {
     name: "opensea-discovery",
+    usesApi: true,
     everyMs: SCHEDULER_TICK_MS,
     async due(sql, at) {
       const rows = await sql<{ contract: string }[]>`
@@ -194,6 +195,7 @@ export function createMetadataJob(deps: OsJobDeps): Job {
 
   return {
     name: "opensea-metadata",
+    usesApi: true,
     everyMs: SLOW_JOB_EVERY_MS,
     async due(sql, at) {
       const rows = await sql<{ contract: string }[]>`

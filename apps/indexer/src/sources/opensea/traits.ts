@@ -26,6 +26,7 @@ export function createTraitsJob(deps: OsJobDeps): Job {
 
   return {
     name: "opensea-traits",
+    usesApi: true,
     everyMs: SCHEDULER_TICK_MS,
     async due(sql, at) {
       const rows = await sql<{ contract: string }[]>`
