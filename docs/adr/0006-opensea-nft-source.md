@@ -1,9 +1,9 @@
 # 0006. OpenSea API v2 and Stream API for NFTs
 
 Date: 2026-10-02
-Status: Accepted. Amended by ADR 0017.
+Status: Accepted. Amended by ADRs 0016 and 0017.
 
-Amended by ADR 0017: Blockscout is not used. Chain data comes from Ink RPC logs, and the Stream feeds listings.
+Amended by ADRs 0016 and 0017: chain data, sales included, comes from Ink RPC logs, and the Stream feeds listings.
 
 ## Context
 
@@ -11,7 +11,7 @@ Ink is a supported OpenSea chain ([chains](https://support.opensea.io/en/article
 
 ## Decision
 
-Use OpenSea API v2 with chain slug `ink` for collections and stats, the Stream API for live sales and listings, and Blockscout token transfers as fallback (superseded, see ADR 0017). Request a full API key.
+Use OpenSea API v2 with chain slug `ink` for collections and stats, the Stream API for live sales (superseded, see ADR 0016: sales come from the chain) and listings, and Blockscout token transfers as fallback (superseded, see ADR 0017). Request a full API key.
 
 ## Consequences
 

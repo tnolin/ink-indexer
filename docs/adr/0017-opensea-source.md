@@ -9,7 +9,7 @@ ADR 0006 chose OpenSea API v2 and the Stream API for Ink NFTs. Chain logs say wh
 
 ## Decision
 
-**ADR 0006 is amended: Blockscout is not used.** Chain data comes from Ink RPC logs (ADR 0016), and the Stream feeds listings.
+**ADR 0006 is amended: chain data comes from Ink RPC logs (ADR 0016), and the Stream feeds listings.**
 
 **Disabled without a key.** With no `OPENSEA_API_KEY` the indexer logs one warning and runs the chain sources only. Without a key no collection resolves a page, so none passes the quality checks.
 
@@ -80,7 +80,7 @@ All thresholds are named constants in `apps/indexer/src/sources/nft/policy.ts`.
 
 The event then carries the collection's latest floor and its age, and the item's name and image.
 
-**Lazy ranks.** The rank is OpenSea's `rarity.rank` and nothing else; the indexer computes no rarity and keeps no traits table. A rank is fetched for one item at a time, only for a listing priced at or under the floor plus 10%, never for sales or whole collections. It is cached for 7 days, or until the collection's rarity calculation time changes (for example at a reveal). The listing waits up to 10 seconds for the fetch. Where OpenSea returns no rank, the fields are null.
+**Lazy ranks.** Ranks come from OpenSea's rarity data: the rank is OpenSea's `rarity.rank`, stored per fetched item. A rank is fetched for one item at a time, only for a listing priced at or under the floor plus 10%, never for sales or whole collections. It is cached for 7 days, or until the collection's rarity calculation time changes (for example at a reveal). The listing waits up to 10 seconds for the fetch. Where OpenSea returns no rank, the fields are null.
 
 **Creator accounts.** The collection owner OpenSea names (or the creator in a Chimera launch) is looked up once and cached per address for 7 days. The username and verified flag go into `nft.collection` as `creator`. A verified creator counts as in the quality-check rule above.
 
