@@ -10,7 +10,7 @@ beforeEach(async () => {
 afterEach(() => sql.end())
 
 it("take returns true while the bucket has tokens above the class floor", async () => {
-  await sql`update indexer.opensea_budget set tokens = 3, capacity = 10, refill_per_s = 0`
+  await sql`update indexer.opensea_budget set tokens = 3, capacity = 10, refill_per_s = 0, min_interval_ms = 0`
   const budget = createBudget(sql)
   expect(await budget.take(0, 0)).toBe(true)
   expect(await budget.take(0, 0)).toBe(true)
@@ -43,4 +43,14 @@ it("block does not shorten an earlier block", async () => {
   await budget.block(60_000)
   await budget.block(10)
   expect(await budget.take(0, 100)).toBe(false)
+})
+
+it("take waits out the spacing between requests when maxWaitMs allows it", async () => {
+  await sql`update indexer.opensea_budget set min_interval_ms = 200`
+  const budget = createBudget(sql)
+  expect(await budget.take(0, 0)).toBe(true)
+  expect(await budget.take(0, 0)).toBe(false)
+  const t0 = Date.now()
+  expect(await budget.take(0, 1000)).toBe(true)
+  expect(Date.now() - t0).toBeGreaterThanOrEqual(100)
 })

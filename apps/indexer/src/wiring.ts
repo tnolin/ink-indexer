@@ -4,6 +4,7 @@ import type { Chain } from "./chain"
 import type { Logger } from "./log"
 import {
   BLOCK_S,
+  DEFAULT_OPENSEA_MIN_INTERVAL_MS,
   DEFAULT_OPENSEA_REQUESTS_PER_HOUR,
   TRACKED_SLUGS_EVERY_MS,
 } from "./sources/nft/policy"
@@ -32,15 +33,18 @@ export type NftSettings =
       /** Undefined: the OpenSea part is off. */
       key: string | undefined
       perHour: number
+      /** Minimum time between two OpenSea requests on the key. */
+      minIntervalMs: number
       /** Undefined: read from the stored mints (see `resolveHistoryStart`). */
       historyStartBlock: bigint | undefined
     }
   | { ok: false; reason: string }
 
-/** Reads `OPENSEA_API_KEY`, `OPENSEA_REQUESTS_PER_HOUR` and `NFT_HISTORY_START_BLOCK`. Empty means unset. */
+/** Reads `OPENSEA_API_KEY`, `OPENSEA_REQUESTS_PER_HOUR`, `OPENSEA_MIN_INTERVAL_MS` and `NFT_HISTORY_START_BLOCK`. Empty means unset. */
 export function parseNftEnv(env: Env): NftSettings {
   const key = env.OPENSEA_API_KEY?.trim() || undefined
   const perHourRaw = env.OPENSEA_REQUESTS_PER_HOUR?.trim() || undefined
+  const intervalRaw = env.OPENSEA_MIN_INTERVAL_MS?.trim() || undefined
   const startRaw = env.NFT_HISTORY_START_BLOCK?.trim() || undefined
   let perHour = DEFAULT_OPENSEA_REQUESTS_PER_HOUR
   if (perHourRaw !== undefined) {
@@ -48,12 +52,19 @@ export function parseNftEnv(env: Env): NftSettings {
     if (perHour <= 0 || perHour > 2 ** 31 - 1)
       return { ok: false, reason: "OPENSEA_REQUESTS_PER_HOUR must be a positive integer" }
   }
+  let minIntervalMs = DEFAULT_OPENSEA_MIN_INTERVAL_MS
+  if (intervalRaw !== undefined) {
+    minIntervalMs = /^\d+$/.test(intervalRaw) ? Number(intervalRaw) : -1
+    if (minIntervalMs < 0 || minIntervalMs > 3_600_000)
+      return { ok: false, reason: "OPENSEA_MIN_INTERVAL_MS must be 0 to 3600000" }
+  }
   if (startRaw !== undefined && !/^\d+$/.test(startRaw))
     return { ok: false, reason: "NFT_HISTORY_START_BLOCK must be a block number" }
   return {
     ok: true,
     key,
     perHour,
+    minIntervalMs,
     historyStartBlock: startRaw === undefined ? undefined : BigInt(startRaw),
   }
 }
@@ -149,7 +160,7 @@ export async function startNftServices(
   }
   stops.push(startPrune({ sql, log, report, now }))
 
-  const { key, perHour } = settings
+  const { key, perHour, minIntervalMs } = settings
   if (key === undefined) {
     log(
       "warn",
@@ -158,7 +169,7 @@ export async function startNftServices(
     return { stop }
   }
   try {
-    await sql`select indexer.opensea_configure(${perHour})`
+    await sql`select indexer.opensea_configure(${perHour}, ${minIntervalMs})`
     const verdict = await createNftVerdictJob(deps)
     const budget = createBudget(sql)
     const rest = createOpenSeaRest({ key, budget, fetch: deps.fetch, log, report, now })
@@ -206,7 +217,7 @@ export async function startNftServices(
     const slugTimer = setInterval(() => void refreshSlugs(), TRACKED_SLUGS_EVERY_MS)
     slugTimer.unref()
     stops.push(() => clearInterval(slugTimer))
-    log("info", "opensea started", { requestsPerHour: perHour })
+    log("info", "opensea started", { requestsPerHour: perHour, minIntervalMs })
   } catch (err) {
     stop()
     throw err

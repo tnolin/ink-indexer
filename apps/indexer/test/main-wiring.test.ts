@@ -160,6 +160,7 @@ describe("NFT and OpenSea wiring", () => {
       env: {
         OPENSEA_API_KEY: KEY,
         OPENSEA_REQUESTS_PER_HOUR: "120",
+        OPENSEA_MIN_INTERVAL_MS: "0",
         NFT_HISTORY_START_BLOCK: "50",
       },
       sql,
@@ -177,8 +178,8 @@ describe("NFT and OpenSea wiring", () => {
     })
     stop = services.stop
 
-    const [budget] = await sql`select capacity from indexer.opensea_budget`
-    expect(budget?.capacity).toBe(120)
+    const [budget] = await sql`select capacity, min_interval_ms from indexer.opensea_budget`
+    expect(budget).toMatchObject({ capacity: 120, min_interval_ms: 0 })
     await until(() => logs.some((l) => l.msg === "opensea jobs paused: key refused"))
     expect(calls).toHaveLength(1)
     expect(server.sockets.length).toBeGreaterThan(0)
@@ -243,15 +244,26 @@ describe("NFT settings", () => {
       ok: true,
       key: undefined,
       perHour: 500,
+      minIntervalMs: 300,
       historyStartBlock: undefined,
     })
     expect(
       parseNftEnv({
         OPENSEA_API_KEY: ` ${KEY} `,
         OPENSEA_REQUESTS_PER_HOUR: "1200",
+        OPENSEA_MIN_INTERVAL_MS: "250",
         NFT_HISTORY_START_BLOCK: "57000000",
       }),
-    ).toEqual({ ok: true, key: KEY, perHour: 1200, historyStartBlock: 57_000_000n })
+    ).toEqual({
+      ok: true,
+      key: KEY,
+      perHour: 1200,
+      minIntervalMs: 250,
+      historyStartBlock: 57_000_000n,
+    })
+    expect(parseNftEnv({ OPENSEA_MIN_INTERVAL_MS: "0" })).toMatchObject({ minIntervalMs: 0 })
+    for (const v of ["-1", "1.5", "abc", "3600001"])
+      expect(parseNftEnv({ OPENSEA_MIN_INTERVAL_MS: v }).ok, v).toBe(false)
     for (const v of ["0", "-1", "1.5", "abc", "1e3"])
       expect(parseNftEnv({ OPENSEA_REQUESTS_PER_HOUR: v }).ok, v).toBe(false)
     for (const v of ["-1", "0x10", "abc"])

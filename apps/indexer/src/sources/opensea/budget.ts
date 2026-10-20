@@ -15,8 +15,9 @@ export type Budget = {
 
 /**
  * The client side of the budget kept in Postgres, which every process using the same OpenSea key
- * calls (see migration 0006). `take` asks for a token and, if told to wait, sleeps that long and asks
- * again until it gets one or the wait would pass `maxWaitMs`.
+ * calls (see migrations 0006 and 0012: an hourly bucket and a minimum gap between requests).
+ * `take` asks for a token and, if told to wait, sleeps that long and asks again until it gets one
+ * or the wait would pass `maxWaitMs`.
  */
 export function createBudget(sql: Sql): Budget {
   const now = Date.now

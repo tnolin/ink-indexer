@@ -185,6 +185,8 @@ export const METADATA_BURST_WINDOW_MS = 10 * MINUTE_MS
 export const TRACKED_SLUGS_EVERY_MS = 5 * MINUTE_MS
 /** OpenSea requests per hour when `OPENSEA_REQUESTS_PER_HOUR` is empty. */
 export const DEFAULT_OPENSEA_REQUESTS_PER_HOUR = 500
+/** Minimum time between two OpenSea requests when `OPENSEA_MIN_INTERVAL_MS` is empty (about 3.3 a second). */
+export const DEFAULT_OPENSEA_MIN_INTERVAL_MS = 300
 /** The daily prune runs at this UTC time. */
 export const PRUNE_AT_UTC = { hour: 3, minute: 30 } as const
 /** `nft_mints`, `nft_burns` and `nft_seadrop_mints` rows are kept this long (by block). */

@@ -14,13 +14,14 @@ async function setBudget(
   tokens: number,
   capacity = tokens,
   refillPerS = 0,
-  extra: { idleSeconds?: number } = {},
+  extra: { idleSeconds?: number; minIntervalMs?: number } = {},
 ) {
+  // Spacing is off unless given, so a loop of takes is not held back by it.
   await sql`
     update indexer.opensea_budget set
       tokens = ${tokens}, capacity = ${capacity}, refill_per_s = ${refillPerS},
       updated_at = now() - ${extra.idleSeconds ?? 0} * interval '1 second',
-      blocked_until = 'epoch'`
+      blocked_until = 'epoch', min_interval_ms = ${extra.minIntervalMs ?? 0}, last_take_at = 'epoch'`
 }
 const take = async (db: Sql, c: number) =>
   (await db<{ w: number }[]>`select indexer.opensea_take(${c}) as w`)[0]!.w
@@ -35,7 +36,7 @@ beforeEach(async () => {
 it("starts with one row at 500 an hour so a reader can take before the indexer configures it", async () => {
   const rows = await sql`select * from indexer.opensea_budget`
   expect(rows).toHaveLength(1)
-  expect(rows[0]).toMatchObject({ id: 1, tokens: 500, capacity: 500 })
+  expect(rows[0]).toMatchObject({ id: 1, tokens: 500, capacity: 500, min_interval_ms: 300 })
   expect(rows[0]!.refill_per_s).toBeCloseTo(500 / 3600, 9)
   await expect(
     sql`insert into indexer.opensea_budget (id, tokens, capacity, refill_per_s) values (2, 1, 1, 1)`,
@@ -155,6 +156,60 @@ it("configure sets capacity and refill and caps tokens", async () => {
   const [after] = await sql`select tokens, capacity from indexer.opensea_budget`
   expect(after).toMatchObject({ tokens: 100, capacity: 100 })
   await expect(sql`select indexer.opensea_configure(0)`).rejects.toThrow(/per_hour/)
+})
+
+it("opensea_configure(per_hour, min_interval_ms) updates both; one argument keeps 300 ms", async () => {
+  await sql`select indexer.opensea_configure(1200, 125)`
+  const [row] =
+    await sql`select capacity, refill_per_s, min_interval_ms from indexer.opensea_budget`
+  expect(row).toMatchObject({ capacity: 1200, min_interval_ms: 125 })
+  expect(row!.refill_per_s).toBeCloseTo(1200 / 3600, 9)
+  await sql`select indexer.opensea_configure(600)`
+  const [after] = await sql`select capacity, min_interval_ms from indexer.opensea_budget`
+  expect(after).toMatchObject({ capacity: 600, min_interval_ms: 300 })
+  await sql`select indexer.opensea_configure(600, 0)`
+  await expect(sql`select indexer.opensea_configure(600, -1)`).rejects.toThrow(/min_interval_ms/)
+})
+
+it("20 takes in a burst from two connections succeed no faster than the interval allows", async () => {
+  const interval = 50
+  await setBudget(100, 100, 0, { minIntervalMs: interval })
+  const times: number[] = []
+  /** Takes until it succeeds, sleeping each wait it is told. */
+  const takeOne = async (db: Sql) => {
+    for (;;) {
+      const w = await take(db, 0)
+      if (w === 0) return void times.push(performance.now())
+      expect(w).toBeGreaterThanOrEqual(1)
+      expect(w).toBeLessThanOrEqual(interval)
+      await new Promise((r) => setTimeout(r, w))
+    }
+  }
+  await Promise.all(Array.from({ length: 20 }, (_, i) => takeOne(i % 2 === 0 ? sql : other)))
+  expect(times).toHaveLength(20)
+  times.sort((a, b) => a - b)
+  // 19 gaps of at least the interval; the slack covers when each client saw its answer.
+  expect(times.at(-1)! - times[0]!).toBeGreaterThanOrEqual(19 * interval - 30)
+  expect(await tokens()).toBeCloseTo(80, 3)
+})
+
+it("a refused take leaves the spacing alone, and a class at its floor waits for the refill", async () => {
+  await setBudget(10, 10, 0, { minIntervalMs: 20 })
+  let n = 0
+  for (;;) {
+    const w = await take(sql, 4)
+    if (w === 0) n++
+    else if (w <= 50) await new Promise((r) => setTimeout(r, w))
+    else break
+  }
+  // Class 4 keeps half the bucket; with nothing refilling it is told to come back in an hour.
+  expect(n).toBe(5)
+  expect(await take(sql, 4)).toBe(3_600_000)
+  expect(await tokens()).toBeCloseTo(5, 6)
+  // Class 0 may still drain the rest, spaced.
+  await new Promise((r) => setTimeout(r, 25))
+  expect(await take(sql, 0)).toBe(0)
+  expect(await take(sql, 0)).toBeGreaterThan(0)
 })
 
 it("a role with only EXECUTE can take and block", async () => {
