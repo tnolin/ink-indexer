@@ -6,7 +6,9 @@ import {
   BLOCK_S,
   DEFAULT_OPENSEA_MIN_INTERVAL_MS,
   DEFAULT_OPENSEA_REQUESTS_PER_HOUR,
+  SCHEDULER_TICK_MS,
   TRACKED_SLUGS_EVERY_MS,
+  TRANSIENT_RETRY_MS,
 } from "./sources/nft/policy"
 import { startPrune } from "./sources/nft/prune"
 import { createVerdictJob } from "./sources/nft/verdict"
@@ -167,6 +169,35 @@ export async function createNftVerdictJob(deps: VerdictJobDeps): Promise<Job> {
 }
 
 /**
+ * The verdict job, built on the first tick that can date the history start. Until then it has
+ * nothing due; a failed read is logged and tried again after `TRANSIENT_RETRY_MS`, so a node that is
+ * down at startup does not stop the chain loop or the other jobs.
+ */
+function startVerdictJob(deps: VerdictJobDeps): Job {
+  const now = deps.now ?? Date.now
+  let job: Job | undefined
+  let retryAt = 0
+  return {
+    name: "nft-verdict",
+    everyMs: SCHEDULER_TICK_MS,
+    async due(sql, at) {
+      if (!job) {
+        if (now() < retryAt) return []
+        try {
+          job = await createNftVerdictJob(deps)
+        } catch (err) {
+          retryAt = now() + TRANSIENT_RETRY_MS
+          deps.log("warn", "nft verdict job not started", { error: String(err) })
+          return []
+        }
+      }
+      return job.due(sql, at)
+    },
+    run: (contract) => job!.run(contract),
+  }
+}
+
+/**
  * Starts what runs beside the chain loop under `start`: the daily NFT prune and, with an OpenSea
  * key, the request budget, the scheduler (discovery, metadata, drops, scheduled stage starts,
  * verdict, traits, tiers and stats) and the Stream with its tracked collections. Without a key
@@ -201,10 +232,7 @@ export async function startNftServices(
   }
   try {
     await sql`select indexer.opensea_configure(${perHour}, ${minIntervalMs})`
-    const verdict = await createNftVerdictJob({
-      ...deps,
-      historyStartBlock: settings.historyStartBlock,
-    })
+    const verdict = startVerdictJob({ ...deps, historyStartBlock: settings.historyStartBlock })
     const budget = createBudget(sql)
     const rest = createOpenSeaRest({ key, budget, fetch: deps.fetch, log, report, now })
     const snapshots = createSnapshots({ sql, store, now })

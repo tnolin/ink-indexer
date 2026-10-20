@@ -207,6 +207,50 @@ describe("NFT and OpenSea wiring", () => {
     for (const e of reports) expect(String(e)).not.toContain(KEY)
   })
 
+  it("a history start block that cannot be read keeps the loop and the other jobs running; the verdict job comes up once it can", async () => {
+    const { chain, indexer } = await chainLoop()
+    await seedCollections()
+    await sql`update indexer.nft_collections set first_mint_block = 90 where contract = ${KNOWN}`
+    const calls: string[] = []
+    const server = new FakeStream()
+    const getBlock = chain.getBlock.bind(chain)
+    let readable = false
+    chain.getBlock = async (n) => {
+      // Only the first stored mint's block, which dates the history start; the loop never reads it.
+      if (!readable && n === 90n) throw new Error("rpc down")
+      return getBlock(n)
+    }
+    const services = await startNftServices({
+      env: { OPENSEA_API_KEY: KEY },
+      sql,
+      store,
+      chain,
+      log,
+      report,
+      fetch: async (url) => {
+        calls.push(String(url))
+        return new Response(null, { status: 404 })
+      },
+      socket: server.factory,
+      now,
+      tickMs: 10,
+    })
+    stop = services.stop
+    await until(() => calls.length > 0)
+    await until(() =>
+      logs.some((l) => l.level === "warn" && l.msg === "nft verdict job not started"),
+    )
+    await indexer.trigger()
+    chain.head = 160n
+    await indexer.trigger()
+    expect(await count("nft_mints")).toBe(2)
+    expect(logs.some((l) => l.msg === "nft history start")).toBe(false)
+
+    readable = true
+    clock += HOUR
+    await until(() => logs.some((l) => l.msg === "nft history start"))
+  })
+
   it("stop ends the stream, the scheduler and the timers", async () => {
     const { chain } = await chainLoop()
     await seedCollections()
