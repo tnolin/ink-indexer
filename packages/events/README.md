@@ -63,9 +63,155 @@ Every event has `v` (schema version, currently `1`), `type`, `chainId` (57073), 
 }
 ```
 
+## NFT events
+
+`nft.*` events share a base instead of the `launchpad`, `token` and `launchId` fields: `v`, `type`, `chainId`, `contract` (the collection, also the row's `entity`), `source`, `txHash`, `logIndex`, `blockNumber` and `blockTimestamp`.
+
+- `source: "chain"` events have a real `txHash` and `logIndex`, and `blockTimestamp` is the block time.
+- `source: "opensea"` events have a synthetic `txHash` (`os:list:<order hash>`, `os:col:<contract>:<n>`, `os:drop:<contract>:<n>`, `os:stats:<contract>:<n>`), `logIndex` 0, and `blockTimestamp` is the receipt time. `blockNumber` is the chain's latest ingested block when the event was received. After a reorg the row, and `blockNumber` with it, moves to the fork block rather than being deleted.
+- Wei amounts are decimal strings. Fields that OpenSea or the chain may not give are `null`.
+
+### `nft.collection`
+
+A snapshot, written at discovery and whenever a field changes.
+
+```json
+{
+  "v": 1, "type": "nft.collection", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
+  "txHash": "os:col:0x00000000000000000000000000000000000000a1:3", "logIndex": 0,
+  "blockNumber": "58966378", "blockTimestamp": 1790000000,
+  "slug": "example-collection", "name": "Example", "imageUrl": "https://img/x.png",
+  "links": { "twitter": "example", "website": "https://example.xyz", "discord": null },
+  "standard": "erc721", "kind": "drop", "verdict": "real",
+  "gates": { "page": "pass", "structure": "pass", "traits": "pending", "farm": "pass", "farmShareBps": 410 },
+  "manual": false, "safelist": "not_requested", "maxSupply": "2222", "seadrop": true,
+  "openseaUrl": "https://opensea.io/collection/example-collection",
+  "rarityCalculatedAt": 1790000000, "maxRank": 2222,
+  "launchpad": null, "launchToken": null,
+  "creator": { "address": "0x00000000000000000000000000000000000000c1", "username": "maker", "verified": false }
+}
+```
+
+- `kind` is `drop` (the collection has a mint phase), `continuous` (NFTs keep minting and burning with no stages, as in Chimera collections) or `legacy` (the mint finished before the indexer's NFT history, so there are no mint events).
+- `verdict` is `real` when the collection passes the quality checks, `pending` while they are undecided, and `junk` when one has failed. `gates` shows each check: `page`, `structure`, `traits` and `farm` are `pass`, `fail` or `pending` (`structure` and `farm` are `n/a` where they do not apply), and `farmShareBps` is the share of minters that are farm wallets. `manual` is true when the verdict or kind was set by hand.
+- `creator` is `null` while unknown, and absent on snapshots written before the field existed, so test with `== null`.
+
+### `nft.drop`
+
+```json
+{
+  "v": 1, "type": "nft.drop", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
+  "txHash": "os:drop:0x00000000000000000000000000000000000000a1:1", "logIndex": 0,
+  "blockNumber": "58966378", "blockTimestamp": 1790000000,
+  "slug": "example-collection", "maxSupply": "2222",
+  "stages": [
+    { "type": "signed_presale", "label": "GTD", "priceWei": "0", "startTime": 1790003600, "endTime": 1790014400, "maxPerWallet": 2, "allowlistCount": 588 },
+    { "type": "public_sale", "label": "Public", "priceWei": "500000000000000", "startTime": 1790025200, "endTime": null, "maxPerWallet": null, "allowlistCount": null }
+  ]
+}
+```
+
+`stages` is ordered by start time. Times are unix seconds.
+
+### `nft.mint`
+
+A mint milestone: `stage_start`, `progress` or `sold_out`.
+
+```json
+{
+  "v": 1, "type": "nft.mint", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "chain",
+  "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "logIndex": 7,
+  "blockNumber": "58966378", "blockTimestamp": 1790000000,
+  "kind": "progress", "stageIndex": 0, "stageLabel": "Public", "stagePriceWei": "500000000000000",
+  "markBps": 5000, "minted": "1111", "maxSupply": "2222",
+  "mintStartTs": 1789995000, "stageStartTs": 1789995000, "minters": 612
+}
+```
+
+`markBps` is 2500, 5000 or 7500 on `progress` and `null` otherwise. `minters` counts distinct recipients in the indexer's mint history, which spans at most 8 days. A `sold_out` event also has `stageCounts`: `{ stageIndex, label, minted }` per stage. A `stage_start` can come from the schedule before any mint (its `txHash` is then `nft:stage:<contract>:<index>`).
+
+### `nft.listing`
+
+A listing that passed the indexer's filter: public, paid in ETH or WETH, open for at least an hour, and priced below the last listing written for that item.
+
+```json
+{
+  "v": 1, "type": "nft.listing", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
+  "txHash": "os:list:0x1111111111111111111111111111111111111111111111111111111111111111", "logIndex": 0,
+  "blockNumber": "58966378", "blockTimestamp": 1790000000,
+  "tokenId": "4405", "priceWei": "44000000000000000", "currency": "ETH",
+  "maker": "0x00000000000000000000000000000000000000b1", "expiresAt": 1790021600,
+  "orderHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "itemName": "Example #4405", "imageUrl": "https://img/4405.png",
+  "floorWei": "42000000000000000", "floorAt": 1789998000,
+  "rank": 41, "maxRank": 4440
+}
+```
+
+`priceWei` is per unit. `rank` is OpenSea's rarity rank. It is fetched only for listings priced at or under the floor plus 10%, so it is `null` for the rest, and `null` where OpenSea has no rank.
+
+### `nft.sale`
+
+One event per NFT item in a Seaport fill.
+
+```json
+{
+  "v": 1, "type": "nft.sale", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "chain",
+  "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "logIndex": 12,
+  "blockNumber": "58966378", "blockTimestamp": 1790000000,
+  "tokenId": "4405", "priceWei": "44000000000000000", "currency": "ETH",
+  "buyer": "0x00000000000000000000000000000000000000b2", "seller": "0x00000000000000000000000000000000000000b1",
+  "orderHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "itemName": "Example #4405", "imageUrl": "https://img/4405.png",
+  "rank": 41, "maxRank": 4440, "floorWei": "42000000000000000"
+}
+```
+
+- The price is the ETH or WETH paid on the side opposite the NFTs, split evenly across the items, and per unit for ERC-1155.
+- When a buyer's offer is filled against the seller's order in one transaction, the NFT is one sale. The buyer is the offerer of the order that has the NFT in its consideration, the seller is the offerer of the order that has it in its offer, and the price is the buyer order's payment.
+- `floorWei` is the latest known floor and can be `null`.
+
+### `nft.stats`
+
+```json
+{
+  "v": 1, "type": "nft.stats", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
+  "txHash": "os:stats:0x00000000000000000000000000000000000000a1:18", "logIndex": 0,
+  "blockNumber": "58966378", "blockTimestamp": 1790000000,
+  "floorWei": "42000000000000000", "floor24hAgoWei": "40000000000000000",
+  "owners": 731, "volume24hWei": "3500000000000000000", "sales24h": 64,
+  "totalSupply": "2222", "maxSupply": "2222", "listedCount": 120, "listedCapped": false
+}
+```
+
+`floor24hAgoWei` comes from the indexer's own stats history and is `null` under 24 hours of history. `listedCount` is `null` when not counted; it stops at 300 with `listedCapped` true.
+
+### `nft.launch`
+
+A Chimera campaign was created. `contract` is the collection.
+
+```json
+{
+  "v": 1, "type": "nft.launch", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "chain",
+  "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "logIndex": 4,
+  "blockNumber": "58966378", "blockTimestamp": 1790000000,
+  "launchpad": "chimera", "campaignId": "5",
+  "token": "0x00000000000000000000000000000000000000d1", "tokenSymbol": "EXA", "tokenName": "Example",
+  "creator": "0x00000000000000000000000000000000000000c1",
+  "poolId": "0x2222222222222222222222222222222222222222222222222222222222222222"
+}
+```
+
 ## Identity
 
-`(txHash, logIndex)` is the stable identity of an event. The table's `id` can change after a reorg rollback, because rolled-back events are deleted and the new fork's events are inserted with new ids, so consumers dedupe on `(txHash, logIndex)`.
+`(txHash, logIndex)` is the stable identity of a launchpad event. One log can yield several NFT events, so the table is unique on `(tx_hash, log_index, sub)`: a sale is identified by its `txHash`, `logIndex`, `contract` and `tokenId`, a mint milestone by its `contract`, `kind` and `stageIndex` or `markBps`, and an OpenSea event by its synthetic `txHash`. The table's `id` can change after a reorg rollback, because rolled-back events are deleted and the new fork's events are inserted with new ids, so consumers dedupe on `(txHash, logIndex)`.
 
 ## Confirmation
 

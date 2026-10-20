@@ -1,7 +1,9 @@
 # 0006. OpenSea API v2 and Stream API for NFTs
 
 Date: 2026-10-02
-Status: Accepted
+Status: Accepted. Amended by ADR 0017.
+
+Amended by ADR 0017: Blockscout is not used. Chain data comes from Ink RPC logs, and the Stream feeds listings.
 
 ## Context
 

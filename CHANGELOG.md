@@ -9,9 +9,18 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - pnpm monorepo with `sdk`, `events`, `db` and `indexer` packages, CI on Node 22 and 24, and gitleaks secret scanning.
 - SDK: InkyPump V2 event decoders for native and xStocks hooks, curve math, event builders and multicall readers.
 - Events schema v1: `launchpad.launch`, `launchpad.trade` and `launchpad.bond`.
-- Events: NFT types `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`, with `NftEvent` and `LaunchpadEvent` unions. Schema version stays 1 and existing types are unchanged.
+- Events (tag `events-v2`): NFT types `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`, with `NftEvent` and `LaunchpadEvent` unions. Schema version stays 1 and existing types are unchanged, so readers of `events-v1` that ignore unknown types keep working.
+- Events table (migration 0003): a `sub` column and a unique key on `(tx_hash, log_index, sub)`, so one log can yield several events, and an `events_type_entity_id` index on `(type, entity, id)`.
 - Trade event `soldBps`: tokens sold over sale supply in basis points, capped at 10,000, beside the curve-based `progressBpsBefore` and `progressBpsAfter`.
 - Indexer: backfill and live following of InkyPump V2 on Ink, getLogs routing across RPC providers, confirmation tracking and reorg rollback.
+- SDK: decoders for ERC-721 and ERC-1155 mints and burns, SeaDrop logs, Seaport sales and Chimera campaigns, SeaDrop mint-stat reads, and OpenSea REST and Stream parsers.
+- Indexer: a `Source` interface shared by every protocol (one cursor, one batch transaction, one rollback), with InkyPump and NFTs as the two sources. See ADR 0016.
+- Indexer: NFT chain source for mints, burns, SeaDrop, Seaport sales (matched orders merged into one sale) and Chimera launches, with mint milestones and scheduled stage starts.
+- Indexer: OpenSea source with REST jobs (discovery, metadata, drops, stats, listed counts, traits samples, item ranks, creator accounts), Stream shards of 50 collections per connection with a firehose fallback, and collection quality checks. See ADR 0017.
+- Indexer: OpenSea-derived events with synthetic ids, stamped with the chain cursor's block and moved, not deleted, on a reorg, under an in-process mutex and a Postgres advisory lock. See ADR 0018.
+- DB: a request budget shared by every process using one OpenSea key (`opensea_take`, `opensea_block`, `opensea_configure`). See ADR 0019.
+- Indexer: `OPENSEA_API_KEY`, `OPENSEA_REQUESTS_PER_HOUR`, `OPENSEA_MIN_INTERVAL_MS` and `NFT_HISTORY_START_BLOCK` settings, `backfill --sources` (`inkypump`, `nft-mints`, `nft-sales`, `nft-launches`) and `pnpm nft:mark`.
+- Indexer: a daily prune of NFT rows (mints, burns and SeaDrop mints after 8 days, sales after 90 days).
 - Optional Sentry reporting for fatal and stall exits (`SENTRY_DSN`, `SENTRY_RELEASE`).
 - Migration 0002: `events_launch_creator` and `events_type_id` indexes for readers of `indexer.events`.
 

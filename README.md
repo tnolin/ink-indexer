@@ -3,9 +3,9 @@
 [![CI](https://github.com/tnolin/ink-indexer/actions/workflows/ci.yml/badge.svg)](https://github.com/tnolin/ink-indexer/actions/workflows/ci.yml)
 [![License: MIT / AGPL-3.0](https://img.shields.io/badge/license-MIT%20%2F%20AGPL--3.0-blue)](LICENSE)
 
-Open SDK and indexer for Ink launchpads, starting with InkyPump V2.
+Open SDK and indexer for Ink launchpads and NFTs, starting with InkyPump V2.
 
-ink-indexer watches the Ink blockchain for new memecoin launches, trades and bonds, and turns them into clean, typed events that bots, dashboards and AI agents can read. The SDK decodes the raw chain data; the indexer stores it in Postgres.
+ink-indexer watches the Ink blockchain for new memecoin launches, trades and bonds, and for NFT mints, sales, listings and collection stats, and turns them into clean, typed events that bots, dashboards and AI agents can read. The SDK decodes the raw chain data; the indexer stores it in Postgres.
 
 ## Documentation
 
@@ -26,10 +26,10 @@ ink-indexer watches the Ink blockchain for new memecoin launches, trades and bon
 
 | Package | License | What it does |
 | --- | --- | --- |
-| [`packages/sdk`](packages/sdk) | MIT | Event decoders, curve math and event builders for InkyPump V2 |
+| [`packages/sdk`](packages/sdk) | MIT | Event decoders, curve math and event builders for InkyPump V2, and decoders for NFT mints, SeaDrop, Seaport and Chimera |
 | [`packages/events`](packages/events) | MIT | Typed, versioned event schema |
 | [`packages/db`](packages/db) | AGPL-3.0 | Postgres schema and migrations |
-| [`apps/indexer`](apps/indexer) | AGPL-3.0 | Follows Ink and writes normalized events to Postgres |
+| [`apps/indexer`](apps/indexer) | AGPL-3.0 | Follows Ink, reads OpenSea, and writes normalized events to Postgres |
 
 ## Usage
 
@@ -56,6 +56,27 @@ order by id limit 500;
 
 Event shapes are documented in [`packages/events`](packages/events/README.md).
 
+## NFTs
+
+Ink NFT events are `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`. Mints, burns, SeaDrop drops, Seaport sales and Chimera launches come from chain logs. Collection pages, drop schedules, floors, listings, item ranks and creator accounts come from OpenSea. Each `nft.collection` event carries the collection's verdict: `real` for collections that pass quality checks (a complete OpenSea page, a sound mint structure, traits, and minters who are not mostly repeat farm wallets), `pending` while checks are undecided. Every collection's events stay readable. Read them like any other event:
+
+```sql
+select id, payload from indexer.events
+where confirmed and type like 'nft.%' and id > $1
+order by id limit 500;
+```
+
+Environment variables, all optional. An invalid value is logged and its default is used.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `OPENSEA_API_KEY` | empty | OpenSea API key. Empty runs the chain sources only, after one warning |
+| `OPENSEA_REQUESTS_PER_HOUR` | 500 | The key's hourly request budget, shared by every process using the key |
+| `OPENSEA_MIN_INTERVAL_MS` | 300 | The shortest gap between two requests on the key |
+| `NFT_HISTORY_START_BLOCK` | the first stored mint | The block the mint backfill started from. A collection that minted earlier is `legacy` and has no mint events |
+
+Backfill by source with `pnpm backfill --from <block> --sources nft-mints,nft-sales,nft-launches` (`inkypump` is the fourth name; the default is every source). `pnpm nft:mark <contract> <verdict-or-kind>` sets a collection's verdict or kind by hand. Details are in the [indexer README](apps/indexer/README.md) and ADRs 0016 to 0019.
+
 ## How it works
 
 ```text
@@ -70,7 +91,7 @@ Event shapes are documented in [`packages/events`](packages/events/README.md).
      Postgres `indexer` schema: hooks · tokens · curve_state · trades · events · cursors · recent_blocks
 ```
 
-Each new block triggers a catch-up from the last saved block, so backfill, live indexing and reconnects follow one path. Events are written unconfirmed and confirmed one block later; a reorg rolls back to the last matching block and re-ingests. Decisions are recorded in [`docs/adr`](docs/adr).
+Each new block triggers a catch-up from the last saved block, so backfill, live indexing and reconnects follow one path. Every source (InkyPump, NFTs) reads the same block range and shares one cursor and one rollback. Events are written unconfirmed and confirmed one block later; a reorg rolls back to the last matching block and re-ingests. Decisions are recorded in [`docs/adr`](docs/adr).
 
 ## Contributing, security and license
 

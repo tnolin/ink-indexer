@@ -32,5 +32,6 @@ xStocks hooks are discovered on-chain. For a new native hook (the indexer logs "
 
 1. Decoders and pure event builders go in `packages/sdk/src/<protocol>/`, tested against captured mainnet fixtures.
 2. New event types go in `packages/events` (a new schema version if an existing shape changes).
-3. Ingestion goes in `apps/indexer/src/sources/<protocol>/` as a `Source` (`apps/indexer/src/sources/source.ts`), registered in `apps/indexer/src/main.ts`. Every source shares one cursor, one batch transaction and one rollback. New event types get a case in `entityOf`.
-4. Record the decision in a new ADR.
+3. Ingestion goes in `apps/indexer/src/sources/<protocol>/` as a `Source` (the interface in `apps/indexer/src/sources/source.ts`: `filters`, `process`, `write`, `prepareRollback`, `rollback`, `reload`), registered in `apps/indexer/src/main.ts`. Every source shares one cursor, one batch transaction and one rollback. New event types get a case in `entityOf`. If one log can yield several events, give each a distinct `sub`. If a backfill should pick the source's filters, add a name to `BACKFILL_SOURCES` in `source.ts`.
+4. Events with no transaction (marketplace data) go through `store.writeOffchain` (ADR 0018), never a direct insert.
+5. Record the decision in a new ADR.
