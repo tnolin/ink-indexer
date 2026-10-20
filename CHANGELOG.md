@@ -9,7 +9,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - pnpm monorepo with `sdk`, `events`, `db` and `indexer` packages, CI on Node 22 and 24, and gitleaks secret scanning.
 - SDK: InkyPump V2 event decoders for native and xStocks hooks, curve math, event builders and multicall readers.
 - Events schema v1: `launchpad.launch`, `launchpad.trade` and `launchpad.bond`.
-- Events (tag `events-v2`): NFT types `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`, with `NftEvent` and `LaunchpadEvent` unions. Schema version stays 1 and existing types are unchanged, so readers of `events-v1` that ignore unknown types keep working.
+- Events: NFT types `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`, with `NftEvent` and `LaunchpadEvent` unions. Schema version stays 1 and existing types are unchanged, so readers of `events-v1` that ignore unknown types keep working.
 - Events table (migration 0003): a `sub` column and a unique key on `(tx_hash, log_index, sub)`, so one log can yield several events, and an `events_type_entity_id` index on `(type, entity, id)`.
 - Trade event `soldBps`: tokens sold over sale supply in basis points, capped at 10,000, beside the curve-based `progressBpsBefore` and `progressBpsAfter`.
 - Indexer: backfill and live following of InkyPump V2 on Ink, getLogs routing across RPC providers, confirmation tracking and reorg rollback.
@@ -30,6 +30,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Changed
 
+- Collection verdict `junk` is now `filtered`. A development database that applied migrations 0007 or 0009 before this rename must be reset (for the `pnpm db:dev` database, delete `.data/postgres`), because their check constraints still allow only `junk`.
 - Sentry events drop HTTP, fetch and console breadcrumbs and redact the configured RPC and database URLs.
 - Indexer: a block the endpoint does not serve yet is retried on the next head instead of stopping the process or triggering a rollback.
 - Indexer: rate-limited reads are retried with backoff.
