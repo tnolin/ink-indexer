@@ -37,7 +37,7 @@ All sources are on Ink mainnet (chain ID 57073).
  ┌───────────────────────────────────────┐
  │  Postgres (indexer schema)            │
  │  tokens · curve_state · trades ·      │
- │  nft_* · wallets ·                    │
+ │  nft_* ·                              │
  │  events  ◄── normalized, typed        │
  └───────────────────────────────────────┘
           │                   │
@@ -72,7 +72,7 @@ NFT events share a `contract` (also the row's `entity`) and a `source` of `chain
 | --- | --- | --- |
 | `nft.collection` | A collection is discovered, and whenever its page, kind, quality-check result or creator changes | chain and OpenSea |
 | `nft.drop` | A drop schedule is first read or changes | OpenSea |
-| `nft.mint` | A stage starts, a mint passes 25%, 50% or 75% of the max supply, and at sell-out | chain, with scheduled stage starts from the drop schedule |
+| `nft.mint` | A stage starts, a mint passes 25%, 50% or 75% of the max supply, and at sell-out | chain, with stage starts from the drop schedule and, for a verified collection with no SeaDrop stages, after 10 mints (`nft:start:<contract>`) |
 | `nft.listing` | A Stream listing passes the listing filter | OpenSea |
 | `nft.sale` | A Seaport fill | chain |
 | `nft.stats` | Floor, owners, volume, sales or listed count changes | OpenSea |
@@ -97,6 +97,7 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | `nft_mints`, `nft_burns`, `nft_seadrop_mints` | tx_hash, log_index, contract, token_id, recipient, holder or minter, qty, block. Kept 8 days |
 | `nft_sales` | tx_hash, log_index, contract, token_id, qty, price_wei, currency, buyer, seller, order_hash, block. Kept 90 days |
 | `nft_drops`, `nft_stages` | The drop schedule from OpenSea, and each stage's first mint |
+| `nft_seadrop_config`, `nft_items_seen` | SeaDrop configuration logs, and the item names and images the listings saw |
 | `nft_launches` | Chimera campaigns: collection, token, creator, pool, block |
 | `nft_stats`, `nft_listing_state`, `nft_ranks`, `nft_accounts` | Floor and stats history, the last listed price per item, cached item ranks, cached creator accounts |
 | `nft_overrides` | Manual verdicts and kinds set with `pnpm nft:mark` |

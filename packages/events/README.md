@@ -211,7 +211,17 @@ A Chimera campaign was created. `contract` is the collection.
 
 ## Identity
 
-`(txHash, logIndex)` is the stable identity of a launchpad event. One log can yield several NFT events, so the table is unique on `(tx_hash, log_index, sub)`: a sale is identified by its `txHash`, `logIndex`, `contract` and `tokenId`, a mint milestone by its `contract`, `kind` and `stageIndex` or `markBps`, and an OpenSea event by its synthetic `txHash`. The table's `id` can change after a reorg rollback, because rolled-back events are deleted and the new fork's events are inserted with new ids, so consumers dedupe on `(txHash, logIndex)`.
+`(txHash, logIndex)` is the stable identity of a launchpad event. One log can yield several NFT events (a sweep sells many items in one log, and one SeaDrop log can cross two mint milestones), so an NFT event's identity is the row's `(tx_hash, log_index, sub)`, and deduping NFT events on `(txHash, logIndex)` would drop real events. A consumer that reads only payloads can use:
+
+| Event | Identity from the payload |
+| --- | --- |
+| `launchpad.*` | `txHash`, `logIndex` |
+| `nft.sale` | `txHash`, `logIndex`, `contract`, `tokenId` |
+| `nft.mint` | `txHash`, `logIndex`, `kind`, and `markBps` (for `progress`) or `stageIndex` (for `stage_start`) |
+| `nft.launch` | `txHash`, `logIndex` |
+| OpenSea-derived events (`nft.collection`, `nft.drop`, `nft.listing`, `nft.stats`, and stage starts from the schedule) | `txHash`, which is a unique synthetic id |
+
+The table's `id` can change after a reorg rollback, because rolled-back chain events are deleted and the new fork's events are inserted with new ids, so dedupe on these identities and not on `id`.
 
 ## Confirmation
 

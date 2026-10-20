@@ -116,7 +116,7 @@ export type ListingsDeps = {
 /**
  * Stream events to `nft.listing` events and listing state.
  *
- * An `item_listed` goes through the filter (spec "Listing filter"): the payload checks, then the
+ * An `item_listed` goes through the filter (ADR 0017): the payload checks, then the
  * item's state (only a strictly lower price than the last one written), then the floor (refreshed
  * first when older than 2 hours), then the rank (fetched only for a price at or under floor × 11/10;
  * a cached rank is attached whatever the price). The floor refresh and the rank fetch each wait up

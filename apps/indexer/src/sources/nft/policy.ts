@@ -63,7 +63,7 @@ export const STAGE_START_WINDOW_MS = 10 * MINUTE_MS
 /** A scheduled stage with no known on-chain index gets this plus its place in the drop's order. */
 export const SYNTHETIC_STAGE_INDEX = 100
 
-// Collection kinds and quality gates (spec "Collection verdicts").
+// Collection kinds and quality gates (ADR 0017).
 
 /** The burn-ratio fallback for `continuous`: at least this many mints in the kind window... */
 export const CONTINUOUS_MIN_MINTS = 100
@@ -97,7 +97,7 @@ export const MINT_LIVE_VERIFIED_MINTS = 10
 /** The verdict is looked at again this often while the collection mints. */
 export const VERDICT_RECHECK_S = 3600
 
-// Collection stats (spec "Stats tiers").
+// Collection stats tiers (ADR 0017).
 
 /** How often the stats tiers are assigned again. */
 export const TIER_EVERY_MS = 10 * MINUTE_MS
@@ -133,7 +133,7 @@ export const LISTED_NOT_FOUND_GIVE_UP = 3
 /** The floor change in `nft.stats` is measured against the newest row at or before this long ago. */
 export const FLOOR_CHANGE_WINDOW_MS = DAY_MS
 
-// The OpenSea Stream (spec "Stream shards").
+// The OpenSea Stream shards (ADR 0017).
 
 /** Collection topics one Stream connection accepts (measured: exactly 50). */
 export const STREAM_PER_CONN = 50
@@ -162,7 +162,7 @@ export const STREAM_PROBE_TIMEOUT_MS = 30_000
 /** How often the firehose logs its messages and bytes per minute. */
 export const FIREHOSE_METER_EVERY_MS = 10 * MINUTE_MS
 
-// Listings and ranks (spec "Listing filter").
+// Listings and ranks (ADR 0017).
 
 /** A listing must live at least this long (its expiry minus its listing time). */
 export const LISTING_MIN_LIFE_S = 3600

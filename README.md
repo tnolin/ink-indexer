@@ -52,7 +52,7 @@ where confirmed and id > $1
 order by id limit 500;
 ```
 
-`confirmed` is set one block after an event's block, in the same commit that writes newer confirmed events, so this query never skips an older row. It does not mean final: a reorg rollback deletes every row above the fork point, up to 128 blocks back, confirmed rows included, and re-inserts the new fork's events with new ids. `(txHash, logIndex)` in each payload is the stable event identity, so dedupe on it, and treat events within the last 128 blocks of the chain head as revisable. Drop `confirmed` to also read events from the newest block.
+`confirmed` is set one block after an event's block, in the same commit that writes newer confirmed events, so this query never skips an older row. It does not mean final: a reorg rollback deletes every row above the fork point, up to 128 blocks back, confirmed rows included, and re-inserts the new fork's events with new ids. `(txHash, logIndex)` in a launchpad payload is the stable event identity, so dedupe launchpad events on it. One log can yield several NFT events, so an NFT event's identity is the row's `(tx_hash, log_index, sub)`; from the payload alone, use `txHash`, `logIndex`, `contract` and `tokenId` for `nft.sale`, and `txHash`, `logIndex`, `kind` and `markBps` or `stageIndex` for `nft.mint`. Events from OpenSea have a unique synthetic `txHash`. Treat events within the last 128 blocks of the chain head as revisable. Drop `confirmed` to also read events from the newest block.
 
 Event shapes are documented in [`packages/events`](packages/events/README.md).
 
@@ -75,7 +75,7 @@ Environment variables, all optional. An invalid value is logged and its default 
 | `OPENSEA_MIN_INTERVAL_MS` | 300 | The shortest gap between two requests on the key |
 | `NFT_HISTORY_START_BLOCK` | the first stored mint | The block the mint backfill started from. A collection that minted earlier is `legacy` and has no mint events |
 
-Backfill by source with `pnpm backfill --from <block> --sources nft-mints,nft-sales,nft-launches` (`inkypump` is the fourth name; the default is every source). `pnpm nft:mark <contract> <verdict-or-kind>` sets a collection's verdict or kind by hand. Details are in the [indexer README](apps/indexer/README.md) and ADRs 0016 to 0019.
+Backfill by source with `pnpm backfill --from <block> --sources nft-mints,nft-sales,nft-launches` (the names are `inkypump`, `nft-mints`, `nft-sales` and `nft-launches`; the default is every source). `pnpm nft:mark <contract> <value>` sets a collection's verdict or kind by hand (the values are listed in the indexer README). Details are in the [indexer README](apps/indexer/README.md) and ADRs [0016](docs/adr/0016-nft-chain-sources.md), [0017](docs/adr/0017-opensea-source.md), [0018](docs/adr/0018-off-chain-events.md) and [0019](docs/adr/0019-opensea-shared-budget.md).
 
 ## How it works
 

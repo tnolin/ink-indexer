@@ -7,7 +7,7 @@ Status: Accepted
 
 The indexer follows InkyPump V2. NFTs on Ink need five more kinds of chain data: mints, burns, SeaDrop drop logs, Seaport sales and Chimera launches. One block range can yield several events from a single log (a sweep sells many items in one order; one SeaDrop mint can cross two milestones), and every source should share the reorg handling of ADR 0008.
 
-Measured on Ink mainnet between 2026-10-17 and 2026-10-20:
+Measured on Ink mainnet on 2026-10-17 and 2026-10-18, over 5 days of blocks:
 - About 232,000 ERC-721 mints a day across about 480 contracts, 300 of them minting through SeaDrop v1.
 - About 16% of Seaport sale transactions fill a buyer's offer against the seller's order, so the same NFT appears in two `OrderFulfilled` logs.
 - ERC-20 transfers use the same event signature as ERC-721 transfers and differ only in having 3 topics.
@@ -48,6 +48,6 @@ Transfers with 3 topics are ERC-20 and are dropped; only 4-topic logs are NFTs. 
 
 - A new protocol is a new `Source`; the loop, cursor and rollback do not change.
 - Readers on the first event schema keep working: they ignore types they do not know, and `(tx_hash, log_index, sub)` still holds `(tx_hash, log_index)` unique for launchpad events.
-- Address-less mint and burn filters fetch every ERC-721 and ERC-1155 mint on Ink, which is about 232,000 logs a day.
+- The mint and burn filters have no contract address, so they fetch every ERC-721 and ERC-1155 mint and burn on Ink. Mints alone were about 232,000 ERC-721 logs a day when measured.
 - The code-presence fallback calls a contract that was deployed before the history but first minted after it `legacy`. Comparing stored mints with token ids would tell the two apart.
 - The deploy migration rebuilds the events unique constraint and adds an index over the whole events table. It takes a lock on `indexer.events` for its duration.

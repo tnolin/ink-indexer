@@ -1,6 +1,6 @@
 -- Collection verdicts: manual marks, the traits sample and the verdict job's schedule.
 
--- Manual marks set by the owner. A row may set the kind, the verdict or both; clearing a mark
+-- Manual marks set by an operator with `pnpm nft:mark`. A row may set the kind, the verdict or both; clearing a mark
 -- deletes the row.
 create table indexer.nft_overrides (
   contract text primary key,

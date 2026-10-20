@@ -32,7 +32,7 @@ import {
   VERDICT_RECHECK_S,
 } from "./policy"
 
-// The owner's four gates and the verdict they give (spec "Collection verdicts"). The pure part
+// The four quality gates and the verdict they give (ADR 0017). The pure part
 // decides; the verdict job gathers the facts, stores the result and writes the snapshot.
 
 export type Verdict = "real" | "pending" | "junk"
@@ -82,7 +82,7 @@ const isVerified = (f: Pick<GateFacts, "safelist" | "creatorVerified">) =>
 
 const filled = (s: string | null) => s !== null && s.trim() !== ""
 
-/** Gate 1. A verified collection or creator passes at once (amendment 2026-10-19). */
+/** Gate 1. A verified collection or creator passes at once. */
 function pageGate(f: GateFacts): GateState {
   if (isVerified(f)) return "pass"
   const p = f.page

@@ -13,7 +13,7 @@ ADR 0006 chose OpenSea API v2 and the Stream API for Ink NFTs. Chain logs say wh
 
 **Disabled without a key.** With no `OPENSEA_API_KEY` the indexer logs one warning and runs the chain sources only. Without a key no collection resolves a page, so none passes the quality checks.
 
-**REST jobs.** A scheduler runs these jobs. Each draws from the shared request budget (ADR 0019) and defers when it cannot.
+**REST jobs.** A scheduler runs these jobs. Jobs that call OpenSea draw from the shared request budget (ADR 0019) and defer when it cannot serve them.
 
 | Job | When | Reads |
 | --- | --- | --- |
@@ -56,7 +56,7 @@ The firehose stays on until the process restarts. It logs its messages and bytes
 - `legacy`: the mint finished before the indexer's history (ADR 0016).
 - A manual mark overrides the kind.
 
-**Quality checks.** A collection passes when it meets four checks, in this order. A collection that fails any check stays out of mint and market feeds, but can still be looked up and followed. The result can change in either direction as checks resolve, and it is written into `nft.collection` as the collection's `verdict`, with the state of each gate.
+**Quality checks.** A collection passes when it meets four checks, in this order. A collection that fails any check is not marked as passing, so readers can leave it out of feeds, but can still be looked up and followed. The result can change in either direction as checks resolve, and it is written into `nft.collection` as the collection's `verdict`, with the state of each gate.
 
 1. **Page.** The contract resolves to a slug, and the collection has a name, an image, and a Twitter account or a website. Waiting while discovery retries; failing when a slug exists without those fields or no slug appears in 7 days. It passes later if a daily refresh finds the fields or new activity restarts discovery.
 2. **Mint structure** (`drop` only). The drop has more than one stage or any signed or allowlist stage, or the mint ran longer than 30 minutes: still minting 30 minutes after the first mint, or sold out more than 30 minutes after it. A single free stage that finishes in minutes fails.

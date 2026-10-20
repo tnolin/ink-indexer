@@ -86,7 +86,7 @@ export type NftGates = {
   structure: GateState | "n/a"
   traits: GateState
   farm: GateState | "n/a"
-  /** Share of the supply held by farm wallets, in basis points. */
+  /** Share of the collection's distinct minters that are farm wallets, in basis points. */
   farmShareBps: number | null
 }
 
