@@ -200,19 +200,33 @@ export function evaluateGates(f: GateFacts): { gates: NftGates; verdict: Verdict
  * checkpoints are the mint end, then 24, 48 and 72 hours later. Checkpoints that passed unsampled
  * are skipped, so only the latest past one is sampled.
  *
+ * `storedDue` is the `next_traits_at` already stored. One that is due now, or sooner than the
+ * computed time, is kept (the earlier of the two), so a sample asked for by a metadata burst is not
+ * overwritten by a verdict pass whatever order the jobs run in. A sample that passed needs none.
+ *
  * shortcut: a mint that resumes after a day without mints moves its end; checkpoints already done
  * keep counting against the new end. Store the end each check was made against to make it exact.
  */
-export function traitsSchedule(f: GateFacts): { nextTraitsAt: number | null; checks: number } {
+export function traitsSchedule(
+  f: GateFacts,
+  storedDue: number | null = null,
+): { nextTraitsAt: number | null; checks: number } {
   const { state, checks } = f.traits
   const end = state === "pass" ? null : mintEndTs(f)
-  if (end === null || checks >= TRAITS_CHECKPOINTS_S.length) return { nextTraitsAt: null, checks }
+  const keep = (computed: number | null) =>
+    state !== "pass" &&
+    storedDue !== null &&
+    (storedDue <= f.now || (computed !== null && storedDue < computed))
+      ? storedDue
+      : computed
+  if (end === null || checks >= TRAITS_CHECKPOINTS_S.length)
+    return { nextTraitsAt: keep(null), checks }
   let passed = -1
   TRAITS_CHECKPOINTS_S.forEach((offset, i) => {
     if (end + offset <= f.now) passed = i
   })
   const k = Math.max(checks, passed)
-  return { nextTraitsAt: end + TRAITS_CHECKPOINTS_S[k]!, checks: k }
+  return { nextTraitsAt: keep(end + TRAITS_CHECKPOINTS_S[k]!), checks: k }
 }
 
 /**
@@ -308,6 +322,8 @@ type FactsRow = {
   discovery_retrying: boolean
   traits_state: TraitsState
   traits_checks: number
+  /** Unix seconds of the stored `next_traits_at`. */
+  traits_due: string | null
   mint_start_emitted: boolean
   prior_minted: boolean | null
   creator_verified: boolean
@@ -330,6 +346,7 @@ async function loadFacts(sql: Sql, contract: string): Promise<FactsRow | undefin
       c.slug, c.name, c.image_url, c.twitter, c.website, c.safelist,
       c.slug is null and c.next_discovery_at is not null as discovery_retrying,
       c.traits_state, c.traits_checks, c.mint_start_emitted, c.prior_minted,
+      extract(epoch from c.next_traits_at)::bigint::text as traits_due,
       coalesce(a.verified, false) as creator_verified,
       o.kind as override_kind, o.verdict as override_verdict,
       m.last_block::text as last_block, coalesce(m.minted, 0)::text as minted,
@@ -474,7 +491,7 @@ export function createVerdictJob(deps: VerdictDeps): Job {
       distinctMinters: row.minters,
     }
     const { gates, verdict } = evaluateGates(facts)
-    const traits = traitsSchedule(facts)
+    const traits = traitsSchedule(facts, row.traits_due === null ? null : Number(row.traits_due))
     const next = nextVerdictAt(facts, { kindFixed: chimera || overrideKind !== undefined })
 
     await snapshots.emitSnapshotIfChanged(contract, {

@@ -670,6 +670,36 @@ describe("the event", () => {
     expect((await collectionOf(PRTSCN)).last_listing_at).toEqual(new Date(T0 + HOUR))
   })
 
+  it("every listing frame leaves the item's name and image, but never overwrites", async () => {
+    const s = setup()
+    const seen = () =>
+      sql`select token_id::text as token_id, name, image_url from indexer.nft_items_seen order by token_id`
+    // Dropped by the filter (private, 15 minutes), yet the names are kept.
+    await s.handle(
+      listed({ token: "1", priv: true, name: "Private #1", image: "https://img.example/1.png" }),
+    )
+    await s.handle(listed({ token: "2", life: 900, name: "Short #2", image: null }))
+    expect(await listingEvents()).toEqual([])
+    expect(await seen()).toEqual([
+      { token_id: "1", name: "Private #1", image_url: "https://img.example/1.png" },
+      { token_id: "2", name: "Short #2", image_url: null },
+    ])
+
+    // A later dropped frame does not replace what is known.
+    await s.handle(
+      listed({ token: "1", priv: true, name: "Renamed", image: "https://img.example/x.png" }),
+    )
+    expect((await seen())[0]).toMatchObject({ name: "Private #1" })
+
+    // A passing listing still refreshes it.
+    await s.handle(listed({ token: "1", name: "Listed #1", image: "https://img.example/y.png" }))
+    expect((await seen())[0]).toMatchObject({
+      name: "Listed #1",
+      image_url: "https://img.example/y.png",
+    })
+    expect(await listingEvents()).toHaveLength(1)
+  })
+
   it("a failing write is reported and logged, and does not reject", async () => {
     const failing = {
       writeOffchain: async () => {

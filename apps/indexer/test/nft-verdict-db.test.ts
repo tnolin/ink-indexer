@@ -614,6 +614,22 @@ describe("the traits job", () => {
     expect(s.fetch.calls).toHaveLength(1)
   })
 
+  it("a re-check asked for by a metadata burst survives a verdict pass and is sampled", async () => {
+    const path = `/chain/ink/contract/${BURST}/nfts/1`
+    const s = setup({ [path]: recorded(`nfts/${BURST}/1`) })
+    // Still minting, so the verdict schedules no sample of its own.
+    await addCollection(BURST, { seadrop: true, max_supply: "1000" })
+    await addMints(BURST, [`0x${"c".repeat(40)}`], [blockAt(T0)])
+    clock = T0 + 1_000
+    // What the listing source's burst rule leaves: the sample due now and the verdict dirty.
+    await sql`update indexer.nft_collections set next_traits_at = ${new Date(clock)}, verdict_dirty = true
+      where contract = ${BURST}`
+    // The verdict job is listed first, so it runs before the traits job in the tick.
+    await s.scheduler.tick()
+    expect(s.fetch.calls.map((c) => c.path)).toEqual([path])
+    expect(await rowOf(BURST)).toMatchObject({ traits_state: "empty", traits_checks: 1 })
+  })
+
   it("a transient error tries again in five minutes without counting a check", async () => {
     const path = `/chain/ink/contract/${HORNET}/nfts/1`
     const s = setup({ [path]: { status: 500, body: {} } })

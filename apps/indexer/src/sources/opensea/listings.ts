@@ -40,6 +40,12 @@ const obj = (v: unknown): Record<string, unknown> | null =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null)
 
+/** The item's name and image in an `item_listed` payload. */
+function itemMeta(payload: unknown): { name: string | null; imageUrl: string | null } {
+  const meta = obj(obj(obj(payload)?.item)?.metadata)
+  return { name: str(meta?.name), imageUrl: str(meta?.image_url) }
+}
+
 /** A listing that passed the filter's payload checks (steps 1 to 4). */
 type Listed = {
   orderHash: Hash
@@ -82,15 +88,15 @@ export function parseListed(payload: unknown): Listed | null {
   if (!orderHash || !/^0x[0-9a-f]{64}$/.test(orderHash)) return null
   if (!maker || !/^0x[0-9a-f]{40}$/.test(maker)) return null
 
-  const meta = obj(obj(p.item)?.metadata)
+  const meta = itemMeta(p)
   return {
     orderHash: orderHash as Hash,
     unitPriceWei: BigInt(total) / BigInt(quantity),
     currency,
     maker: maker as Address,
     expiresAtMs: expiresAt,
-    name: str(meta?.name),
-    imageUrl: str(meta?.image_url),
+    name: meta.name,
+    imageUrl: meta.imageUrl,
   }
 }
 
@@ -159,10 +165,20 @@ export function createListings(deps: ListingsDeps) {
   }
 
   async function onListed(e: StreamEvent): Promise<void> {
-    const l = parseListed(e.payload)
-    if (!l) return
     const { contract, tokenId } = e
     const at = now()
+
+    // Every listing frame, dropped or not, leaves the item's name and image if none is known yet,
+    // so a sale of an item whose listings were all dropped still has a name. Never overwrites.
+    const meta = itemMeta(e.payload)
+    if (meta.name !== null || meta.imageUrl !== null)
+      await sql`
+        insert into indexer.nft_items_seen (contract, token_id, name, image_url, seen_at)
+        values (${contract}, ${tokenId}, ${meta.name}, ${meta.imageUrl}, ${new Date(at)})
+        on conflict (contract, token_id) do nothing`
+
+    const l = parseListed(e.payload)
+    if (!l) return
 
     // The item's state: only a lower price than the last one written, and only until that listing expires.
     const [state] = await sql<{ last_price_wei: string; expires_at: Date }[]>`

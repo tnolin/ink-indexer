@@ -656,4 +656,31 @@ describe("schedule", () => {
       checks: 1,
     })
   })
+
+  it("a stored traits time that is due, or sooner than the computed one, is kept", () => {
+    const end = 1_000_000
+    const f = facts({
+      firstMintTs: end - HOUR,
+      lastMintTs: end,
+      soldOutTs: end,
+      now: end + HOUR,
+      traits: { state: "empty", checks: 1 },
+    })
+    // The computed time is the next checkpoint, a day on.
+    expect(traitsSchedule(f)).toEqual({ nextTraitsAt: end + DAY, checks: 1 })
+    // Due now (a burst asked for it): kept.
+    expect(traitsSchedule(f, f.now)).toEqual({ nextTraitsAt: f.now, checks: 1 })
+    expect(traitsSchedule(f, f.now - MIN).nextTraitsAt).toBe(f.now - MIN)
+    // Sooner than the checkpoint: kept. Later than it: the checkpoint.
+    expect(traitsSchedule(f, f.now + MIN).nextTraitsAt).toBe(f.now + MIN)
+    expect(traitsSchedule(f, end + 2 * DAY).nextTraitsAt).toBe(end + DAY)
+    // No checkpoint at all (mint running): a due time is kept, a future one is not.
+    const running = { ...f, soldOutTs: null, lastMintTs: f.now - MIN }
+    expect(traitsSchedule(running, f.now).nextTraitsAt).toBe(f.now)
+    expect(traitsSchedule(running, f.now + DAY).nextTraitsAt).toBeNull()
+    // A sample that passed needs none.
+    expect(
+      traitsSchedule({ ...f, traits: { state: "pass", checks: 1 } }, f.now).nextTraitsAt,
+    ).toBeNull()
+  })
 })
