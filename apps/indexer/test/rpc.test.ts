@@ -166,6 +166,27 @@ describe("watchHeads reconnects and logs each outage once", () => {
     stop()
   })
 
+  it("logs a repeating subscription error once per outage, then again after a new head", () => {
+    vi.useFakeTimers()
+    const f = fakeClient()
+    const l = logs()
+    const stop = watchHeads(f.client, () => {}, l.logger as never)
+    const closed = new Error("SocketClosedError: The socket has been closed.")
+    // Every resubscription fails again, and one subscription can report the same error many times.
+    for (let minute = 0; minute < 10; minute++) {
+      for (let i = 0; i < 100; i++) f.live().opts.onError(closed)
+      vi.advanceTimersByTime(60_000)
+    }
+    expect(l.count(/head subscription error/)).toBe(1)
+    expect(l.count(/no new head/)).toBe(0)
+    f.live().opts.onBlockNumber(5n)
+    expect(l.count(/recovered/)).toBe(1)
+    f.live().opts.onError(closed)
+    f.live().opts.onError(closed)
+    expect(l.count(/head subscription error/)).toBe(2)
+    stop()
+  })
+
   it("subscribes again when heads stop without an error, backing off while it stays down", () => {
     vi.useFakeTimers()
     const f = fakeClient()

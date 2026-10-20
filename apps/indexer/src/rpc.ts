@@ -407,10 +407,12 @@ export function watchHeads(
         onHead()
       },
       onError: (error: unknown) => {
+        // An error starts an outage just as a stall does, so a socket that keeps failing logs once.
         if (!down)
           logger("warn", "head subscription error", {
             error: error instanceof Error ? String(error) : JSON.stringify(error),
           })
+        down = true
         resubscribeLater()
       },
     } as unknown as WatchBlockNumberParameters)

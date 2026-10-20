@@ -17,6 +17,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 ### Fixed
 
 - The new-head subscription is created again after the WebSocket closes or goes silent, with backoff up to 5 minutes. An outage logs one warning when it starts and one line when heads return, instead of a warning every 10 seconds.
+- A subscription that keeps reporting errors now logs one warning per outage. It logged one for every error, about a million a day on a failing socket.
 
 ### Changed
 
