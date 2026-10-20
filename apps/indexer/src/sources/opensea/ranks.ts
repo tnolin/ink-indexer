@@ -104,6 +104,7 @@ export function createRanks(deps: RanksDeps) {
       if (!row) return null
       const cached = valid(row)
       if (cached) return cached
+      if (row.max_rank === null) return null
 
       const res = await rest.get(
         `/chain/ink/contract/${contract}/nfts/${tokenId}`,
@@ -114,7 +115,6 @@ export function createRanks(deps: RanksDeps) {
       if (!res.ok || !res.value) return null
       const rank = res.value.rank
       if (rank === null || !Number.isInteger(rank) || rank < 1 || rank > INT_MAX) return null
-      if (row.max_rank === null) return null
       // The calculated_at read before the request is the one kept: if the collection's rarity moved
       // meanwhile, the row no longer matches it and the next listing fetches again.
       await sql`

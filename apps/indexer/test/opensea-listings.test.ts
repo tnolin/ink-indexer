@@ -770,4 +770,11 @@ describe("metadata bursts", () => {
     await burst(s, 30, SEC)
     expect(await traitsDue()).toEqual({ at: null, dirty: false })
   })
+
+  it("makes no request for a collection without max_rank", async () => {
+    const s = setup({ [nftPath(RANKED)]: ranked() })
+    await sql`update indexer.nft_collections set max_rank = null where contract = ${PRTSCN}`
+    expect(await s.ranks.getRank(PRTSCN, RANKED, { maxWaitMs: 0 })).toBeNull()
+    expect(callsTo(s.fetch, nftPath(RANKED))).toBe(0)
+  })
 })
