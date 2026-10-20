@@ -48,12 +48,14 @@ function secretsFor(value: string, withHttpForm: boolean): string[] {
   return out
 }
 
-/** Every URL the indexer is configured with: DATABASE_URL and each INK_RPC_WS_URLS entry, longest first so a full URL goes before its prefix. */
+/** Every URL the indexer is configured with (DATABASE_URL and each INK_RPC_WS_URLS entry) and the OpenSea key, longest first so a full URL goes before its prefix. */
 function configuredSecrets(env: Record<string, string | undefined>): string[] {
   const rpc = (env.INK_RPC_WS_URLS ?? "").split(",").map((u) => u.trim())
+  const key = env.OPENSEA_API_KEY?.trim()
   const all = [
     ...(env.DATABASE_URL ? secretsFor(env.DATABASE_URL, false) : []),
     ...rpc.filter(Boolean).flatMap((u) => secretsFor(u, true)),
+    ...(key ? [key, encodeURIComponent(key)] : []),
   ]
   // shortcut: strings under 8 characters are skipped so a bare "/" or a short password cannot blank whole messages, and only exact strings match; match on URL structure (or have providers send keys in headers) to close both gaps
   return [...new Set(all.filter((s) => s.length >= 8))].sort((a, b) => b.length - a.length)

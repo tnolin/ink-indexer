@@ -18,7 +18,12 @@ export type SourceBatch = { events: EventRow[]; blocks: { number: bigint; hash: 
  */
 export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
   name: string
-  filters(): LogFilter[]
+  /**
+   * The log filters, in the order `process` receives their logs. With `only` (backfill names such
+   * as `nft-sales`), a filter the list does not pick is null: the loop reads nothing for it and
+   * passes an empty array in its place.
+   */
+  filters(only?: string[]): (LogFilter | null)[]
   /** One log array per filter, same order. Network reads allowed; no DB writes. */
   process(logs: ChainLog[][], ctx: { toBlock: bigint }): Promise<B>
   write(tx: Tx, batch: B): Promise<void>
@@ -28,6 +33,10 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
   /** Rebuilds in-memory state after a failed batch or a rollback. */
   reload(): Promise<void>
 }
+
+/** `filter` when `only` is absent or names `group`, else null (see `Source.filters`). */
+export const pick = (only: string[] | undefined, group: string, filter: LogFilter) =>
+  only === undefined || only.includes(group) ? filter : null
 
 /** The `entity` column: what readers look an event up by. Every event type has one case. */
 export function entityOf(e: IndexerEvent): string {

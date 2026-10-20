@@ -24,7 +24,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
-import type { EventRow, Source } from "../source"
+import { type EventRow, pick, type Source } from "../source"
 import { HookRegistry, type HookRow, nativeHookRows } from "./hooks"
 import {
   launchesToRefresh,
@@ -112,7 +112,7 @@ export function inkypumpSource(deps: {
   let registry = new HookRegistry([], logger)
   return {
     name: "inkypump",
-    filters: () => [LOG_FILTER],
+    filters: (only) => [pick(only, "inkypump", LOG_FILTER)],
     process: ([logs]) =>
       processLogs(logs ?? [], {
         chain,

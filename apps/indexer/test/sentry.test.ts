@@ -143,6 +143,22 @@ describe("sentry scrubbing", () => {
     expect(text).toContain("unauthorized")
   })
 
+  it("redacts the OpenSea key", () => {
+    const sdk = fakeSdk()
+    initSentry(
+      { SENTRY_DSN: "https://k@o1.ingest.sentry.io/1", OPENSEA_API_KEY: "osKey0123456789" },
+      sdk,
+    )
+    const opts = sdk.init.mock.calls[0]?.[0] as { beforeSend: (e: Ev) => Ev | null }
+    const event = opts.beforeSend({
+      exception: {
+        values: [{ type: "Error", value: "wss://x/socket?token=osKey0123456789 closed" }],
+      },
+    })
+    expect(JSON.stringify(event)).not.toContain("osKey0123456789")
+    expect(JSON.stringify(event)).toContain("closed")
+  })
+
   it("never throws and leaks nothing when redaction fails", () => {
     const { beforeSend } = configured()
     const event: Ev = {

@@ -24,7 +24,7 @@ import type { LogFilter } from "../../rpc"
 import { seenItems } from "../opensea/listings"
 import { cachedRanks, itemKey } from "../opensea/ranks"
 import { latestFloors } from "../opensea/stats"
-import type { EventRow, Source, SourceBatch } from "../source"
+import { type EventRow, pick, type Source, type SourceBatch } from "../source"
 import {
   loadMilestoneContexts,
   type MilestoneUpdate,
@@ -141,6 +141,16 @@ const FILTERS: LogFilter[] = [
   { address: [SEAPORT_1_6, SEAPORT_1_5], topics: [NFT_TOPICS.orderFulfilled] },
   { address: CHIMERA_FACTORY, topics: [NFT_TOPICS.campaignCreated] },
 ]
+/** The backfill name of each filter: `nft-mints` is the first five, then Seaport, then Chimera. */
+const FILTER_GROUPS = [
+  "nft-mints",
+  "nft-mints",
+  "nft-mints",
+  "nft-mints",
+  "nft-mints",
+  "nft-sales",
+  "nft-launches",
+] as const
 const [MINTS_721, BURNS_721, MINTS_1155, BURNS_1155, SEADROP, SEAPORT, CHIMERA] = [
   0, 1, 2, 3, 4, 5, 6,
 ] as const
@@ -152,7 +162,7 @@ const [MINTS_721, BURNS_721, MINTS_1155, BURNS_1155, SEADROP, SEAPORT, CHIMERA] 
 export function nftSource(deps: NftDeps): Source<NftBatch, null> {
   return {
     name: "nft",
-    filters: () => FILTERS,
+    filters: (only) => FILTERS.map((f, i) => pick(only, FILTER_GROUPS[i]!, f)),
     process: (logs, ctx) => processLogs(logs, deps, ctx.toBlock),
     write: writeRows,
     prepareRollback: async () => null,

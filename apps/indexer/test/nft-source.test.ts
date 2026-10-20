@@ -2,11 +2,14 @@ import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import type { NftLaunchEvent } from "@ink-indexer/events"
 import {
+  CHIMERA_FACTORY,
   type ChainLog,
   decodeChimeraCampaign,
   decodeNftTransfers,
   decodeOrderFulfilled,
   NFT_TOPICS,
+  SEADROP_V1,
+  SEAPORT_1_5,
   SEAPORT_1_6,
   ZERO_TOPIC,
 } from "@ink-indexer/sdk"
@@ -18,6 +21,8 @@ import {
   loadSeaportRoles,
 } from "../../../packages/sdk/test/fixtures"
 import { Indexer } from "../src/loop"
+import type { LogFilter } from "../src/rpc"
+import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
@@ -689,5 +694,53 @@ describe("NFT source", () => {
     await idx.backfill(firstBlock(logs), chain.head)
     // 50 sales in one block: one read, not 50.
     expect(reads.filter((n) => n === logs[0]!.blockNumber)).toHaveLength(1)
+  })
+
+  it("a backfill of some sources reads only their filters", async () => {
+    const logs = [...loadChimeraCampaigns(), orderLog([nft1155(1n, 1n)], 10n ** 18n)]
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    chain.maxSpan = 10n ** 9n
+    for (const l of logs) chain.add(l)
+    const asked: LogFilter[] = []
+    const getLogs = chain.getLogs.bind(chain)
+    chain.getLogs = (from, to, filter) => {
+      asked.push(filter)
+      return getLogs(from, to, filter)
+    }
+    const sources = [
+      inkypumpSource({ sql, chain, logger: () => {} }),
+      nftSource({ sql, chain, logger: () => {} }),
+    ]
+    const idx = new Indexer({ chain, store, logger: () => {}, sources })
+    await idx.init()
+    const from = firstBlock(logs)
+
+    await idx.backfill(from, chain.head, ["nft-launches"])
+    expect(asked.map((f) => f.address)).toEqual([CHIMERA_FACTORY])
+    expect(await count("nft_launches")).toBe(5)
+    expect(await count("nft_sales")).toBe(0)
+
+    asked.length = 0
+    await idx.backfill(from, chain.head, ["nft-sales"])
+    expect(asked.map((f) => f.address)).toEqual([[SEAPORT_1_6, SEAPORT_1_5]])
+    expect(await count("nft_sales")).toBe(1)
+
+    asked.length = 0
+    await idx.backfill(from, chain.head, ["nft-mints"])
+    expect(asked).toHaveLength(5)
+    expect(asked.at(-1)?.address).toBe(SEADROP_V1)
+
+    // A source with none of its filters picked is left out entirely.
+    asked.length = 0
+    await idx.backfill(from, chain.head, ["inkypump"])
+    expect(asked).toHaveLength(1)
+    expect(sources[1]!.filters(["inkypump"])).toEqual(Array(7).fill(null))
+    expect(sources[0]!.filters(["nft-sales"])).toEqual([null])
+
+    // No list: every filter of every source, as the live loop reads them.
+    asked.length = 0
+    await idx.backfill(from, chain.head)
+    expect(asked).toHaveLength(8)
+    expect(await store.getCursor()).toBeNull()
   })
 })

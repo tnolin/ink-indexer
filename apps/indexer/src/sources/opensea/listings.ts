@@ -233,8 +233,8 @@ export function createListings(deps: ListingsDeps) {
             or indexer.nft_listing_state.expires_at <= ${new Date(at)}
           returning 1`
         if (set.length === 0) throw new ListingStale()
-        // shortcut: state rows are replaced by the item's next listing and never pruned, about
-        // 10,000 a day at the measured rate; delete rows expired for a day if the table grows.
+        // State rows are replaced by the item's next listing; the daily prune deletes expired ones.
+        // The item's name and image have no retention (see the shortcut in `pruneNft`).
         await tx`
           insert into indexer.nft_items_seen (contract, token_id, name, image_url, seen_at)
           values (${contract}, ${tokenId}, ${l.name}, ${l.imageUrl}, ${new Date(at)})

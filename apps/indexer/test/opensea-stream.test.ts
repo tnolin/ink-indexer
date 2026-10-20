@@ -121,6 +121,12 @@ describe("Stream shards", () => {
     for (const f of shards()[0]!.sent.filter((f) => f[3] === "phx_join"))
       expect(f[4]).toEqual({ event_types: TYPES })
     expect(s.mode()).toBe("shards")
+    // One line per shard once its joins are answered.
+    expect(logs.filter((l) => l.msg === "opensea stream joined").map((l) => l.fields)).toEqual([
+      { conn: expect.any(String), kind: "shard", topics: 50 },
+      { conn: expect.any(String), kind: "shard", topics: 50 },
+      { conn: expect.any(String), kind: "shard", topics: 20 },
+    ])
   })
 
   it("rebalance keeps assignments and fills holes", async () => {

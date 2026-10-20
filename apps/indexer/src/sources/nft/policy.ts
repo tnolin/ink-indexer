@@ -178,3 +178,18 @@ export const RANK_CACHE_MS = 7 * DAY_MS
 export const METADATA_BURST_COUNT = 20
 /** ...mark its traits re-check due. */
 export const METADATA_BURST_WINDOW_MS = 10 * MINUTE_MS
+
+// Wiring and retention.
+
+/** How often the stream's tracked collections are read again. */
+export const TRACKED_SLUGS_EVERY_MS = 5 * MINUTE_MS
+/** OpenSea requests per hour when `OPENSEA_REQUESTS_PER_HOUR` is empty. */
+export const DEFAULT_OPENSEA_REQUESTS_PER_HOUR = 500
+/** The daily prune runs at this UTC time. */
+export const PRUNE_AT_UTC = { hour: 3, minute: 30 } as const
+/** `nft_mints`, `nft_burns` and `nft_seadrop_mints` rows are kept this long (by block). */
+export const MINTS_RETENTION_S = 8 * 86400
+/** `nft_sales` rows are kept this long (by block). */
+export const SALES_RETENTION_S = 90 * 86400
+/** `nft_stats` rows are kept this long. */
+export const STATS_RETENTION_MS = 8 * DAY_MS

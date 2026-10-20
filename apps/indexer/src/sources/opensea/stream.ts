@@ -397,6 +397,8 @@ export function createStream(deps: {
         c.proven = true
         refusedInARow = 0
       }
+      if (c.pending.size === 0)
+        log("info", "opensea stream joined", { conn: c.name, kind: c.kind, topics: c.topics.size })
       return
     }
     log("warn", "opensea stream join failed", {

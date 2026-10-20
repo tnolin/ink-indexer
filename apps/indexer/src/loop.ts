@@ -67,10 +67,15 @@ export class Indexer {
     }
   }
 
-  /** Re-scans [from, to] idempotently without moving the live cursor. Stop `start` before running it. */
-  async backfill(from: bigint, to?: bigint) {
+  /**
+   * Re-scans [from, to] idempotently without moving the live cursor. Stop `start` before running it.
+   * `only` limits it to some sources' filters (see `Source.filters`); a source with none of its
+   * filters picked is left out.
+   */
+  async backfill(from: bigint, to?: bigint, only?: string[]) {
     const end = to ?? (await this.deps.chain.getBlockNumber())
-    for (let next = from; next <= end; ) next = (await this.ingest(next, end, end, false)) + 1n
+    for (let next = from; next <= end; )
+      next = (await this.ingest(next, end, end, false, only)) + 1n
   }
 
   private async ingest(
@@ -78,15 +83,24 @@ export class Indexer {
     to: bigint,
     head: bigint,
     moveCursor: boolean,
+    only?: string[],
   ): Promise<bigint> {
-    const { chain, store, logger, sources } = this.deps
+    const { chain, store, logger } = this.deps
+    const picked = this.deps.sources
+      .map((source) => ({ source, filters: source.filters(only) }))
+      .filter((s) => s.filters.some((f) => f !== null))
+    const sources = picked.map((s) => s.source)
     // Every filter covers the same range. A transport may serve less than asked, so each call asks
     // up to the lowest end returned so far, and logs above the final end are dropped.
     let toBlock = to
     const fetched: ChainLog[][][] = []
-    for (const source of sources) {
+    for (const { filters } of picked) {
       const perFilter: ChainLog[][] = []
-      for (const filter of source.filters()) {
+      for (const filter of filters) {
+        if (filter === null) {
+          perFilter.push([])
+          continue
+        }
         const r = await chain.getLogs(from, toBlock, filter)
         if (r.toBlock < toBlock) toBlock = r.toBlock
         perFilter.push(r.logs)

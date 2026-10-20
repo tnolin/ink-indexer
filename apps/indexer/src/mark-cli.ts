@@ -3,7 +3,7 @@ import type { Job } from "./sources/opensea/scheduler"
 
 // The manual mark: `nft:mark <contract> <real|junk|continuous|drop|clear>`. `real` and `junk` set
 // the verdict, `continuous` and `drop` the kind, `clear` removes both. The process entry point is
-// wired with the other commands.
+// `main.ts mark` (the `nft:mark` script).
 
 export const MARK_USAGE = "usage: nft:mark <contract> <real|junk|continuous|drop|clear>"
 

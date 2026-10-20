@@ -1,0 +1,314 @@
+import type { Sql } from "@ink-indexer/db"
+import { resetDb } from "@ink-indexer/db/testing"
+import type { ChainLog } from "@ink-indexer/sdk"
+import { type Address, encodeEventTopics, type Hash, type Hex, pad, parseAbi, toHex } from "viem"
+import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
+import type { Logger } from "../src/log"
+import { Indexer } from "../src/loop"
+import { nftSource } from "../src/sources/nft/index"
+import { createStore, type Store } from "../src/store"
+import { parseNftEnv, resolveHistoryStart, startNftServices } from "../src/wiring"
+import { FakeChain } from "./fake-chain"
+import { FakeStream } from "./opensea/fake-ws"
+
+const KEY = "wiring-test-key-0123456789"
+const NFT = "0x00000000000000000000000000000000000000a1" as Address
+const OWNER = "0x0000000000000000000000000000000000000b0b" as Address
+const KNOWN = "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b"
+const T0 = Date.parse("2026-10-19T00:00:00Z")
+const HOUR = 3_600_000
+
+let sql: Sql
+let store: Store
+let logs: { level: string; msg: string; fields?: Record<string, unknown> }[]
+let reports: unknown[]
+let clock: number
+let stop: (() => void) | undefined
+beforeEach(async () => {
+  sql = await resetDb(inject("databaseUrl"))
+  store = createStore(sql)
+  logs = []
+  reports = []
+  clock = T0
+  stop = undefined
+})
+afterEach(async () => {
+  stop?.()
+  // Lets a scheduler tick that was running finish before the pool closes.
+  await sleep(50)
+  await sql.end()
+})
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const log: Logger = (level, msg, fields) => void logs.push({ level, msg, fields })
+const report = (e: unknown) => void reports.push(e)
+const now = () => clock
+async function until(cond: () => boolean | Promise<boolean>, ms = 3_000) {
+  const end = Date.now() + ms
+  while (!(await cond())) {
+    if (Date.now() > end) throw new Error("timed out")
+    await sleep(10)
+  }
+}
+
+const TRANSFER = parseAbi([
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+])
+/** An ERC-721 mint of `tokenId` to OWNER at `block`. */
+function mintLog(block: bigint, tokenId: bigint): ChainLog {
+  return {
+    address: NFT,
+    topics: encodeEventTopics({
+      abi: TRANSFER,
+      eventName: "Transfer",
+      args: { from: "0x0000000000000000000000000000000000000000", to: OWNER, tokenId },
+    }) as Hex[],
+    data: "0x",
+    blockNumber: block,
+    blockHash: pad(toHex(block), { size: 32 }) as Hash,
+    transactionHash: pad(toHex(block * 100n + tokenId), { size: 32 }) as Hash,
+    logIndex: 0,
+  }
+}
+
+/** A chain with mints at blocks 101 and 151, and an indexer over the NFT source. */
+async function chainLoop() {
+  const chain = new FakeChain(120n)
+  chain.add(mintLog(101n, 1n))
+  chain.add(mintLog(151n, 2n))
+  const indexer = new Indexer({
+    chain,
+    store,
+    logger: () => {},
+    sources: [nftSource({ sql, chain, logger: () => {} })],
+  })
+  // The loop starts at the stored cursor.
+  await store.writeBatch([], [], { cursor: { block: 100n, hash: chain.hashOf(100n) }, head: 100n })
+  await indexer.init()
+  return { chain, indexer }
+}
+
+const count = async (table: string, where = "true") =>
+  Number((await sql.unsafe(`select count(*)::int as n from indexer.${table} where ${where}`))[0]!.n)
+
+/** A collection OpenSea knows, followed by the stream, and one the discovery job will look up now. */
+async function seedCollections() {
+  await sql`insert into indexer.nft_collections ${sql({
+    contract: KNOWN,
+    standard: "erc721",
+    slug: "known",
+    verdict: "real",
+    next_discovery_at: null,
+  })}`
+  await sql`insert into indexer.nft_collections ${sql({
+    contract: NFT,
+    standard: "erc721",
+    next_discovery_at: new Date(T0 - 1000),
+  })}`
+}
+
+describe("NFT and OpenSea wiring", () => {
+  it("no key: chain sources run, no scheduler, no stream, one warning", async () => {
+    const { chain, indexer } = await chainLoop()
+    await seedCollections()
+    const calls: string[] = []
+    const server = new FakeStream()
+    const services = await startNftServices({
+      env: { OPENSEA_API_KEY: "" },
+      sql,
+      store,
+      chain,
+      log,
+      report,
+      fetch: async (url) => {
+        calls.push(String(url))
+        return new Response("{}", { status: 200 })
+      },
+      socket: server.factory,
+      now,
+      tickMs: 10,
+    })
+    stop = services.stop
+    await indexer.trigger()
+    chain.head = 160n
+    await indexer.trigger()
+    await sleep(100)
+
+    expect(await count("nft_mints")).toBe(2)
+    expect(calls).toEqual([])
+    expect(server.sockets).toEqual([])
+    // The discovery job never ran: the collection is still due.
+    expect(await count("nft_collections", `contract = '${NFT}' and discovery_attempts = 0`)).toBe(1)
+    expect(logs.filter((l) => l.level === "warn")).toEqual([
+      {
+        level: "warn",
+        msg: "OPENSEA_API_KEY is not set: OpenSea collections, drops, stats and listings are off",
+        fields: undefined,
+      },
+    ])
+    expect(reports).toEqual([])
+  })
+
+  it("rejected key: OpenSea jobs pause for an hour, the chain loop keeps ingesting, no nft.listing is written", async () => {
+    const { chain, indexer } = await chainLoop()
+    await seedCollections()
+    const calls: string[] = []
+    const server = new FakeStream()
+    // The real Stream closes a connection whose token it refuses.
+    server.refuse = 1_000
+    const services = await startNftServices({
+      env: {
+        OPENSEA_API_KEY: KEY,
+        OPENSEA_REQUESTS_PER_HOUR: "120",
+        NFT_HISTORY_START_BLOCK: "50",
+      },
+      sql,
+      store,
+      chain,
+      log,
+      report,
+      fetch: async (url) => {
+        calls.push(String(url))
+        return new Response(null, { status: 401 })
+      },
+      socket: server.factory,
+      now,
+      tickMs: 10,
+    })
+    stop = services.stop
+
+    const [budget] = await sql`select capacity from indexer.opensea_budget`
+    expect(budget?.capacity).toBe(120)
+    await until(() => logs.some((l) => l.msg === "opensea jobs paused: key refused"))
+    expect(calls).toHaveLength(1)
+    expect(server.sockets.length).toBeGreaterThan(0)
+
+    // Paused: ticks keep coming but ask OpenSea nothing, while the chain keeps being ingested.
+    clock += HOUR / 2
+    await indexer.trigger()
+    chain.head = 160n
+    await indexer.trigger()
+    await sleep(100)
+    expect(calls).toHaveLength(1)
+    expect(await count("nft_mints")).toBe(2)
+    expect((await store.getCursor())?.block).toBe(160n)
+
+    // An hour after the refusal the jobs try again.
+    clock += HOUR / 2 + 1
+    await until(() => calls.length > 1)
+
+    expect(await count("events", "type = 'nft.listing'")).toBe(0)
+    expect(logs.filter((l) => l.msg === "OPENSEA_API_KEY is not set")).toEqual([])
+    for (const l of logs)
+      expect(JSON.stringify(l, (_k, v) => (typeof v === "bigint" ? String(v) : v))).not.toContain(
+        KEY,
+      )
+    for (const e of reports) expect(String(e)).not.toContain(KEY)
+  })
+
+  it("stop ends the stream, the scheduler and the timers", async () => {
+    const { chain } = await chainLoop()
+    await seedCollections()
+    const calls: string[] = []
+    const server = new FakeStream()
+    const services = await startNftServices({
+      env: { OPENSEA_API_KEY: KEY, NFT_HISTORY_START_BLOCK: "50" },
+      sql,
+      store,
+      chain,
+      log,
+      report,
+      fetch: async (url) => {
+        calls.push(String(url))
+        return new Response(null, { status: 404 })
+      },
+      socket: server.factory,
+      now,
+      tickMs: 10,
+    })
+    await until(() => calls.length > 0 && server.openSockets().length > 0)
+    services.stop()
+    await sleep(50)
+    const n = calls.length
+    expect(server.openSockets()).toEqual([])
+    clock += HOUR
+    await sleep(100)
+    expect(calls).toHaveLength(n)
+  })
+})
+
+describe("NFT settings", () => {
+  it("reads the key, the hourly budget and the history start block", () => {
+    expect(parseNftEnv({})).toEqual({
+      ok: true,
+      key: undefined,
+      perHour: 500,
+      historyStartBlock: undefined,
+    })
+    expect(
+      parseNftEnv({
+        OPENSEA_API_KEY: ` ${KEY} `,
+        OPENSEA_REQUESTS_PER_HOUR: "1200",
+        NFT_HISTORY_START_BLOCK: "57000000",
+      }),
+    ).toEqual({ ok: true, key: KEY, perHour: 1200, historyStartBlock: 57_000_000n })
+    for (const v of ["0", "-1", "1.5", "abc", "1e3"])
+      expect(parseNftEnv({ OPENSEA_REQUESTS_PER_HOUR: v }).ok, v).toBe(false)
+    for (const v of ["-1", "0x10", "abc"])
+      expect(parseNftEnv({ NFT_HISTORY_START_BLOCK: v }).ok, v).toBe(false)
+  })
+
+  it("a bad setting stops the start with its reason", async () => {
+    const chain = new FakeChain(100n)
+    await expect(
+      startNftServices({
+        env: { OPENSEA_API_KEY: KEY, OPENSEA_REQUESTS_PER_HOUR: "lots" },
+        sql,
+        store,
+        chain,
+        log,
+        report,
+      }),
+    ).rejects.toThrow("OPENSEA_REQUESTS_PER_HOUR must be a positive integer")
+  })
+
+  it("history start: the configured block, else the first stored mint, else where the loop starts", async () => {
+    const chain = new FakeChain(1_000n)
+    // FakeChain block n has timestamp n.
+    expect(await resolveHistoryStart(sql, chain, 300n)).toEqual({ block: 300n, ts: 300 })
+
+    // No mint and no cursor: the history starts at the loop's first block.
+    const fresh = await resolveHistoryStart(sql, new FakeChain(10n ** 9n), undefined)
+    expect(fresh.block).toBeGreaterThan(0n)
+
+    await store.writeBatch([], [], {
+      cursor: { block: 700n, hash: chain.hashOf(700n) },
+      head: 700n,
+    })
+    expect(await resolveHistoryStart(sql, chain, undefined)).toEqual({ block: 701n, ts: 701 })
+
+    // The first mint's time comes from its collection row (it survives the mint rows' pruning).
+    await sql`insert into indexer.nft_collections ${sql({
+      contract: KNOWN,
+      first_mint_block: 450,
+      first_mint_ts: new Date(1_700_000_000_000),
+    })}`
+    await sql`insert into indexer.nft_mints ${sql({
+      tx_hash: "0x01",
+      log_index: 0,
+      idx: 0,
+      contract: NFT,
+      token_id: "1",
+      recipient: OWNER,
+      qty: "1",
+      block: 500,
+    })}`
+    expect(await resolveHistoryStart(sql, chain, undefined)).toEqual({
+      block: 450n,
+      ts: 1_700_000_000,
+    })
+    await sql`delete from indexer.nft_collections`
+    // Only a stored mint: its time is read from the chain.
+    expect(await resolveHistoryStart(sql, chain, undefined)).toEqual({ block: 500n, ts: 500 })
+  })
+})
