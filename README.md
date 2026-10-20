@@ -77,6 +77,20 @@ Environment variables, all optional. An invalid value is logged and its default 
 
 Backfill by source with `pnpm backfill --from <block> --sources nft-mints,nft-sales,nft-launches` (the names are `inkypump`, `nft-mints`, `nft-sales` and `nft-launches`; the default is every source). `pnpm nft:mark <contract> <value>` sets a collection's verdict or kind by hand (the values are listed in the indexer README). Details are in the [indexer README](apps/indexer/README.md) and ADRs [0016](docs/adr/0016-nft-chain-sources.md), [0017](docs/adr/0017-opensea-source.md), [0018](docs/adr/0018-off-chain-events.md) and [0019](docs/adr/0019-opensea-shared-budget.md).
 
+## Upgrading and rollback
+
+`pnpm db:migrate` (and `pnpm start`) applies new migrations in order. Migration 0003 replaces the events table's `unique (tx_hash, log_index)` with `unique (tx_hash, log_index, sub)`. A binary from before 0003 inserts with `on conflict (tx_hash, log_index)`, which the table no longer has, so it cannot write events. Rolling the code back past 0003 needs the reverse migration first:
+
+```sql
+-- Logs that yielded several events keep their first row only.
+delete from indexer.events e using indexer.events k
+where e.tx_hash = k.tx_hash and e.log_index = k.log_index and e.sub > k.sub;
+drop index indexer.events_type_entity_id;
+alter table indexer.events drop constraint events_tx_hash_log_index_sub_key;
+alter table indexer.events add unique (tx_hash, log_index);
+alter table indexer.events drop column sub;
+```
+
 ## How it works
 
 ```text
