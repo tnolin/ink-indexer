@@ -268,18 +268,59 @@ describe("NFT settings", () => {
     for (const v of ["-1", "1.5", "abc", "3600001"])
       expect(parseNftEnv({ OPENSEA_MIN_INTERVAL_MS: v }), v).toMatchObject({
         minIntervalMs: 300,
-        invalid: [{ variable: "OPENSEA_MIN_INTERVAL_MS", value: v }],
+        invalid: [
+          {
+            variable: "OPENSEA_MIN_INTERVAL_MS",
+            reason: "not a whole number from 0 to 3600000",
+            using: 300,
+          },
+        ],
       })
     for (const v of ["0", "-1", "1.5", "abc", "1e3", "500/h"])
       expect(parseNftEnv({ OPENSEA_REQUESTS_PER_HOUR: v }), v).toMatchObject({
         perHour: 500,
-        invalid: [{ variable: "OPENSEA_REQUESTS_PER_HOUR", value: v }],
+        invalid: [
+          {
+            variable: "OPENSEA_REQUESTS_PER_HOUR",
+            reason: "not a whole number from 1 to 2147483647",
+            using: 500,
+          },
+        ],
       })
     for (const v of ["-1", "0x10", "abc"])
       expect(parseNftEnv({ NFT_HISTORY_START_BLOCK: v }), v).toMatchObject({
         historyStartBlock: undefined,
-        invalid: [{ variable: "NFT_HISTORY_START_BLOCK", value: v }],
+        invalid: [
+          { variable: "NFT_HISTORY_START_BLOCK", reason: "not a block number", using: null },
+        ],
       })
+  })
+
+  it("a key pasted into a setting is never logged, not even a prefix of it", async () => {
+    const pasted = "9f2c41d07be35a68c1e09d4473fa2b6e"
+    const chain = new FakeChain(100n)
+    for (const variable of [
+      "OPENSEA_REQUESTS_PER_HOUR",
+      "OPENSEA_MIN_INTERVAL_MS",
+      "NFT_HISTORY_START_BLOCK",
+    ]) {
+      logs = []
+      const services = await startNftServices({
+        env: { [variable]: pasted },
+        sql,
+        store,
+        chain,
+        log,
+        report,
+      })
+      services.stop()
+      const warning = logs.find((l) => l.fields?.variable === variable)
+      expect(warning, variable).toBeDefined()
+      const text = JSON.stringify(logs)
+      for (let n = 5; n <= pasted.length; n++)
+        for (let i = 0; i + n <= pasted.length; i++)
+          expect(text, variable).not.toContain(pasted.slice(i, i + n))
+    }
   })
 
   it("no key and OPENSEA_REQUESTS_PER_HOUR=abc: the chain loop starts and one warning names the variable", async () => {
@@ -300,7 +341,11 @@ describe("NFT settings", () => {
       {
         level: "warn",
         msg: "invalid NFT setting ignored",
-        fields: { variable: "OPENSEA_REQUESTS_PER_HOUR", value: "abc", using: 500 },
+        fields: {
+          variable: "OPENSEA_REQUESTS_PER_HOUR",
+          reason: "not a whole number from 1 to 2147483647",
+          using: 500,
+        },
       },
     ])
     expect(logs.filter((l) => l.level === "warn")).toHaveLength(2)
@@ -327,7 +372,11 @@ describe("NFT settings", () => {
       {
         level: "warn",
         msg: "invalid NFT setting ignored",
-        fields: { variable: "OPENSEA_MIN_INTERVAL_MS", value: "-5", using: 300 },
+        fields: {
+          variable: "OPENSEA_MIN_INTERVAL_MS",
+          reason: "not a whole number from 0 to 3600000",
+          using: 300,
+        },
       },
     ])
   })
@@ -352,7 +401,7 @@ describe("NFT settings", () => {
       {
         level: "warn",
         msg: "NFT_HISTORY_START_BLOCK cannot be dated; using the stored history",
-        fields: { block: 5_000n },
+        fields: undefined,
       },
     ])
 

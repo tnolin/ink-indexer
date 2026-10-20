@@ -35,8 +35,11 @@ export type NftSettings = {
   minIntervalMs: number
   /** Undefined: read from the stored mints (see `resolveHistoryStart`). */
   historyStartBlock: bigint | undefined
-  /** Settings whose value was not valid, and the default used instead. */
-  invalid: { variable: string; value: string; using: number | null }[]
+  /**
+   * Settings whose value was not valid, why, and the default used instead. Never the value: a key
+   * pasted into the wrong variable would end up in the logs.
+   */
+  invalid: { variable: string; reason: string; using: number | null }[]
 }
 
 /**
@@ -53,7 +56,11 @@ export function parseNftEnv(env: Env): NftSettings {
     if (v === undefined) return fallback
     const n = /^\d+$/.test(v) ? Number(v) : Number.NaN
     if (n >= min && n <= max) return n
-    invalid.push({ variable: name, value: v.slice(0, 40), using: fallback })
+    invalid.push({
+      variable: name,
+      reason: `not a whole number from ${min} to ${max}`,
+      using: fallback,
+    })
     return fallback
   }
   const perHour = int(
@@ -73,12 +80,16 @@ export function parseNftEnv(env: Env): NftSettings {
   if (start !== undefined) {
     if (/^\d+$/.test(start)) historyStartBlock = BigInt(start)
     else
-      invalid.push({ variable: "NFT_HISTORY_START_BLOCK", value: start.slice(0, 40), using: null })
+      invalid.push({
+        variable: "NFT_HISTORY_START_BLOCK",
+        reason: "not a block number",
+        using: null,
+      })
   }
   return { key: raw("OPENSEA_API_KEY"), perHour, minIntervalMs, historyStartBlock, invalid }
 }
 
-/** `parseNftEnv`, logging one warning per invalid setting (never the key). */
+/** `parseNftEnv`, logging one warning per invalid setting: its name, the reason and the default, never its value. */
 export function readNftSettings(env: Env, log: Logger): NftSettings {
   const settings = parseNftEnv(env)
   for (const fields of settings.invalid) log("warn", "invalid NFT setting ignored", fields)
@@ -105,9 +116,7 @@ export async function resolveHistoryStart(
   if (configured !== undefined) {
     const b = await chain.getBlock(configured).catch(() => null)
     if (b) return { block: configured, ts: Number(b.timestamp) }
-    log?.("warn", "NFT_HISTORY_START_BLOCK cannot be dated; using the stored history", {
-      block: configured,
-    })
+    log?.("warn", "NFT_HISTORY_START_BLOCK cannot be dated; using the stored history")
   }
   const [first] = await sql<{ block: string | null; ts: string | null }[]>`
     with f as (
