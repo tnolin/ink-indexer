@@ -519,6 +519,47 @@ describe("legacy collections", () => {
     expect(chain.priorReads).toHaveLength(1)
   })
 
+  it("a backfill that moves the first mint earlier clears legacy, and the verdict recomputes it", async () => {
+    // Live, the first mint seen was mid-mint (100 already minted); the real first mint is earlier.
+    const earlier = B0 - 1000
+    chain.totalSupplyAt.set(PRTSCN, (b) => (b < BigInt(earlier) ? 0n : 100n))
+    const s = await mintFor30Minutes(PRTSCN)
+    expect(await rowOf(PRTSCN)).toMatchObject({ kind: "legacy", prior_minted: true })
+
+    const batch: NftBatch = {
+      events: [],
+      blocks: [],
+      mints: [],
+      burns: [],
+      seadropMints: [],
+      seadropConfig: [],
+      sales: [],
+      launches: [],
+      collections: [
+        {
+          contract: PRTSCN,
+          standard: "erc721",
+          firstMint: { block: BigInt(earlier), ts: sec(T0) - 1000 },
+          seadrop: false,
+          launch: null,
+        },
+      ],
+      stages: [],
+      milestones: [],
+      touched: [PRTSCN],
+    }
+    await sql.begin((tx) => writeRows(tx, batch))
+    expect(await rowOf(PRTSCN)).toMatchObject({
+      first_mint_block: BigInt(earlier),
+      prior_supply: null,
+      prior_minted: null,
+      verdict_dirty: true,
+    })
+    await s.verdict.run(PRTSCN)
+    expect(await rowOf(PRTSCN)).toMatchObject({ prior_supply: "0", prior_minted: false })
+    expect((await rowOf(PRTSCN)).kind).not.toBe("legacy")
+  })
+
   it("a new SeaDrop drop (no supply before its first mint) stays a drop", async () => {
     chain.totalSupplyAt.set(HORNET, (b) => (b < B0 ? 0n : 30n))
     await mintFor30Minutes(HORNET, { seadrop: true })

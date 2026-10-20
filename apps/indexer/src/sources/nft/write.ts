@@ -98,6 +98,13 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
             and (indexer.nft_collections.first_mint_block is null
               or excluded.first_mint_block < indexer.nft_collections.first_mint_block)
           then excluded.first_mint_ts else indexer.nft_collections.first_mint_ts end,
+        -- A first mint moved earlier decides legacy again: the verdict job reads the supply before it.
+        prior_supply = case
+          when excluded.first_mint_block < indexer.nft_collections.first_mint_block then null
+          else indexer.nft_collections.prior_supply end,
+        prior_minted = case
+          when excluded.first_mint_block < indexer.nft_collections.first_mint_block then null
+          else indexer.nft_collections.prior_minted end,
         seadrop = indexer.nft_collections.seadrop or excluded.seadrop,
         kind = coalesce(excluded.kind, indexer.nft_collections.kind),
         launchpad = coalesce(excluded.launchpad, indexer.nft_collections.launchpad),
