@@ -11,7 +11,7 @@ import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
-import { createNftVerdictJob, startNftServices } from "./wiring"
+import { createNftVerdictJob, readNftSettings, startNftServices } from "./wiring"
 
 const cli = parseCli(process.argv.slice(2))
 if (!cli.ok) {
@@ -57,7 +57,8 @@ try {
   rpc = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
   const chain = viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping })
   if (cli.command === "mark") {
-    const verdict = await createNftVerdictJob({ env: process.env, sql, store, chain, log })
+    const { historyStartBlock } = readNftSettings(process.env, log)
+    const verdict = await createNftVerdictJob({ historyStartBlock, sql, store, chain, log })
     await applyMark({ sql, verdict }, { contract: cli.contract, value: cli.value })
     log("info", "mark applied", { contract: cli.contract, mark: cli.value })
     await sql.end()

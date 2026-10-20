@@ -23,7 +23,7 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
    * as `nft-sales`), a filter the list does not pick is null: the loop reads nothing for it and
    * passes an empty array in its place.
    */
-  filters(only?: string[]): (LogFilter | null)[]
+  filters(only?: readonly BackfillSource[]): (LogFilter | null)[]
   /** One log array per filter, same order. Network reads allowed; no DB writes. */
   process(logs: ChainLog[][], ctx: { toBlock: bigint }): Promise<B>
   write(tx: Tx, batch: B): Promise<void>
@@ -34,9 +34,20 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
   reload(): Promise<void>
 }
 
+/**
+ * The names `backfill --sources` takes. `inkypump` is the InkyPump source; the NFT source's filters
+ * come in three groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and
+ * `nft-launches` (the Chimera factory).
+ */
+export const BACKFILL_SOURCES = ["inkypump", "nft-mints", "nft-sales", "nft-launches"] as const
+export type BackfillSource = (typeof BACKFILL_SOURCES)[number]
+
 /** `filter` when `only` is absent or names `group`, else null (see `Source.filters`). */
-export const pick = (only: string[] | undefined, group: string, filter: LogFilter) =>
-  only === undefined || only.includes(group) ? filter : null
+export const pick = (
+  only: readonly BackfillSource[] | undefined,
+  group: BackfillSource,
+  filter: LogFilter,
+) => (only === undefined || only.includes(group) ? filter : null)
 
 /** The `entity` column: what readers look an event up by. Every event type has one case. */
 export function entityOf(e: IndexerEvent): string {

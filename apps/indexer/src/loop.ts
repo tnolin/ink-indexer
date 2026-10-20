@@ -3,7 +3,7 @@ import type { Hash } from "viem"
 import type { Chain } from "./chain"
 import { BlockNotServedError } from "./errors"
 import type { Logger } from "./log"
-import type { Source, SourceBatch } from "./sources/source"
+import type { BackfillSource, Source, SourceBatch } from "./sources/source"
 import type { Cursor, Store } from "./store"
 
 export class Indexer {
@@ -72,7 +72,7 @@ export class Indexer {
    * `only` limits it to some sources' filters (see `Source.filters`); a source with none of its
    * filters picked is left out.
    */
-  async backfill(from: bigint, to?: bigint, only?: string[]) {
+  async backfill(from: bigint, to?: bigint, only?: readonly BackfillSource[]) {
     const end = to ?? (await this.deps.chain.getBlockNumber())
     for (let next = from; next <= end; )
       next = (await this.ingest(next, end, end, false, only)) + 1n
@@ -83,7 +83,7 @@ export class Indexer {
     to: bigint,
     head: bigint,
     moveCursor: boolean,
-    only?: string[],
+    only?: readonly BackfillSource[],
   ): Promise<bigint> {
     const { chain, store, logger } = this.deps
     const picked = this.deps.sources

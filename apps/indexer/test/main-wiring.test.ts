@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { ChainLog } from "@ink-indexer/sdk"
+import { type ChainLog, INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import { type Address, encodeEventTopics, type Hash, type Hex, pad, parseAbi, toHex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
@@ -239,13 +239,13 @@ describe("NFT and OpenSea wiring", () => {
 })
 
 describe("NFT settings", () => {
-  it("reads the key, the hourly budget and the history start block", () => {
+  it("reads the key, the hourly budget, the spacing and the history start block", () => {
     expect(parseNftEnv({})).toEqual({
-      ok: true,
       key: undefined,
       perHour: 500,
       minIntervalMs: 300,
       historyStartBlock: undefined,
+      invalid: [],
     })
     expect(
       parseNftEnv({
@@ -255,33 +255,81 @@ describe("NFT settings", () => {
         NFT_HISTORY_START_BLOCK: "57000000",
       }),
     ).toEqual({
-      ok: true,
       key: KEY,
       perHour: 1200,
       minIntervalMs: 250,
       historyStartBlock: 57_000_000n,
+      invalid: [],
     })
     expect(parseNftEnv({ OPENSEA_MIN_INTERVAL_MS: "0" })).toMatchObject({ minIntervalMs: 0 })
-    for (const v of ["-1", "1.5", "abc", "3600001"])
-      expect(parseNftEnv({ OPENSEA_MIN_INTERVAL_MS: v }).ok, v).toBe(false)
-    for (const v of ["0", "-1", "1.5", "abc", "1e3"])
-      expect(parseNftEnv({ OPENSEA_REQUESTS_PER_HOUR: v }).ok, v).toBe(false)
-    for (const v of ["-1", "0x10", "abc"])
-      expect(parseNftEnv({ NFT_HISTORY_START_BLOCK: v }).ok, v).toBe(false)
   })
 
-  it("a bad setting stops the start with its reason", async () => {
+  it("an invalid setting falls back to its default and is listed", () => {
+    for (const v of ["-1", "1.5", "abc", "3600001"])
+      expect(parseNftEnv({ OPENSEA_MIN_INTERVAL_MS: v }), v).toMatchObject({
+        minIntervalMs: 300,
+        invalid: [{ variable: "OPENSEA_MIN_INTERVAL_MS", value: v }],
+      })
+    for (const v of ["0", "-1", "1.5", "abc", "1e3", "500/h"])
+      expect(parseNftEnv({ OPENSEA_REQUESTS_PER_HOUR: v }), v).toMatchObject({
+        perHour: 500,
+        invalid: [{ variable: "OPENSEA_REQUESTS_PER_HOUR", value: v }],
+      })
+    for (const v of ["-1", "0x10", "abc"])
+      expect(parseNftEnv({ NFT_HISTORY_START_BLOCK: v }), v).toMatchObject({
+        historyStartBlock: undefined,
+        invalid: [{ variable: "NFT_HISTORY_START_BLOCK", value: v }],
+      })
+  })
+
+  it("no key and OPENSEA_REQUESTS_PER_HOUR=abc: the chain loop starts and one warning names the variable", async () => {
+    const { chain, indexer } = await chainLoop()
+    const services = await startNftServices({
+      env: { OPENSEA_REQUESTS_PER_HOUR: "abc" },
+      sql,
+      store,
+      chain,
+      log,
+      report,
+    })
+    stop = services.stop
+    await indexer.trigger()
+    expect(await count("nft_mints")).toBe(1)
+    const bad = logs.filter((l) => l.level === "warn" && l.fields?.variable !== undefined)
+    expect(bad).toEqual([
+      {
+        level: "warn",
+        msg: "invalid NFT setting ignored",
+        fields: { variable: "OPENSEA_REQUESTS_PER_HOUR", value: "abc", using: 500 },
+      },
+    ])
+    expect(logs.filter((l) => l.level === "warn")).toHaveLength(2)
+  })
+
+  it("a key and OPENSEA_MIN_INTERVAL_MS=-5: the budget uses 300 ms and one warning names the variable", async () => {
     const chain = new FakeChain(100n)
-    await expect(
-      startNftServices({
-        env: { OPENSEA_API_KEY: KEY, OPENSEA_REQUESTS_PER_HOUR: "lots" },
-        sql,
-        store,
-        chain,
-        log,
-        report,
-      }),
-    ).rejects.toThrow("OPENSEA_REQUESTS_PER_HOUR must be a positive integer")
+    const services = await startNftServices({
+      env: { OPENSEA_API_KEY: KEY, OPENSEA_MIN_INTERVAL_MS: "-5", NFT_HISTORY_START_BLOCK: "50" },
+      sql,
+      store,
+      chain,
+      log,
+      report,
+      fetch: async () => new Response(null, { status: 404 }),
+      socket: new FakeStream().factory,
+      now,
+      tickMs: 10_000,
+    })
+    stop = services.stop
+    const [budget] = await sql`select capacity, min_interval_ms from indexer.opensea_budget`
+    expect(budget).toMatchObject({ capacity: 500, min_interval_ms: 300 })
+    expect(logs.filter((l) => l.level === "warn")).toEqual([
+      {
+        level: "warn",
+        msg: "invalid NFT setting ignored",
+        fields: { variable: "OPENSEA_MIN_INTERVAL_MS", value: "-5", using: 300 },
+      },
+    ])
   })
 
   it("history start: the configured block, else the first stored mint, else where the loop starts", async () => {
@@ -291,13 +339,22 @@ describe("NFT settings", () => {
 
     // No mint and no cursor: the history starts at the loop's first block.
     const fresh = await resolveHistoryStart(sql, new FakeChain(10n ** 9n), undefined)
-    expect(fresh.block).toBeGreaterThan(0n)
+    expect(fresh.block).toBe(INKYPUMP_START_BLOCK)
 
     await store.writeBatch([], [], {
       cursor: { block: 700n, hash: chain.hashOf(700n) },
       head: 700n,
     })
     expect(await resolveHistoryStart(sql, chain, undefined)).toEqual({ block: 701n, ts: 701 })
+    // A configured block the chain cannot date (above head) falls back, with a warning.
+    expect(await resolveHistoryStart(sql, chain, 5_000n, log)).toEqual({ block: 701n, ts: 701 })
+    expect(logs).toEqual([
+      {
+        level: "warn",
+        msg: "NFT_HISTORY_START_BLOCK cannot be dated; using the stored history",
+        fields: { block: 5_000n },
+      },
+    ])
 
     // The first mint's time comes from its collection row (it survives the mint rows' pruning).
     await sql`insert into indexer.nft_collections ${sql({

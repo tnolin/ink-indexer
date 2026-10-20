@@ -27,46 +27,62 @@ import { CURSOR_ROW, type Store } from "./store"
 
 type Env = Record<string, string | undefined>
 
-export type NftSettings =
-  | {
-      ok: true
-      /** Undefined: the OpenSea part is off. */
-      key: string | undefined
-      perHour: number
-      /** Minimum time between two OpenSea requests on the key. */
-      minIntervalMs: number
-      /** Undefined: read from the stored mints (see `resolveHistoryStart`). */
-      historyStartBlock: bigint | undefined
-    }
-  | { ok: false; reason: string }
+export type NftSettings = {
+  /** Undefined: the OpenSea part is off. */
+  key: string | undefined
+  perHour: number
+  /** Minimum time between two OpenSea requests on the key. */
+  minIntervalMs: number
+  /** Undefined: read from the stored mints (see `resolveHistoryStart`). */
+  historyStartBlock: bigint | undefined
+  /** Settings whose value was not valid, and the default used instead. */
+  invalid: { variable: string; value: string; using: number | null }[]
+}
 
-/** Reads `OPENSEA_API_KEY`, `OPENSEA_REQUESTS_PER_HOUR`, `OPENSEA_MIN_INTERVAL_MS` and `NFT_HISTORY_START_BLOCK`. Empty means unset. */
+/**
+ * Reads `OPENSEA_API_KEY`, `OPENSEA_REQUESTS_PER_HOUR`, `OPENSEA_MIN_INTERVAL_MS` and
+ * `NFT_HISTORY_START_BLOCK`. Empty means unset. These are optional, so an invalid value never
+ * stops the process: it is listed in `invalid` and its default is used.
+ */
 export function parseNftEnv(env: Env): NftSettings {
-  const key = env.OPENSEA_API_KEY?.trim() || undefined
-  const perHourRaw = env.OPENSEA_REQUESTS_PER_HOUR?.trim() || undefined
-  const intervalRaw = env.OPENSEA_MIN_INTERVAL_MS?.trim() || undefined
-  const startRaw = env.NFT_HISTORY_START_BLOCK?.trim() || undefined
-  let perHour = DEFAULT_OPENSEA_REQUESTS_PER_HOUR
-  if (perHourRaw !== undefined) {
-    perHour = /^\d+$/.test(perHourRaw) ? Number(perHourRaw) : 0
-    if (perHour <= 0 || perHour > 2 ** 31 - 1)
-      return { ok: false, reason: "OPENSEA_REQUESTS_PER_HOUR must be a positive integer" }
+  const invalid: NftSettings["invalid"] = []
+  const raw = (name: string) => env[name]?.trim() || undefined
+  /** A whole number in [min, max], or the default (listed as invalid) for anything else. */
+  const int = (name: string, fallback: number, min: number, max: number) => {
+    const v = raw(name)
+    if (v === undefined) return fallback
+    const n = /^\d+$/.test(v) ? Number(v) : Number.NaN
+    if (n >= min && n <= max) return n
+    invalid.push({ variable: name, value: v.slice(0, 40), using: fallback })
+    return fallback
   }
-  let minIntervalMs = DEFAULT_OPENSEA_MIN_INTERVAL_MS
-  if (intervalRaw !== undefined) {
-    minIntervalMs = /^\d+$/.test(intervalRaw) ? Number(intervalRaw) : -1
-    if (minIntervalMs < 0 || minIntervalMs > 3_600_000)
-      return { ok: false, reason: "OPENSEA_MIN_INTERVAL_MS must be 0 to 3600000" }
+  const perHour = int(
+    "OPENSEA_REQUESTS_PER_HOUR",
+    DEFAULT_OPENSEA_REQUESTS_PER_HOUR,
+    1,
+    2 ** 31 - 1,
+  )
+  const minIntervalMs = int(
+    "OPENSEA_MIN_INTERVAL_MS",
+    DEFAULT_OPENSEA_MIN_INTERVAL_MS,
+    0,
+    3_600_000,
+  )
+  const start = raw("NFT_HISTORY_START_BLOCK")
+  let historyStartBlock: bigint | undefined
+  if (start !== undefined) {
+    if (/^\d+$/.test(start)) historyStartBlock = BigInt(start)
+    else
+      invalid.push({ variable: "NFT_HISTORY_START_BLOCK", value: start.slice(0, 40), using: null })
   }
-  if (startRaw !== undefined && !/^\d+$/.test(startRaw))
-    return { ok: false, reason: "NFT_HISTORY_START_BLOCK must be a block number" }
-  return {
-    ok: true,
-    key,
-    perHour,
-    minIntervalMs,
-    historyStartBlock: startRaw === undefined ? undefined : BigInt(startRaw),
-  }
+  return { key: raw("OPENSEA_API_KEY"), perHour, minIntervalMs, historyStartBlock, invalid }
+}
+
+/** `parseNftEnv`, logging one warning per invalid setting (never the key). */
+export function readNftSettings(env: Env, log: Logger): NftSettings {
+  const settings = parseNftEnv(env)
+  for (const fields of settings.invalid) log("warn", "invalid NFT setting ignored", fields)
+  return settings
 }
 
 /**
@@ -79,13 +95,20 @@ export async function resolveHistoryStart(
   sql: Sql,
   chain: Pick<Chain, "getBlock">,
   configured: bigint | undefined,
+  log?: Logger,
 ): Promise<{ block: bigint; ts: number }> {
   const timeOf = async (n: bigint) => {
     const b = await chain.getBlock(n)
     if (!b) throw new Error(`block ${n} not served; the NFT history start cannot be dated`)
     return Number(b.timestamp)
   }
-  if (configured !== undefined) return { block: configured, ts: await timeOf(configured) }
+  if (configured !== undefined) {
+    const b = await chain.getBlock(configured).catch(() => null)
+    if (b) return { block: configured, ts: Number(b.timestamp) }
+    log?.("warn", "NFT_HISTORY_START_BLOCK cannot be dated; using the stored history", {
+      block: configured,
+    })
+  }
   const [first] = await sql<{ block: string | null; ts: string | null }[]>`
     with f as (
       select least(
@@ -108,7 +131,8 @@ export async function resolveHistoryStart(
 }
 
 type VerdictJobDeps = {
-  env: Env
+  /** From `NFT_HISTORY_START_BLOCK`; undefined uses the stored history. */
+  historyStartBlock: bigint | undefined
   sql: Sql
   store: Store
   chain: Chain
@@ -119,9 +143,7 @@ type VerdictJobDeps = {
 /** The verdict job with its history start resolved (also what `nft:mark` runs). */
 export async function createNftVerdictJob(deps: VerdictJobDeps): Promise<Job> {
   const { sql, store, chain, log, now } = deps
-  const settings = parseNftEnv(deps.env)
-  if (!settings.ok) throw new Error(settings.reason)
-  const history = await resolveHistoryStart(sql, chain, settings.historyStartBlock)
+  const history = await resolveHistoryStart(sql, chain, deps.historyStartBlock, log)
   log("info", "nft history start", { block: history.block, ts: history.ts })
   return createVerdictJob({
     sql,
@@ -139,11 +161,12 @@ export async function createNftVerdictJob(deps: VerdictJobDeps): Promise<Job> {
  * Starts what runs beside the chain loop under `start`: the daily NFT prune and, with an OpenSea
  * key, the request budget, the scheduler (discovery, metadata, drops, scheduled stage starts,
  * verdict, traits, tiers and stats) and the Stream with its tracked collections. Without a key
- * only the prune runs, after one warning. A bad setting rejects before anything starts. `stop`
- * ends all of it; call it before stopping the chain loop.
+ * only the prune runs, after one warning. An invalid setting is warned about and replaced by its
+ * default. `stop` ends all of it; call it before stopping the chain loop.
  */
 export async function startNftServices(
-  deps: VerdictJobDeps & {
+  deps: Omit<VerdictJobDeps, "historyStartBlock"> & {
+    env: Env
     report: (err: unknown) => void
     fetch?: typeof fetch
     socket?: (url: string) => WebSocketLike
@@ -151,8 +174,7 @@ export async function startNftServices(
   },
 ): Promise<{ stop(): void }> {
   const { sql, store, chain, log, report, now } = deps
-  const settings = parseNftEnv(deps.env)
-  if (!settings.ok) throw new Error(settings.reason)
+  const settings = readNftSettings(deps.env, log)
   // Stopped last-started first: the slug timer and the Stream, then the scheduler, then the prune.
   const stops: (() => void)[] = []
   const stop = () => {
@@ -170,7 +192,10 @@ export async function startNftServices(
   }
   try {
     await sql`select indexer.opensea_configure(${perHour}, ${minIntervalMs})`
-    const verdict = await createNftVerdictJob(deps)
+    const verdict = await createNftVerdictJob({
+      ...deps,
+      historyStartBlock: settings.historyStartBlock,
+    })
     const budget = createBudget(sql)
     const rest = createOpenSeaRest({ key, budget, fetch: deps.fetch, log, report, now })
     const snapshots = createSnapshots({ sql, store, now })

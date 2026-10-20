@@ -157,4 +157,23 @@ describe("NFT prune", () => {
     expect(logs.filter(([, msg]) => msg === "nft prune done")).toHaveLength(1)
     expect(reports).toEqual([])
   })
+
+  it("a failed prune is logged and reported once, and waits for the next day", async () => {
+    const logs: [string, string][] = []
+    const reports: unknown[] = []
+    const broken = {
+      unsafe() {},
+    } as unknown as Sql
+    // Any query on it throws: a tagged call on a plain object is not a function.
+    const stop = startPrune({
+      sql: broken,
+      log: (level, msg) => logs.push([level, msg]),
+      report: (e) => reports.push(e),
+      now: () => NOW - 20,
+    })
+    await new Promise((r) => setTimeout(r, 100))
+    stop()
+    expect(logs).toEqual([["error", "nft prune failed"]])
+    expect(reports).toHaveLength(1)
+  })
 })

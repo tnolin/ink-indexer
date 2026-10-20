@@ -30,6 +30,10 @@ export type PruneCounts = {
  *   anyway, so deleting it changes nothing);
  * - `nft_ranks` fetched 7 days ago or more (no longer valid).
  *
+ * shortcut: each table is pruned in one statement, so the first run after a long backfill can
+ * delete millions of rows at once (a daily run deletes about a day's worth). Delete in batches by
+ * block if that run holds locks too long.
+ *
  * shortcut: `nft_items_seen` has no retention: one row per item ever listed in a tracked collection.
  * Prune it by `seen_at`, keeping items with a recent sale, if the table grows past what is useful.
  */
