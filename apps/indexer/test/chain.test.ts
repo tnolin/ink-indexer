@@ -1,4 +1,3 @@
-import { NFT_SELECTORS } from "@ink-indexer/sdk"
 import {
   BlockNotFoundError,
   ContractFunctionExecutionError,
@@ -263,27 +262,6 @@ describe("viemChain timeouts, stopping and every read", () => {
     expect(calls).toBe(2)
     expect(await chain.hasCodeAt(TOKEN, 9n)).toBe(true)
     expect(asked).toEqual([{ address: TOKEN, blockNumber: 9n }])
-  })
-
-  it("reads a Chimera collection's supply at the latest block, retrying socket errors", async () => {
-    const words = (n: bigint) => `0x${n.toString(16).padStart(64, "0")}` as const
-    let calls = 0
-    const asked: unknown[] = []
-    const client = {
-      getBlockNumber: async () => 1n,
-      getBlock: async () => ({}),
-      call: async (p: { data: string }) => {
-        if (++calls === 1) throw socketError()
-        asked.push(p.data)
-        return { data: words(p.data === NFT_SELECTORS.permanentSupply ? 729n : 999n) }
-      },
-    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
-    const chain = viemChain(client, {} as LogRouter, { logger: () => {}, sleep: async () => {} })
-    expect(await chain.readChimeraSupply(TOKEN)).toEqual({
-      permanentSupply: 729n,
-      maxPermanent: 999n,
-    })
-    expect(asked).toEqual([NFT_SELECTORS.permanentSupply, NFT_SELECTORS.maxPermanent])
   })
 
   it("still fails fast from every read on a non-socket error", async () => {

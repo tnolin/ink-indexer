@@ -182,7 +182,7 @@ export async function startNftServices(
     tickMs?: number
   },
 ): Promise<{ stop(): void }> {
-  const { sql, store, chain, log, report, now } = deps
+  const { sql, store, log, report, now } = deps
   const settings = readNftSettings(deps.env, log)
   // Stopped last-started first: the slug timer and the Stream, then the scheduler, then the prune.
   const stops: (() => void)[] = []
@@ -210,7 +210,7 @@ export async function startNftServices(
     const snapshots = createSnapshots({ sql, store, now })
     const accounts = createAccounts({ sql, rest, now })
     const jobDeps = { sql, store, rest, snapshots, accounts, log, now }
-    const stats = createStats({ sql, store, rest, chain, log, now })
+    const stats = createStats({ sql, store, rest, log, now })
     const ranks = createRanks({ sql, rest, log, now })
     const listings = createListings({ sql, store, stats, ranks, log, report, now })
 

@@ -2,7 +2,6 @@ import type { Sql } from "@ink-indexer/db"
 import { type NftStatsEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import { INK_CHAIN_ID, type OsStats, parseStats } from "@ink-indexer/sdk"
 import type { Address } from "viem"
-import type { Chain } from "../../chain"
 import { CURSOR_ROW } from "../../store"
 import {
   BLOCK_S,
@@ -152,14 +151,12 @@ class StatsRaced extends Error {
 }
 
 export type StatsDeps = Pick<OsJobDeps, "sql" | "store" | "rest" | "log"> & {
-  chain: Pick<Chain, "readChimeraSupply">
   now?: () => number
 }
 
 type CollectionRow = {
   slug: string | null
   stats_tier: Tier | null
-  launchpad: string | null
   max_supply: string | null
   total_supply: number | null
   listed_due_at: Date | null
@@ -175,12 +172,11 @@ type Poll = { wrote: boolean; outcome: JobOutcome }
  * A poll reads `GET /collections/{slug}/stats` (budget class 3), adds a listed count when one is
  * due, stores an `nft_stats` row and writes `nft.stats` (`os:stats:<contract>:<n>`) when the floor,
  * owners or 24 hour volume differ from the previous row. The supply comes from the collection's
- * `total_supply` (its OpenSea page) and `max_supply`; a Chimera collection reads `permanentSupply()`
- * and `maxPermanent()` from the chain. All network and chain reads finish before the database
- * transaction opens.
+ * `total_supply` (its OpenSea page) and `max_supply`, for Chimera collections too. All network reads
+ * finish before the database transaction opens.
  */
 export function createStats(deps: StatsDeps) {
-  const { sql, store, rest, chain, log } = deps
+  const { sql, store, rest, log } = deps
   const now = deps.now ?? Date.now
 
   /**
@@ -210,21 +206,11 @@ export function createStats(deps: StatsDeps) {
     return { ok: true, value: { count: LISTED_PAGES * LISTED_PAGE_SIZE, capped: true } }
   }
 
-  /** The supply the event reports: the chain for Chimera, the collection's columns otherwise. */
-  async function supplyOf(contract: string, row: CollectionRow) {
-    if (row.launchpad === "chimera") {
-      try {
-        const read = await chain.readChimeraSupply(contract as Address)
-        if (read) return { total: read.permanentSupply, max: read.maxPermanent }
-      } catch (err) {
-        log("warn", "chimera supply read failed", { contract, error: String(err) })
-      }
-    }
-    return {
-      total: row.total_supply === null ? null : BigInt(row.total_supply),
-      max: row.max_supply === null ? null : BigInt(row.max_supply),
-    }
-  }
+  /** The supply the event reports: the collection's columns. */
+  const supplyOf = (row: CollectionRow) => ({
+    total: row.total_supply === null ? null : BigInt(row.total_supply),
+    max: row.max_supply === null ? null : BigInt(row.max_supply),
+  })
 
   function listedWanted(row: CollectionRow, at: number): boolean {
     if (row.listed_due_at !== null && row.listed_due_at.getTime() <= at) return true
@@ -268,7 +254,7 @@ export function createStats(deps: StatsDeps) {
     opts: { scheduled: boolean; maxWaitMs: number },
   ): Promise<Poll> {
     const [row] = await sql<CollectionRow[]>`
-      select slug, stats_tier, launchpad, max_supply::text as max_supply, total_supply,
+      select slug, stats_tier, max_supply::text as max_supply, total_supply,
         listed_due_at, listed_counted_at, stats_n
       from indexer.nft_collections where contract = ${contract}`
     if (!row?.slug) return { wrote: false, outcome: undefined }
@@ -304,7 +290,7 @@ export function createStats(deps: StatsDeps) {
       if (counted.ok) listed = counted.value
       else listingFailed = counted
     }
-    const supply = await supplyOf(contract, row)
+    const supply = supplyOf(row)
 
     const [prev] = await sql<
       { floor_wei: string | null; owners: number | null; volume: string | null }[]

@@ -12,7 +12,6 @@ import { createOpenSeaRest } from "../src/sources/opensea/rest"
 import { createStats } from "../src/sources/opensea/stats"
 import type { StreamEvent } from "../src/sources/opensea/stream"
 import { createStore, type Store } from "../src/store"
-import { FakeChain } from "./fake-chain"
 import { type FakeRequest, type FakeResponse, fakeFetch, recorded } from "./opensea/fake-fetch"
 import { loadOpenSeaFixture } from "./opensea/fixtures"
 
@@ -38,7 +37,6 @@ const CALCULATED = new Date(T0 - 3 * DAY)
 
 let sql: Sql
 let store: Store
-let chain: FakeChain
 let clock: number
 let reports: unknown[]
 let warnings: string[]
@@ -47,7 +45,6 @@ let takeBudget: () => Promise<boolean>
 beforeEach(async () => {
   sql = await resetDb(inject("databaseUrl"))
   store = createStore(sql)
-  chain = new FakeChain(10n)
   clock = T0
   reports = []
   warnings = []
@@ -112,7 +109,7 @@ function setup(
 ) {
   const fetch = fakeFetch({ [statsPath]: osStats(0.1), ...routes })
   const rest = createOpenSeaRest({ key: KEY, budget, fetch, log, report, now })
-  const stats = createStats({ sql, store, rest, chain, log, now })
+  const stats = createStats({ sql, store, rest, log, now })
   const ranks = createRanks({ sql, rest, log, now })
   const listings = createListings({ sql, store: withStore, stats, ranks, log, report, now })
   return { fetch, rest, stats, ranks, listings, handle: listings.handleStreamEvent }

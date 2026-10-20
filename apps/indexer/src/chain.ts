@@ -5,7 +5,6 @@ import {
   type LaunchKey,
   type LaunchState,
   type NftReader,
-  readChimeraSupply,
   readErc20Meta,
   readErc20Names,
   readLaunchStates,
@@ -48,10 +47,6 @@ export type Chain = {
   readMaxSupply(contract: Address, block: bigint): Promise<bigint | null>
   /** An NFT contract's `totalSupply()` at a block. null when it reverts or has none. */
   readTotalSupplyAt(contract: Address, block: bigint): Promise<bigint | null>
-  /** A Chimera collection's `permanentSupply()` and `maxPermanent()` now. null when either reverts. */
-  readChimeraSupply(
-    contract: Address,
-  ): Promise<{ permanentSupply: bigint; maxPermanent: bigint } | null>
   /** Whether the address had contract code at a block. */
   hasCodeAt(address: Address, block: bigint): Promise<boolean>
 }
@@ -142,8 +137,6 @@ export function viemChain(
       retry("readMaxSupply", () => readMaxSupply(client, contract, block)),
     readTotalSupplyAt: (contract, block) =>
       retry("readTotalSupplyAt", () => readNftTotalSupply(client, contract, block)),
-    readChimeraSupply: (contract) =>
-      retry("readChimeraSupply", () => readChimeraSupply(client, contract)),
     hasCodeAt: (address, block) => retry("hasCodeAt", () => hasCodeAt(client, address, block)),
   }
 }

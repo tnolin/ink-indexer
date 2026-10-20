@@ -16,7 +16,6 @@ import {
   type TierCandidate,
 } from "../src/sources/opensea/stats"
 import { createStore, type Store } from "../src/store"
-import { FakeChain } from "./fake-chain"
 import { type FakeRequest, type FakeResponse, fakeFetch, recorded } from "./opensea/fake-fetch"
 
 const KEY = "test-key-0123456789abcdef"
@@ -31,7 +30,6 @@ const ETH = 10n ** 18n
 
 let sql: Sql
 let store: Store
-let chain: FakeChain
 let clock: number
 let reports: unknown[]
 let takeBudget: () => Promise<boolean>
@@ -39,7 +37,6 @@ let takeBudget: () => Promise<boolean>
 beforeEach(async () => {
   sql = await resetDb(inject("databaseUrl"))
   store = createStore(sql)
-  chain = new FakeChain(10n)
   clock = T0
   reports = []
   takeBudget = async () => true
@@ -79,7 +76,7 @@ const listings = (n: number, next: string | null): FakeResponse => ({
 function setup(routes: Parameters<typeof fakeFetch>[0]) {
   const fetch = fakeFetch(routes)
   const rest = createOpenSeaRest({ key: KEY, budget, fetch, log, report, now })
-  const stats = createStats({ sql, store, rest, chain, log, now })
+  const stats = createStats({ sql, store, rest, log, now })
   return { fetch, rest, stats }
 }
 const callsTo = (fetch: { calls: FakeRequest[] }, path: string) =>
@@ -480,40 +477,18 @@ describe("stats job", () => {
 })
 
 describe("supply", () => {
-  it("chimera stats read permanentSupply and maxPermanent", async () => {
+  it("chimera stats report OpenSea's supply from the collection's columns", async () => {
     const s = setup({ [statsPath(A)]: osStats({ floor: 1 }) })
     await addCollection(A, {
       launchpad: "chimera",
       stats_tier: "hot",
       next_stats_at: new Date(T0),
-      // OpenSea's own total and the column from discovery are not used for a Chimera collection.
       total_supply: 5,
       max_supply: "7",
     })
-    chain.chimeraSupplies.set(A, { permanentSupply: 729n, maxPermanent: 999n })
     await s.stats.job.run(A)
-    expect(chain.chimeraReads).toEqual([A])
-    expect((await statsEvents())[0]).toMatchObject({ totalSupply: "729", maxSupply: "999" })
-    expect((await statRows(A))[0]?.total_supply).toBe(729)
-  })
-
-  it("a chimera collection whose reads revert falls back to the collection's total supply", async () => {
-    const s = setup({ [statsPath(A)]: osStats({ floor: 1 }) })
-    await addCollection(A, {
-      launchpad: "chimera",
-      stats_tier: "hot",
-      next_stats_at: new Date(T0),
-      total_supply: 5,
-    })
-    await s.stats.job.run(A)
-    expect((await statsEvents())[0]).toMatchObject({ totalSupply: "5", maxSupply: null })
-  })
-
-  it("other collections do not read the chain", async () => {
-    const s = setup({ [statsPath(A)]: osStats({ floor: 1 }) })
-    await addCollection(A, { stats_tier: "hot", next_stats_at: new Date(T0), total_supply: 5 })
-    await s.stats.job.run(A)
-    expect(chain.chimeraReads).toEqual([])
+    expect((await statsEvents())[0]).toMatchObject({ totalSupply: "5", maxSupply: "7" })
+    expect((await statRows(A))[0]?.total_supply).toBe(5)
   })
 })
 

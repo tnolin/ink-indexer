@@ -127,10 +127,6 @@ export class ReplayChain implements Chain {
     throw new Error("readTotalSupplyAt was not recorded")
   }
 
-  async readChimeraSupply(): Promise<null> {
-    throw new Error("readChimeraSupply was not recorded")
-  }
-
   async hasCodeAt(): Promise<boolean> {
     throw new Error("hasCodeAt was not recorded")
   }
