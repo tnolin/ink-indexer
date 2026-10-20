@@ -1,11 +1,16 @@
+import type { Sql } from "@ink-indexer/db"
 import { type OsCollection, parseCollection, parseContract } from "@ink-indexer/sdk"
+import { CURSOR_ROW } from "../../store"
 import {
   ACCOUNT_RETRY_MS,
+  BLOCK_S,
   DISCOVERY_DAILY_MS,
   DISCOVERY_GIVE_UP_S,
   DISCOVERY_RETRY_MS,
   JOBS_PER_TICK,
+  METADATA_ACTIVE_S,
   METADATA_REFRESH_MS,
+  METADATA_SLOW_REFRESH_MS,
   SCHEDULER_TICK_MS,
   SLOW_JOB_EVERY_MS,
   TRANSIENT_RETRY_MS,
@@ -26,6 +31,28 @@ export function nextDiscoveryDelay(failures: number): number | null {
   let elapsed = 0
   for (let i = 1; i < failures; i++) elapsed += wait(i)
   return elapsed + wait(failures) > DISCOVERY_GIVE_UP_S * 1000 ? null : wait(failures)
+}
+
+/**
+ * How long until a collection's page is read again: a week for a `filtered` collection and for one
+ * with no mint or sale in the last week, a day for the rest.
+ *
+ * shortcut: activity is read from the mint and sale rows still stored (mints for 8 days, sales for
+ * 90) when the page is read, so a quiet collection that wakes up is read up to a week late. Move
+ * `next_metadata_at` up from the chain write path when a collection turns active to remove the lag.
+ */
+async function refreshDelay(sql: Sql, contract: string): Promise<number> {
+  const [row] = await sql<{ slow: boolean }[]>`
+    select c.verdict = 'filtered' or not (
+      exists (select 1 from indexer.nft_mints m
+        where m.contract = c.contract and m.block >= h.block - ${METADATA_ACTIVE_S / BLOCK_S})
+      or exists (select 1 from indexer.nft_sales s
+        where s.contract = c.contract and s.block >= h.block - ${METADATA_ACTIVE_S / BLOCK_S})
+    ) as slow
+    from indexer.nft_collections c
+    left join indexer.cursors h on h.source = ${CURSOR_ROW}
+    where c.contract = ${contract}`
+  return row?.slow ? METADATA_SLOW_REFRESH_MS : METADATA_REFRESH_MS
 }
 
 /** OpenSea writes `calculated_at` without a zone; it is UTC. */
@@ -169,7 +196,7 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
         next_discovery_at: null,
         discovered_at: new Date(t),
         next_metadata_at: new Date(
-          t + (accountFailed ? accountRetryMs(accountFailed) : METADATA_REFRESH_MS),
+          t + (accountFailed ? accountRetryMs(accountFailed) : await refreshDelay(sql, contract)),
         ),
         verdict_dirty: true,
         // A SeaDrop collection gets its drop page now, unless that is already due.
@@ -245,7 +272,8 @@ export function createMetadataJob(deps: OsJobDeps): Job {
         ...columns,
         ...supplyColumn(page.value),
         next_metadata_at: new Date(
-          now() + (accountFailed ? accountRetryMs(accountFailed) : METADATA_REFRESH_MS),
+          now() +
+            (accountFailed ? accountRetryMs(accountFailed) : await refreshDelay(sql, contract)),
         ),
         ...(changed || (account?.ok && account.value.verified !== (cached?.verified ?? false))
           ? { verdict_dirty: true }

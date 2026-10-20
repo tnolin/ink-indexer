@@ -37,6 +37,10 @@ export const SLOW_JOB_EVERY_MS = MINUTE_MS
 
 /** Collection page fields are read again this long after the last read. */
 export const METADATA_REFRESH_MS = DAY_MS
+/** ...or this long for a `filtered` collection and one with no mint or sale in the last `METADATA_ACTIVE_S`. */
+export const METADATA_SLOW_REFRESH_MS = 7 * DAY_MS
+/** A collection with a mint or a sale this recent (7 days) is read at the daily pace. */
+export const METADATA_ACTIVE_S = 7 * 86400
 
 /** A SeaDrop configuration log makes the drop page due this soon, unless it is due sooner. */
 export const DROPS_DEBOUNCE_MS = 5 * MINUTE_MS

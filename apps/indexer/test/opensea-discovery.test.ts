@@ -151,7 +151,8 @@ describe("discovery", () => {
     expect(row.image_url).toMatch(/^https:\/\//)
     expect(at(row.rarity_calculated_at.getTime())).toBe("2026-10-18T12:08:38.783Z")
     expect(at(row.discovered_at.getTime())).toBe(at(T0))
-    expect(at(row.next_metadata_at.getTime())).toBe(at(T0 + DAY))
+    // No mint or sale in the last 7 days: the page is read weekly.
+    expect(at(row.next_metadata_at.getTime())).toBe(at(T0 + 7 * DAY))
     expect(row.snapshot_hash).toMatch(/^[0-9a-f]{64}$/)
 
     const events = await eventsOf<NftCollectionEvent>("nft.collection")
@@ -406,6 +407,9 @@ function saleOf(contract: string): NftBatch["sales"][number] {
   }
 }
 
+/** A sale in the window the refresh cadence looks at (the chain cursor is block 100). */
+const recentSale = (contract: string) => write(emptyBatch({ sales: [saleOf(contract)] }))
+
 describe("metadata refresh", () => {
   it("fetches the collection daily; an unchanged page writes nothing, a changed safelist writes one event", async () => {
     let safelist = "not_requested"
@@ -418,6 +422,7 @@ describe("metadata refresh", () => {
       }),
     })
     await addCollection(HORNET)
+    await recentSale(HORNET)
     await s.scheduler.tick()
     expect(await eventsOf("nft.collection")).toHaveLength(1)
     await sql`update indexer.nft_collections set verdict_dirty = false where contract = ${HORNET}`
@@ -447,6 +452,30 @@ describe("metadata refresh", () => {
     expect(events.map((e) => e.txHash)).toEqual([`os:col:${HORNET}:1`, `os:col:${HORNET}:2`])
     expect(events[1]?.safelist).toBe("verified")
   })
+  it("a filtered collection and one with no mint or sale in 7 days are read every 7 days, an active one daily", async () => {
+    const s = setup({
+      ...discoveryRoutes(HORNET, "ink-hornet"),
+      ...discoveryRoutes(PRTSCN, "prtscn-ink"),
+      ...discoveryRoutes(WIRED, "wiredonink"),
+    })
+    await addCollection(HORNET, { verdict: "filtered" })
+    await recentSale(HORNET)
+    await addCollection(PRTSCN)
+    await addCollection(WIRED)
+    await recentSale(WIRED)
+    await s.scheduler.tick()
+    const next = async (c: string) => at((await rowOf(c)).next_metadata_at.getTime())
+    expect(await next(HORNET)).toBe(at(T0 + 7 * DAY))
+    expect(await next(PRTSCN)).toBe(at(T0 + 7 * DAY))
+    expect(await next(WIRED)).toBe(at(T0 + DAY))
+
+    // The same on a refresh. A sale 8 days of blocks back is outside the window.
+    await sql`update indexer.cursors set block = block + ${8 * 86400}`
+    await sql`update indexer.nft_collections set next_metadata_at = ${new Date(T0)}`
+    clock = T0 + 2 * MIN
+    await s.scheduler.tick()
+    expect(await next(WIRED)).toBe(at(T0 + 2 * MIN + 7 * DAY))
+  })
 })
 
 describe("total supply", () => {
@@ -461,6 +490,7 @@ describe("total supply", () => {
       }),
     })
     await addCollection(HORNET)
+    await recentSale(HORNET)
     await s.scheduler.tick()
     expect((await rowOf(HORNET)).total_supply).toBe(2222)
     await sql`update indexer.nft_collections set verdict_dirty = false where contract = ${HORNET}`
