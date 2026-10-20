@@ -598,7 +598,7 @@ describe("trackedSlugs", () => {
     await mint(30, 60)
     await add(31, { verdict: "pending" }) // its last mint is an hour old
     await mint(31, 3600)
-    await add(40, { verdict: "junk" })
+    await add(40, { verdict: "filtered" })
     await sales(40, 3, DAY_S)
     await add(41, { verdict: "pending" })
     await sales(41, 5, 2 * DAY_S)
@@ -608,24 +608,24 @@ describe("trackedSlugs", () => {
     expect(await trackedSlugs(sql)).toEqual(["c-10", "c-21", "c-20", "c-30", "c-41", "c-40"])
   })
 
-  it("a manual junk mark leaves the collection out, however much it sells", async () => {
-    await add(10, { verdict: "junk" })
-    await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(10)}, 'junk')`
+  it("a manual filtered mark leaves the collection out, however much it sells", async () => {
+    await add(10, { verdict: "filtered" })
+    await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(10)}, 'filtered')`
     await sales(10, 50, DAY_S)
     await add(11, { verdict: "real" })
     await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(11)}, 'real')`
-    await add(12, { verdict: "junk" }) // junk by the gates, not by a mark: a 7-day seller
+    await add(12, { verdict: "filtered" }) // filtered by the gates, not by a mark: a 7-day seller
     await sales(12, 1, DAY_S)
     expect(await trackedSlugs(sql)).toEqual(["c-11", "c-12"])
   })
 
-  it("contracts that share a slug count once, and a junk mark on any of them leaves the slug out", async () => {
+  it("contracts that share a slug count once, and a filtered mark on any of them leaves the slug out", async () => {
     await add(60, { verdict: "real", slug: "shared" })
     await add(61, { slug: "shared" })
     await sales(61, 9, DAY_S)
     await add(62, { verdict: "real", slug: "marked" })
     await add(63, { slug: "marked" })
-    await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(63)}, 'junk')`
+    await sql`insert into indexer.nft_overrides (contract, verdict) values (${addr(63)}, 'filtered')`
     await add(64, { verdict: "real" })
     expect(await trackedSlugs(sql)).toEqual(["shared", "c-64"])
   })

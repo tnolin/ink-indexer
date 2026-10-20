@@ -351,7 +351,7 @@ describe("the verdict job", () => {
     await s.verdict.run(BURST)
     const row = await rowOf(BURST)
     // Sold out in its first block, one public stage: gate 2 fails.
-    expect(row).toMatchObject({ kind: "drop", verdict: "junk", max_supply: "100" })
+    expect(row).toMatchObject({ kind: "drop", verdict: "filtered", max_supply: "100" })
     const gates: NftGates = row.gates
     expect(gates).toEqual({
       page: "pass",
@@ -361,7 +361,7 @@ describe("the verdict job", () => {
       farmShareBps: 0,
     })
     const [snapshot] = await eventsOf<NftCollectionEvent>("nft.collection")
-    expect(snapshot).toMatchObject({ verdict: "junk", kind: "drop", manual: false, gates })
+    expect(snapshot).toMatchObject({ verdict: "filtered", kind: "drop", manual: false, gates })
     // The mint ended: the traits sample is due at once.
     expect(row.next_traits_at).toEqual(new Date(T0))
     expect(row.next_verdict_at).toBeNull()
@@ -575,7 +575,7 @@ describe("the traits job", () => {
     await checkAt(T0 + DAY)
     await checkAt(T0 + 2 * DAY)
     row = await rowOf(BURST)
-    expect(row).toMatchObject({ traits_checks: 3, verdict: "junk" })
+    expect(row).toMatchObject({ traits_checks: 3, verdict: "filtered" })
     expect(row.gates.traits).toBe("pending")
 
     await checkAt(T0 + 3 * DAY)
@@ -660,17 +660,17 @@ describe("manual marks", () => {
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ verdict: "pending", manual: false, kind: "drop" })
 
-    await applyMark(deps, { contract: HORNET, value: "junk" })
+    await applyMark(deps, { contract: HORNET, value: "filtered" })
     events = await eventsOf<NftCollectionEvent>("nft.collection")
     expect(events).toHaveLength(2)
-    expect(events[1]).toMatchObject({ verdict: "junk", manual: true })
+    expect(events[1]).toMatchObject({ verdict: "filtered", manual: true })
     expect(
       (await sql`select kind, verdict from indexer.nft_overrides where contract = ${HORNET}`)[0],
-    ).toMatchObject({ kind: null, verdict: "junk" })
+    ).toMatchObject({ kind: null, verdict: "filtered" })
 
     await applyMark(deps, { contract: HORNET, value: "continuous" })
     events = await eventsOf<NftCollectionEvent>("nft.collection")
-    expect(events.at(-1)).toMatchObject({ verdict: "junk", manual: true, kind: "continuous" })
+    expect(events.at(-1)).toMatchObject({ verdict: "filtered", manual: true, kind: "continuous" })
     expect(events.at(-1)?.gates).toMatchObject({ structure: "n/a", farm: "n/a" })
 
     await applyMark(deps, { contract: HORNET, value: "clear" })

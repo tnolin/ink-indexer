@@ -143,7 +143,7 @@ function farmShare(contract: string, minters: Set<string>) {
 }
 
 describe("reference collections", () => {
-  it("burst: single free public stage, done in 2 minutes → structure fail → junk", () => {
+  it("burst: single free public stage, done in 2 minutes → structure fail → filtered", () => {
     const c = chainFacts("burst-mints", BURST)
     const recorded = new Set(loadFarmWallets()[BURST])
     const f = facts({
@@ -164,7 +164,7 @@ describe("reference collections", () => {
     expect(gates.page).toBe("fail")
     expect(gates.farm).toBe("fail")
     expect(gates.farmShareBps).toBeGreaterThan(3000)
-    expect(verdict).toBe("junk")
+    expect(verdict).toBe("filtered")
 
     // Not sold out but stopped after two minutes: the same once 30 minutes have passed.
     const stopped = evaluateGates({ ...f, soldOutTs: null })
@@ -371,7 +371,7 @@ describe("kind", () => {
 })
 
 describe("gates", () => {
-  it("a chimera collection with a failing page gate is pending or junk, never judged on structure or farm share", () => {
+  it("a chimera collection with a failing page gate is pending or filtered, never judged on structure or farm share", () => {
     const chimera = facts({
       kind: "continuous",
       dropStages: [],
@@ -384,7 +384,7 @@ describe("gates", () => {
       verdict: "real",
     })
     const noSocials = { ...chimera, page: { ...chimera.page, twitter: null, website: null } }
-    expect(evaluateGates(noSocials).verdict).toBe("junk")
+    expect(evaluateGates(noSocials).verdict).toBe("filtered")
     expect(evaluateGates(noSocials).gates.structure).toBe("n/a")
     const noSlug = {
       ...chimera,
@@ -402,19 +402,23 @@ describe("gates", () => {
       lastMintTs: 1_000_000 - 59 * MIN,
       farmShareBps: 9000,
     })
-    expect(evaluateGates(failing).verdict).toBe("junk")
+    expect(evaluateGates(failing).verdict).toBe("filtered")
     const v = evaluateGates({ ...failing, safelist: "verified" })
     expect(v.verdict).toBe("real")
     expect(v.gates.page).toBe("pass")
     expect(v.gates.structure).toBe("pass")
   })
 
-  it("manual junk overrides verified", () => {
-    expect(evaluateGates(facts({ safelist: "verified", override: "junk" })).verdict).toBe("junk")
-    expect(evaluateGates(facts({ creatorVerified: true, override: "junk" })).verdict).toBe("junk")
+  it("manual filtered overrides verified", () => {
+    expect(evaluateGates(facts({ safelist: "verified", override: "filtered" })).verdict).toBe(
+      "filtered",
+    )
+    expect(evaluateGates(facts({ creatorVerified: true, override: "filtered" })).verdict).toBe(
+      "filtered",
+    )
     // And a manual real overrides failing gates.
     const failing = facts({ farmShareBps: 9000 })
-    expect(evaluateGates(failing).verdict).toBe("junk")
+    expect(evaluateGates(failing).verdict).toBe("filtered")
     expect(evaluateGates({ ...failing, override: "real" }).verdict).toBe("real")
   })
 
@@ -425,7 +429,7 @@ describe("gates", () => {
     expect(retrying.verdict).toBe("pending")
     const gaveUp = evaluateGates(facts({ page: none, discoveryRetrying: false }))
     expect(gaveUp.gates.page).toBe("fail")
-    expect(gaveUp.verdict).toBe("junk")
+    expect(gaveUp.verdict).toBe("filtered")
   })
 
   it("gate 1 fail turns pass when socials appear", () => {
@@ -433,7 +437,7 @@ describe("gates", () => {
       page: { slug: "x", name: "X", imageUrl: "https://img", twitter: null, website: null },
     })
     expect(evaluateGates(bare).gates.page).toBe("fail")
-    expect(evaluateGates(bare).verdict).toBe("junk")
+    expect(evaluateGates(bare).verdict).toBe("filtered")
     const site = evaluateGates({ ...bare, page: { ...bare.page, website: "https://x.art" } })
     expect(site.gates.page).toBe("pass")
     expect(site.verdict).toBe("real")
@@ -461,7 +465,7 @@ describe("gates", () => {
       traits: { state: "empty", checks: 4 },
     })
     expect(after.gates.traits).toBe("fail")
-    expect(after.verdict).toBe("junk")
+    expect(after.verdict).toBe("filtered")
     // A pass at any checkpoint holds.
     expect(
       evaluateGates({ ...ended, now: end + 80 * HOUR, traits: { state: "pass", checks: 2 } }).gates
@@ -478,11 +482,11 @@ describe("gates", () => {
     expect(evaluateGates({ ...idle, now: end + DAY + 72 * HOUR }).gates.traits).toBe("fail")
   })
 
-  it("farm share 31% with 60 minters → junk; 31% with 40 minters → pending farm", () => {
+  it("farm share 31% with 60 minters → filtered; 31% with 40 minters → pending farm", () => {
     const sixty = evaluateGates(facts({ farmShareBps: 3100, distinctMinters: 60 }))
     expect(sixty.gates.farm).toBe("fail")
     expect(sixty.gates.farmShareBps).toBe(3100)
-    expect(sixty.verdict).toBe("junk")
+    expect(sixty.verdict).toBe("filtered")
     const forty = evaluateGates(facts({ farmShareBps: 3100, distinctMinters: 40 }))
     expect(forty.gates.farm).toBe("pending")
     expect(forty.verdict).toBe("real")

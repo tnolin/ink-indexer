@@ -543,9 +543,9 @@ export function createStream(deps: {
 }
 
 /**
- * The collections to stream, in order: manual marks other than `junk`, then `real` collections,
+ * The collections to stream, in order: manual marks other than `filtered`, then `real` collections,
  * then `pending` collections minting now (a mint in the last 10 minutes), then any collection with
- * an on-chain sale in 7 days. A manual `junk` mark on any contract leaves its slug out entirely. Within each
+ * an on-chain sale in 7 days. A manual `filtered` mark on any contract leaves its slug out entirely. Within each
  * group the most 7-day sales come first, ties by slug. Only collections with a slug.
  *
  * At most `TRACKED_CAP + 1` (1,001): when more than the cap qualify, the extra one makes the set
@@ -563,13 +563,13 @@ export async function trackedSlugs(sql: Sql): Promise<string[]> {
   const salesCut = blockBefore(RANK_WINDOW_S)
   const mintCut = blockBefore(STILL_MINTING_S)
   // Slugs are not unique per contract: rank by slug, before the limit, so the overflow row and
-  // a junk mark on any contract of the slug both count.
+  // a filtered mark on any contract of the slug both count.
   const rows = await sql<{ slug: string }[]>`
     with sales as (
       select contract, count(*)::int as n from indexer.nft_sales
       where block >= ${salesCut}::bigint group by contract),
     ranked as (
-      select c.slug, r.rank, coalesce(s.n, 0) as n, o.verdict = 'junk' as junk_mark
+      select c.slug, r.rank, coalesce(s.n, 0) as n, o.verdict = 'filtered' as filtered_mark
       from indexer.nft_collections c
       left join indexer.nft_overrides o on o.contract = c.contract
       left join sales s on s.contract = c.contract
@@ -582,7 +582,7 @@ export async function trackedSlugs(sql: Sql): Promise<string[]> {
       where c.slug is not null)
     select slug from ranked
     group by slug
-    having min(rank) is not null and bool_and(junk_mark is not true)
+    having min(rank) is not null and bool_and(filtered_mark is not true)
     order by min(rank), sum(n) desc, slug
     limit ${TRACKED_CAP + 1}`
   return rows.map((r) => r.slug)

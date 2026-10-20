@@ -5,9 +5,9 @@ Follows Ink mainnet and writes InkyPump V2 launches, curve trades and bonds, and
     pnpm start                                  # backfill to head, then follow new blocks
     pnpm backfill --from <block> [--to <block>] # re-scan a range; safe to repeat
     pnpm backfill --from <block> --sources nft-sales,nft-launches
-    pnpm nft:mark <contract> <real|junk|continuous|drop|clear>
+    pnpm nft:mark <contract> <real|filtered|continuous|drop|clear>
 
-`--sources` limits a backfill to some sources: `inkypump`, `nft-mints` (ERC-721 and ERC-1155 mints and burns, SeaDrop logs), `nft-sales` (Seaport) and `nft-launches` (Chimera campaigns). The default is every source. `nft:mark` sets a collection's verdict (`real`, `junk`) or kind (`continuous`, `drop`) by hand, or `clear`s both, and re-evaluates it.
+`--sources` limits a backfill to some sources: `inkypump`, `nft-mints` (ERC-721 and ERC-1155 mints and burns, SeaDrop logs), `nft-sales` (Seaport) and `nft-launches` (Chimera campaigns). The default is every source. `nft:mark` sets a collection's verdict (`real`, `filtered`) or kind (`continuous`, `drop`) by hand, or `clear`s both, and re-evaluates it.
 
 Run `backfill` with `start` stopped: two writers break the guarantee that event `id` order matches commit order, which readers of `where confirmed and id > $1` rely on.
 

@@ -94,7 +94,7 @@ A snapshot, written at discovery and whenever a field changes.
 ```
 
 - `kind` is `drop` (the collection has a mint phase), `continuous` (NFTs keep minting and burning with no stages, as in Chimera collections) or `legacy` (the mint finished before the indexer's NFT history, so there are no mint events).
-- `verdict` is `real` when the collection passes the quality checks, `pending` while they are undecided, and `junk` when one has failed. `gates` shows each check: `page`, `structure`, `traits` and `farm` are `pass`, `fail` or `pending` (`structure` and `farm` are `n/a` where they do not apply), and `farmShareBps` is the share of minters that are farm wallets. `manual` is true when the verdict or kind was set by hand.
+- `verdict` is `real` when the collection passes the quality checks, `pending` while they are undecided, and `filtered` when one has failed. `gates` shows each check: `page`, `structure`, `traits` and `farm` are `pass`, `fail` or `pending` (`structure` and `farm` are `n/a` where they do not apply), and `farmShareBps` is the share of minters that are farm wallets. `manual` is true when the verdict or kind was set by hand.
 - `creator` is `null` while unknown, and absent on snapshots written before the field existed, so test with `== null`.
 
 ### `nft.drop`

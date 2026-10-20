@@ -98,7 +98,7 @@ export type NftCollectionEvent = NftBase & {
   links: { twitter: string | null; website: string | null; discord: string | null }
   standard: "erc721" | "erc1155"
   kind: "drop" | "continuous" | "legacy"
-  verdict: "real" | "pending" | "junk"
+  verdict: "real" | "pending" | "filtered"
   gates: NftGates
   /** True when the verdict was set by hand. */
   manual: boolean

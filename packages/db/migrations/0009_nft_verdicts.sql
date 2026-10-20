@@ -5,7 +5,7 @@
 create table indexer.nft_overrides (
   contract text primary key,
   kind text check (kind in ('drop', 'continuous')),
-  verdict text check (verdict in ('real', 'junk')),
+  verdict text check (verdict in ('real', 'filtered')),
   note text,
   set_at timestamptz
 );

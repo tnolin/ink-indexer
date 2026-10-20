@@ -88,13 +88,13 @@ describe("parseCli mark", () => {
   const HORNET = "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b"
 
   it("nft:mark validates the address and value", () => {
-    expect(parseCli(["mark", HORNET.toUpperCase().replace("0X", "0x"), "junk"])).toEqual({
+    expect(parseCli(["mark", HORNET.toUpperCase().replace("0X", "0x"), "filtered"])).toEqual({
       ok: true,
       command: "mark",
       contract: HORNET,
-      value: "junk",
+      value: "filtered",
     })
-    for (const value of ["real", "junk", "continuous", "drop", "clear"])
+    for (const value of ["real", "filtered", "continuous", "drop", "clear"])
       expect(parseCli(["mark", HORNET, value])).toMatchObject({ ok: true, value })
     for (const argv of [
       ["mark"],
@@ -110,7 +110,7 @@ describe("parseCli mark", () => {
       expect(parseCli(argv).ok, argv.join(" ")).toBe(false)
     const r = parseCli(["mark", HORNET, "spam"])
     expect(r.ok === false && r.usage).toBe(
-      "usage: nft:mark <contract> <real|junk|continuous|drop|clear>",
+      "usage: nft:mark <contract> <real|filtered|continuous|drop|clear>",
     )
   })
 })

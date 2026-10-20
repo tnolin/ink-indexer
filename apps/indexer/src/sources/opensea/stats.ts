@@ -34,7 +34,7 @@ export type Tier = "hot" | "warm" | "cold"
 /** What `planTiers` needs to know about a collection that has a slug and recent activity. */
 export type TierCandidate = {
   contract: string
-  junk: boolean
+  filtered: boolean
   /** A mint within the last ten minutes. */
   minting: boolean
   /** Sales over the last seven days. */
@@ -44,13 +44,13 @@ export type TierCandidate = {
 /**
  * The tier of each candidate. Hot: collections minting now, and the 30 tracked collections with
  * the most sales in 7 days (at least one). Warm: the next 70 of the tracked collections, in the
- * same order. Cold: every other candidate. Junk is tracked by nobody but followers, so it is always
+ * same order. Cold: every other candidate. Filtered is tracked by nobody but followers, so it is always
  * cold; the order of ties is the contract.
  */
 export function planTiers(rows: TierCandidate[]): Map<string, Tier> {
   const plan = new Map<string, Tier>()
   const ranked = rows
-    .filter((r) => !r.junk)
+    .filter((r) => !r.filtered)
     .sort((a, b) => b.sales7d - a.sales7d || (a.contract < b.contract ? -1 : 1))
   const hot = new Set(ranked.filter((r) => r.minting).map((r) => r.contract))
   for (const r of ranked.filter((r) => r.sales7d > 0).slice(0, HOT_TOP)) hot.add(r.contract)
@@ -62,7 +62,7 @@ export function planTiers(rows: TierCandidate[]): Map<string, Tier> {
       plan.set(r.contract, "warm")
     } else plan.set(r.contract, "cold")
   }
-  for (const r of rows) if (r.junk) plan.set(r.contract, "cold")
+  for (const r of rows) if (r.filtered) plan.set(r.contract, "cold")
   return plan
 }
 
@@ -85,9 +85,9 @@ export async function assignTiers(sql: Sql, now: Date): Promise<void> {
   const listedCut = new Date(now.getTime() - COLD_WINDOW_S * 1000)
 
   const rows = await sql<
-    { contract: string; junk: boolean; minting: boolean; sales7d: number; active: boolean }[]
+    { contract: string; filtered: boolean; minting: boolean; sales7d: number; active: boolean }[]
   >`
-    select c.contract, c.verdict = 'junk' as junk,
+    select c.contract, c.verdict = 'filtered' as filtered,
       exists (select 1 from indexer.nft_mints m
         where m.contract = c.contract and m.block >= ${mintCut!}) as minting,
       (select count(*)::int from indexer.nft_sales s

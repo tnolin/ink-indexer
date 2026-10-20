@@ -20,7 +20,7 @@ alter table indexer.nft_collections
   add column next_metadata_at timestamptz,
   add column next_drops_at timestamptz,
   add column drop_first_start timestamptz,
-  add column verdict text not null default 'pending' check (verdict in ('real', 'pending', 'junk')),
+  add column verdict text not null default 'pending' check (verdict in ('real', 'pending', 'filtered')),
   add column gates jsonb,
   add column verdict_dirty boolean not null default true,
   -- Hash of the last `nft.collection` event written and how many have been written.

@@ -35,7 +35,7 @@ import {
 // The four quality gates and the verdict they give (ADR 0017). The pure part
 // decides; the verdict job gathers the facts, stores the result and writes the snapshot.
 
-export type Verdict = "real" | "pending" | "junk"
+export type Verdict = "real" | "pending" | "filtered"
 
 /**
  * What the traits sample showed: `pass` (the item has traits), `empty` (no traits and no rarity
@@ -47,7 +47,7 @@ export type TraitsState = "pending" | "pass" | "empty"
 export type GateFacts = {
   kind: Kind | "pending_kind"
   /** A manual verdict mark. */
-  override: "real" | "junk" | null
+  override: "real" | "filtered" | null
   /** OpenSea's safelist status. */
   safelist: string | null
   /** The creator's OpenSea account is verified. */
@@ -171,7 +171,7 @@ function farmGate(f: GateFacts): GateState | "n/a" {
 
 /**
  * The four gates and the verdict. Precedence: a manual mark, then `safelist: verified`, then the
- * gates: any failed gate is `junk`; otherwise `pending` while gate 1 or 2 is undecided; otherwise
+ * gates: any failed gate is `filtered`; otherwise `pending` while gate 1 or 2 is undecided; otherwise
  * `real` (gates 3 and 4 only need not to have failed).
  */
 export function evaluateGates(f: GateFacts): { gates: NftGates; verdict: Verdict } {
@@ -188,7 +188,7 @@ export function evaluateGates(f: GateFacts): { gates: NftGates; verdict: Verdict
     : f.safelist === "verified"
       ? "real"
       : states.includes("fail")
-        ? "junk"
+        ? "filtered"
         : gates.page === "pending" || gates.structure === "pending"
           ? "pending"
           : "real"
@@ -387,8 +387,8 @@ export type VerdictDeps = {
 
 const asKind = (v: string | null): Kind | undefined =>
   v === "drop" || v === "continuous" ? v : undefined
-const asVerdict = (v: string | null): "real" | "junk" | null =>
-  v === "real" || v === "junk" ? v : null
+const asVerdict = (v: string | null): "real" | "filtered" | null =>
+  v === "real" || v === "filtered" ? v : null
 const toDate = (s: number | null) => (s === null ? null : new Date(s * 1000))
 
 /**

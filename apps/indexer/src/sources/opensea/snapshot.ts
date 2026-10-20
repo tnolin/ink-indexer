@@ -69,7 +69,7 @@ export type CollectionPatch = Partial<
 
 const KINDS = ["drop", "continuous", "legacy"] as const
 type Kind = (typeof KINDS)[number]
-const VERDICTS = ["real", "pending", "junk"] as const
+const VERDICTS = ["real", "pending", "filtered"] as const
 
 /** Fields the hash leaves out: they differ between two snapshots of the same collection. */
 const BASE_FIELDS = new Set(["txHash", "logIndex", "blockNumber", "blockTimestamp"])

@@ -1,13 +1,13 @@
 import type { Sql } from "@ink-indexer/db"
 import type { Job } from "./sources/opensea/scheduler"
 
-// The manual mark: `nft:mark <contract> <real|junk|continuous|drop|clear>`. `real` and `junk` set
+// The manual mark: `nft:mark <contract> <real|filtered|continuous|drop|clear>`. `real` and `filtered` set
 // the verdict, `continuous` and `drop` the kind, `clear` removes both. The process entry point is
 // `main.ts mark` (the `nft:mark` script).
 
-export const MARK_USAGE = "usage: nft:mark <contract> <real|junk|continuous|drop|clear>"
+export const MARK_USAGE = "usage: nft:mark <contract> <real|filtered|continuous|drop|clear>"
 
-const VALUES = ["real", "junk", "continuous", "drop", "clear"] as const
+const VALUES = ["real", "filtered", "continuous", "drop", "clear"] as const
 export type MarkValue = (typeof VALUES)[number]
 export type Mark = { contract: string; value: MarkValue; note?: string }
 
@@ -37,7 +37,7 @@ export async function applyMark(deps: { sql: Sql; verdict: Job }, mark: Mark): P
     if (value === "clear") {
       await tx`delete from indexer.nft_overrides where contract = ${contract}`
     } else {
-      const column = value === "real" || value === "junk" ? "verdict" : "kind"
+      const column = value === "real" || value === "filtered" ? "verdict" : "kind"
       await tx`
         insert into indexer.nft_overrides ${tx({ contract, [column]: value, note: mark.note ?? null, set_at: new Date() })}
         on conflict (contract) do update set

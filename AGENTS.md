@@ -18,7 +18,7 @@
 - `pnpm lint`, `pnpm typecheck`, `pnpm format`.
 - `pnpm db:dev`: persistent local Postgres in `.data/postgres`.
 - `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>] [--sources inkypump,nft-mints,nft-sales,nft-launches]` (default: every source).
-- `pnpm nft:mark <contract> <real|junk|continuous|drop|clear>`: a manual verdict or kind for a collection.
+- `pnpm nft:mark <contract> <real|filtered|continuous|drop|clear>`: a manual verdict or kind for a collection.
 
 ## Adding an InkyPump hook
 

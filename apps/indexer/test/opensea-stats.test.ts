@@ -151,7 +151,7 @@ async function addMint(contract: string, ageS: number) {
 }
 
 describe("tiers", () => {
-  it("minting collection is hot; 31st by sales is warm; junk with a sale in 30 days is cold; idle is untiered", async () => {
+  it("minting collection is hot; 31st by sales is warm; filtered with a sale in 30 days is cold; idle is untiered", async () => {
     // 31 collections with 40, 39, ... 10 sales in the last 7 days.
     const sellers = Array.from({ length: 31 }, (_, i) => addr(0x100 + i))
     for (const [i, c] of sellers.entries()) {
@@ -161,14 +161,14 @@ describe("tiers", () => {
     const minting = addr(0x200)
     await addCollection(minting, { verdict: "real" })
     await addMint(minting, 60)
-    // Junk is never hot or warm, however much it sells or mints.
-    const junkQuiet = addr(0x201)
-    await addCollection(junkQuiet, { verdict: "junk" })
-    await addSales(junkQuiet, 1, (10 * DAY) / SEC)
-    const junkBusy = addr(0x202)
-    await addCollection(junkBusy, { verdict: "junk" })
-    await addSales(junkBusy, 100, DAY / SEC)
-    await addMint(junkBusy, 30)
+    // Filtered is never hot or warm, however much it sells or mints.
+    const filteredQuiet = addr(0x201)
+    await addCollection(filteredQuiet, { verdict: "filtered" })
+    await addSales(filteredQuiet, 1, (10 * DAY) / SEC)
+    const filteredBusy = addr(0x202)
+    await addCollection(filteredBusy, { verdict: "filtered" })
+    await addSales(filteredBusy, 100, DAY / SEC)
+    await addMint(filteredBusy, 30)
     // A sale 40 days ago is outside the window.
     const idle = addr(0x203)
     await addCollection(idle)
@@ -186,8 +186,8 @@ describe("tiers", () => {
     for (const c of sellers.slice(0, 30)) expect(t[c], c).toBe("hot")
     expect(t[sellers[30]!]).toBe("warm")
     expect(t[minting]).toBe("hot")
-    expect(t[junkQuiet]).toBe("cold")
-    expect(t[junkBusy]).toBe("cold")
+    expect(t[filteredQuiet]).toBe("cold")
+    expect(t[filteredBusy]).toBe("cold")
     expect(t[idle]).toBeNull()
     expect(t[noSlug]).toBeNull()
     expect(t[listed]).toBe("warm")
@@ -216,7 +216,7 @@ describe("tiers", () => {
   it("the hot and warm tiers are cut at 30 and 70, the rest of the tracked set is cold", () => {
     const rows: TierCandidate[] = Array.from({ length: 120 }, (_, i) => ({
       contract: addr(i + 1),
-      junk: false,
+      filtered: false,
       minting: false,
       sales7d: 1000 - i,
     }))
