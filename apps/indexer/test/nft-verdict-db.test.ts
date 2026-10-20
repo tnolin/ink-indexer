@@ -325,7 +325,7 @@ describe("the verdict job", () => {
     expect((await rowOf(PRTSCN)).verdict_dirty).toBe(false)
   })
 
-  it("stores kind, gates and verdict and writes the snapshot; a failed run is tried again", async () => {
+  it("stores kind, gates and verdict and writes the snapshot; a failed run backs off and is tried again", async () => {
     const s = setup()
     await addCollection(BURST, { seadrop: true, max_supply: "100" })
     await addMints(
@@ -334,7 +334,7 @@ describe("the verdict job", () => {
       [blockAt(T0)],
     )
     clock = T0 + 40 * MIN
-    // A transport failure on maxSupply(): the run throws, and the row stays due.
+    // A transport failure on maxSupply(): the run throws and the row backs off.
     const read = chain.readMaxSupply.bind(chain)
     chain.readMaxSupply = async () => {
       throw new Error("socket closed")
@@ -342,12 +342,19 @@ describe("the verdict job", () => {
     await sql`update indexer.nft_collections set max_supply = null where contract = ${BURST}`
     await s.scheduler.tick()
     expect(reports).toHaveLength(1)
-    expect((await rowOf(BURST)).verdict_dirty).toBe(true)
+    // Not dirty, so it does not sort first and starve the other rows; due again after the back-off.
+    expect(await rowOf(BURST)).toMatchObject({
+      verdict_dirty: false,
+      next_verdict_at: new Date(T0 + 40 * MIN + 5 * MIN),
+    })
+    await addCollection(HORNET, { verdict_dirty: true })
 
     chain.readMaxSupply = read
     chain.maxSupplies.set(BURST, 100n)
     clock += 15_000
-    expect(await s.verdict.due(sql, new Date(clock))).toEqual([BURST])
+    expect(await s.verdict.due(sql, new Date(clock))).toEqual([HORNET])
+    clock += 5 * MIN
+    expect(await s.verdict.due(sql, new Date(clock))).toEqual([HORNET, BURST])
     await s.verdict.run(BURST)
     const row = await rowOf(BURST)
     // Sold out in its first block, one public stage: gate 2 fails.

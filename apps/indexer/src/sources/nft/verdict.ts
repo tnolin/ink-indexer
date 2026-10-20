@@ -29,6 +29,7 @@ import {
   STRUCTURE_MIN_MINT_S,
   TRAITS_CHECKPOINTS_S,
   TRAITS_GRACE_S,
+  TRANSIENT_RETRY_MS,
   VERDICT_RECHECK_S,
 } from "./policy"
 
@@ -561,7 +562,8 @@ export function createVerdictJob(deps: VerdictDeps): Job {
     },
     async run(contract) {
       // Clear the mark first, so a writer that marks the row again while this run reads it is not
-      // lost. A run that fails marks it again, to be tried next tick.
+      // lost. A run that fails backs off instead of marking the row again: a dirty row sorts first
+      // and would retry every tick, starving the others.
       const claimed = await sql`
         update indexer.nft_collections set verdict_dirty = false where contract = ${contract}
         returning 1`
@@ -570,9 +572,9 @@ export function createVerdictJob(deps: VerdictDeps): Job {
         await evaluate(contract)
       } catch (err) {
         await sql`
-          update indexer.nft_collections set verdict_dirty = true where contract = ${contract}`.catch(
-          () => {},
-        )
+          update indexer.nft_collections
+          set next_verdict_at = ${new Date(now() + TRANSIENT_RETRY_MS)}
+          where contract = ${contract}`.catch(() => {})
         throw err
       }
     },
