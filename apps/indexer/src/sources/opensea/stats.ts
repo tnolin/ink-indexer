@@ -339,6 +339,7 @@ export function createStats(deps: StatsDeps) {
           type: "nft.stats",
           floorWei: values.floor_wei,
           floor24hAgoWei: ago?.floor_wei ?? null,
+          // shortcut: unknown owners, sales and volume report 0 (NftStatsEvent has no null for them); widen the event type to null if readers need to tell unknown from zero.
           owners: values.owners ?? 0,
           volume24hWei: values.volume_24h_wei ?? "0",
           sales24h: values.sales_24h ?? 0,

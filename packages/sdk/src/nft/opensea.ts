@@ -37,7 +37,7 @@ export type OsStats = {
   owners: number | null
   volume24hWei: bigint | null
   sales24h: number | null
-  /** Always null today: the stats endpoint does not carry it; read it from the collection. */
+  /** The body's `total_supply` when the stats endpoint carries one, else null; the collection page has it too. */
   totalSupply: number | null
 }
 
