@@ -34,3 +34,23 @@ The `Trade` event's `price` is the cost of the next whole token, `curveValue(sol
 - `sold` is already in the `Trade` event and `saleSupply` is a stored launch parameter, so this adds no state reads.
 - It is added to v1 before any consumer depends on the schema, so the schema version stays 1 and there is no migration. Events written before this change lack the field and need re-indexing.
 
+
+## Amendment 2026-10-20: progress check against inkypump.com
+
+InkyPump's team said V2 progress is ETH raised, not tokens sold over sale supply. A check against the site on 2026-10-20 found that its token pages show `soldBps`, so the 2026-10-10 decision stands: consumers show `soldBps` as curve progress.
+
+- The site treats a token as V2 when it has a launch id, meaning a launch on one of the hooks this indexer reads. Its V1 tokens come from the earlier token factory, which this indexer does not read.
+- On a V2 token page, the header's Funding figure is `min(sold, saleSupply) / saleSupply` from a live `getLaunchState` read. The site's code uses this formula for every V2 launch, whatever the hook. It shows the API's `funding_progress` only until that read returns.
+- The home page's token cards show the API's `funding_progress`. It matches none of the quantities below, and its formula is not public.
+
+Five unbonded V2 launches, all on the legacy Ink hook. Contract state is from block 58,930,887; `progressBpsAfter` is from each launch's last trade, which left the state as read.
+
+| Token | Page | `soldBps` | `progressBpsAfter` | `raised` / target | `netContributions` / target | API `funding_progress` |
+| - | - | - | - | - | - | - |
+| SQUIJAK `0xc899…8bf7` | 58.6% | 5863 | 4131 | 4075 | 3719 | 25.1% |
+| INKPOT `0xc1ad…0343` | 13.8% | 1375 | 468 | 397 | 252 | 5.4% |
+| INKCAT `0x322d…bfff` | not loaded | 1708 | 696 | 696 | 604 | 7.4% |
+| X402 `0xeddc…3f56` | not loaded | 1300 | 492 | 469 | 419 | 5.1% |
+| INKERS `0x469a…f40d` | not loaded | 537 | 537 | 500 | 421 | 5.7% |
+
+Basis-point columns are floored. The pages that did not load would show the same formula, per the site's code.
