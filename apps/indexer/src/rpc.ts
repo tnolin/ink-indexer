@@ -375,9 +375,11 @@ const RESUBSCRIBE_MAX_MS = 5 * 60_000
 
 /**
  * Calls onHead for every new head, and on its own every `stallMs / 3` while no head has arrived for
- * `stallMs`. viem's WebSocket transport reconnects the socket but drops the subscription, so after an
- * error or a silent stall it subscribes again, backing off to RESUBSCRIBE_MAX_MS while the outage lasts.
- * Each outage logs one warning when it starts and one info line when a new head arrives again.
+ * `stallMs`. viem's WebSocket transport reconnects the socket and restores its subscriptions, but forgets
+ * them when its reconnect attempts run out. So the subscription is created again only after `stallMs`
+ * without a head, backing off to RESUBSCRIBE_MAX_MS while the outage lasts.
+ * Each outage logs one warning when it starts (a subscription error or a stall) and one info line when a
+ * new head arrives again.
  */
 export function watchHeads(
   client: Pick<PublicClient, "watchBlockNumber">,
@@ -407,11 +409,15 @@ export function watchHeads(
         onHead()
       },
       onError: (error: unknown) => {
+        // An error starts an outage just as a stall does, so a socket that keeps failing logs once.
         if (!down)
           logger("warn", "head subscription error", {
             error: error instanceof Error ? String(error) : JSON.stringify(error),
           })
-        resubscribeLater()
+        down = true
+        // No resubscribe here: viem reconnects and restores its subscriptions itself. Subscribing again on
+        // every error leaves the old subscription behind (its unsubscribe holds a stale id), so each drop
+        // added one more and every later drop reported an error for all of them.
       },
     } as unknown as WatchBlockNumberParameters)
   }

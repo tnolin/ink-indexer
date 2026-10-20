@@ -150,7 +150,7 @@ describe("watchHeads reconnects and logs each outage once", () => {
     stop()
   })
 
-  it("subscribes again after the subscription errors, without emitting the current head as a new one", () => {
+  it("subscribes again when an error is followed by 30 s without heads, without emitting the current head as a new one", () => {
     vi.useFakeTimers()
     const f = fakeClient()
     const l = logs()
@@ -158,11 +158,110 @@ describe("watchHeads reconnects and logs each outage once", () => {
     expect(f.subs).toHaveLength(1)
     expect(f.subs[0]!.opts.emitOnBegin).toBe(true)
     f.subs[0]!.opts.onError(new Error("SocketClosedError: The socket has been closed."))
-    vi.advanceTimersByTime(5_000)
+    // viem restores the subscription itself after a reconnect, so an error alone does not resubscribe.
+    vi.advanceTimersByTime(20_000)
+    expect(f.subs).toHaveLength(1)
+    // It subscribes again only when heads have stopped for 30 s.
+    vi.advanceTimersByTime(20_000)
     expect(f.subs).toHaveLength(2)
     expect(f.subs[0]!.stopped).toBe(true)
     expect(f.subs[1]!.opts.emitOnBegin).toBe(false)
     expect(l.count(/head subscription error/)).toBe(1)
+    stop()
+  })
+
+  it("logs a repeating subscription error once per outage, then again after a new head", () => {
+    vi.useFakeTimers()
+    const f = fakeClient()
+    const l = logs()
+    const stop = watchHeads(f.client, () => {}, l.logger as never)
+    const closed = new Error("SocketClosedError: The socket has been closed.")
+    // Every resubscription fails again, and one subscription can report the same error many times.
+    for (let minute = 0; minute < 10; minute++) {
+      for (let i = 0; i < 100; i++) f.live().opts.onError(closed)
+      vi.advanceTimersByTime(60_000)
+    }
+    expect(l.count(/head subscription error/)).toBe(1)
+    expect(l.count(/no new head/)).toBe(0)
+    f.live().opts.onBlockNumber(5n)
+    expect(l.count(/recovered/)).toBe(1)
+    f.live().opts.onError(closed)
+    f.live().opts.onError(closed)
+    expect(l.count(/head subscription error/)).toBe(2)
+    stop()
+  })
+
+  /**
+   * Models viem 2.57's WebSocket transport. On a socket drop it tells every stored subscription about
+   * the error, then reconnects and subscribes them again under new ids. unsubscribe() holds the id from
+   * the original subscribe, so after a reconnect it no longer removes anything.
+   */
+  function reconnectingClient() {
+    type Sub = Opts & { epoch: number }
+    const live = new Set<Sub>()
+    let epoch = 0
+    const client = {
+      watchBlockNumber: (opts: Opts) => {
+        const sub = { ...opts, epoch }
+        live.add(sub)
+        return () => {
+          if (sub.epoch === epoch) live.delete(sub)
+        }
+      },
+    } as unknown as Pick<PublicClient, "watchBlockNumber">
+    return {
+      client,
+      live,
+      /** The socket drops and viem reconnects, restoring every stored subscription. */
+      drop: () => {
+        for (const sub of [...live])
+          sub.onError(new Error("SocketClosedError: The socket has been closed."))
+        epoch++
+      },
+      /** viem gives up after its reconnect attempts: it forgets every subscription. */
+      giveUp: () => {
+        for (const sub of [...live])
+          sub.onError(new Error("SocketClosedError: The socket has been closed."))
+        live.clear()
+      },
+      head: () => {
+        for (const sub of [...live]) sub.onBlockNumber(1n)
+      },
+    }
+  }
+
+  it("does not pile up subscriptions when the socket keeps dropping and reconnecting", () => {
+    vi.useFakeTimers()
+    const f = reconnectingClient()
+    const l = logs()
+    let ticks = 0
+    const stop = watchHeads(f.client, () => ticks++, l.logger as never)
+    for (let i = 0; i < 30; i++) {
+      f.drop()
+      vi.advanceTimersByTime(6_000)
+      f.head()
+    }
+    expect(f.live.size).toBe(1)
+    // One head is one tick: leaked subscriptions would each deliver it again.
+    ticks = 0
+    f.head()
+    expect(ticks).toBe(1)
+    // Each drop starts an outage and the next head ends it; the log stays bounded by the drops.
+    expect(l.count(/head subscription error/)).toBe(30)
+    stop()
+  })
+
+  it("subscribes again when viem gives up on the socket and heads stop", () => {
+    vi.useFakeTimers()
+    const f = reconnectingClient()
+    const l = logs()
+    const stop = watchHeads(f.client, () => {}, l.logger as never)
+    f.giveUp()
+    expect(f.live.size).toBe(0)
+    vi.advanceTimersByTime(60_000)
+    expect(f.live.size).toBe(1)
+    f.head()
+    expect(l.count(/recovered/)).toBe(1)
     stop()
   })
 
