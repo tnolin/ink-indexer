@@ -21,6 +21,8 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import { seenItems } from "../opensea/listings"
+import { cachedRanks, itemKey } from "../opensea/ranks"
 import { latestFloors } from "../opensea/stats"
 import type { EventRow, Source, SourceBatch } from "../source"
 import {
@@ -336,6 +338,22 @@ export async function processLogs(
   const floors = await latestFloors(deps.sql, [
     ...new Set(saleLogs.flatMap((x) => x.sales.map((r) => r.contract))),
   ])
+  // And the item's name, image and rank, from what the listings cached (no network; a sale never
+  // fetches a rank). The same shortcut applies: the cache as it stands when the sale is processed.
+  const soldItems = [
+    ...new Map(
+      saleLogs
+        .flatMap((x) => x.sales)
+        .map((r) => [
+          itemKey(r.contract, s(r.tokenId)),
+          { contract: r.contract, tokenId: s(r.tokenId) },
+        ]),
+    ).values(),
+  ]
+  const [ranks, listedItems] = await Promise.all([
+    cachedRanks(deps.sql, soldItems, new Date()),
+    seenItems(deps.sql, soldItems),
+  ])
   const sales: SaleRow[] = []
   for (const { log, sales: rows } of saleLogs) {
     const ts = times.get(log.blockNumber)!
@@ -348,7 +366,10 @@ export async function processLogs(
       const sub = first === r.contract ? `sale:${r.tokenId}` : `sale:${r.tokenId}:${r.contract}`
       sales.push(r)
       events.push({
-        event: saleEvent(r, ts, floors.get(r.contract) ?? null),
+        event: saleEvent(r, ts, floors.get(r.contract) ?? null, {
+          ...listedItems.get(itemKey(r.contract, s(r.tokenId))),
+          rank: ranks.get(itemKey(r.contract, s(r.tokenId))),
+        }),
         block: r.block,
         blockHash: log.blockHash,
         sub,
@@ -454,7 +475,18 @@ function linesToSales(log: ChainLog, decoded: SeaportSale[]): SaleRow[] {
   }))
 }
 
-function saleEvent(r: SaleRow, blockTimestamp: number, floorWei: bigint | null): NftSaleEvent {
+type SaleItem = {
+  name?: string | null
+  imageUrl?: string | null
+  rank?: { rank: number; maxRank: number }
+}
+
+function saleEvent(
+  r: SaleRow,
+  blockTimestamp: number,
+  floorWei: bigint | null,
+  item: SaleItem,
+): NftSaleEvent {
   return {
     v: SCHEMA_VERSION,
     chainId: INK_CHAIN_ID,
@@ -471,11 +503,11 @@ function saleEvent(r: SaleRow, blockTimestamp: number, floorWei: bigint | null):
     buyer: r.buyer,
     seller: r.seller,
     orderHash: r.orderHash,
-    // Item name, image and rank stay null until they are looked up from nft_ranks and the listing cache.
-    itemName: null,
-    imageUrl: null,
-    rank: null,
-    maxRank: null,
+    // From nft_items_seen and nft_ranks; null for an item no listing has cached.
+    itemName: item.name ?? null,
+    imageUrl: item.imageUrl ?? null,
+    rank: item.rank?.rank ?? null,
+    maxRank: item.rank?.maxRank ?? null,
     // The collection's latest stats floor; null while it has none.
     floorWei: floorWei === null ? null : s(floorWei),
   }

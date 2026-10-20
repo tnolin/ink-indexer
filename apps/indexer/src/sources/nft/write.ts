@@ -210,6 +210,10 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
  */
 export async function rollbackRows(tx: Tx, fork: bigint) {
   const f = s(fork)
+  // shortcut: a sale deletes its item's nft_listing_state in `writeRows`, and a rolled-back sale does
+  // not bring that row back. The item may still be listed, so its next listing is written at any
+  // price instead of only a lower one (one extra listing event). Keep the deleted row with the
+  // sale's block, or rebuild the state from `nft.listing` events here, to undo it.
   await tx`delete from indexer.nft_mints where block > ${f}`
   await tx`delete from indexer.nft_burns where block > ${f}`
   await tx`delete from indexer.nft_seadrop_mints where block > ${f}`

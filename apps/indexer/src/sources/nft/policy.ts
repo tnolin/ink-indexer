@@ -161,3 +161,20 @@ export const STREAM_REFUSED_TO_FIREHOSE = 2
 export const STREAM_PROBE_TIMEOUT_MS = 30_000
 /** How often the firehose logs its messages and bytes per minute. */
 export const FIREHOSE_METER_EVERY_MS = 10 * MINUTE_MS
+
+// Listings and ranks (spec "Listing filter").
+
+/** A listing must live at least this long (its expiry minus its listing time). */
+export const LISTING_MIN_LIFE_S = 3600
+/** A rank is fetched for a listing priced at or under the floor times this ratio (11/10). */
+export const NEAR_FLOOR_RATIO = { num: 11n, den: 10n } as const
+/** A floor older than this is refreshed before a listing is judged against it. */
+export const FLOOR_MAX_AGE_MS = 2 * HOUR_MS
+/** How long a listing waits for the floor refresh, then (separately) for the rank fetch. */
+export const LISTING_WAIT_MS = 10_000
+/** A cached rank is fetched again after this long, or sooner when the collection's rarity changes. */
+export const RANK_CACHE_MS = 7 * DAY_MS
+/** This many `item_metadata_updated` events of one collection within the window... */
+export const METADATA_BURST_COUNT = 20
+/** ...mark its traits re-check due. */
+export const METADATA_BURST_WINDOW_MS = 10 * MINUTE_MS

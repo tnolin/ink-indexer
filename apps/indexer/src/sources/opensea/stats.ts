@@ -466,3 +466,5 @@ export function createStats(deps: StatsDeps) {
 
   return { job, tierJob, requestStats, latestFloor }
 }
+
+export type Stats = ReturnType<typeof createStats>

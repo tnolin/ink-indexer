@@ -354,6 +354,73 @@ describe("NFT source", () => {
     })
   })
 
+  describe("a sale's item", () => {
+    const CALCULATED = new Date("2026-10-10T00:00:00Z")
+    const DAY = 86_400_000
+
+    it("carries the name, image and rank the listings cached, and null where the cache is not valid", async () => {
+      const roles = loadSeaportRoles()
+      const logs = loadNftFixture("seaport-fills").filter((l) => l.transactionHash === roles.sweep)
+      const ids = [...new Set(logs.flatMap(decodeOrderFulfilled).map((x) => x.tokenId.toString()))]
+      expect(ids.length).toBeGreaterThan(5)
+      const [valid, rarityMoved, tooOld, nameOnly] = ids
+      await sql`insert into indexer.nft_collections (contract, standard, rarity_calculated_at, max_rank)
+        values (${SWEEP_COLLECTION}, 'erc721', ${CALCULATED}, 3333)`
+      const recent = new Date(Date.now() - DAY)
+      const rank = (id: string, calculated: Date, fetched: Date, r: number) => ({
+        contract: SWEEP_COLLECTION,
+        token_id: id,
+        rank: r,
+        max_rank: 3333,
+        calculated_at: calculated,
+        fetched_at: fetched,
+      })
+      await sql`insert into indexer.nft_ranks ${sql([
+        rank(valid!, CALCULATED, recent, 12),
+        rank(rarityMoved!, new Date("2026-10-01T00:00:00Z"), recent, 13),
+        rank(tooOld!, CALCULATED, new Date(Date.now() - 8 * DAY), 14),
+        // Another collection's row for the same id is not this one's.
+        { ...rank(valid!, CALCULATED, recent, 99), contract: NFT_A },
+      ])}`
+      const seen = (id: string, name: string | null, image: string | null) => ({
+        contract: SWEEP_COLLECTION,
+        token_id: id,
+        name,
+        image_url: image,
+        seen_at: recent,
+      })
+      await sql`insert into indexer.nft_items_seen ${sql([
+        seen(valid!, "Valid #1", "https://img.example/1.png"),
+        seen(rarityMoved!, "Moved #2", null),
+        seen(nameOnly!, null, "https://img.example/4.png"),
+      ])}`
+
+      await ingest(logs)
+      const rows = await sql<{ payload: Record<string, unknown> }[]>`
+        select payload from indexer.events where type = 'nft.sale'`
+      const byToken = new Map(rows.map((r) => [r.payload.tokenId as string, r.payload]))
+      expect(byToken.get(valid!)).toMatchObject({
+        itemName: "Valid #1",
+        imageUrl: "https://img.example/1.png",
+        rank: 12,
+        maxRank: 3333,
+      })
+      expect(byToken.get(rarityMoved!)).toMatchObject({
+        itemName: "Moved #2",
+        imageUrl: null,
+        rank: null,
+        maxRank: null,
+      })
+      expect(byToken.get(tooOld!)).toMatchObject({ itemName: null, rank: null, maxRank: null })
+      expect(byToken.get(nameOnly!)).toMatchObject({
+        itemName: null,
+        imageUrl: "https://img.example/4.png",
+        rank: null,
+      })
+      expect(byToken.get(ids[4]!)).toMatchObject({ itemName: null, imageUrl: null, rank: null })
+    })
+  })
+
   it("an offer, a listing and a multi-order transaction each become sales; unsupported currencies none", async () => {
     const logs = loadNftFixture("seaport-fills")
     await ingest(logs)
