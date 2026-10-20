@@ -227,4 +227,4 @@ The table's `id` can change after a reorg rollback, because rolled-back chain ev
 
 The indexer writes events as soon as their block is seen, with `confirmed = false`, and marks them confirmed one block later. Consumers choose whether to act on unconfirmed events.
 
-Confirmed is not final. A reorg rollback deletes every row above the fork point, up to 128 blocks back, confirmed rows included, and the new fork's events are inserted with new ids. Dedupe on `(txHash, logIndex)` and treat events within the last 128 blocks of the chain head as revisable.
+Confirmed is not final. A reorg rollback deletes every chain row above the fork point, up to 128 blocks back, confirmed rows included, and the new fork's events are inserted with new ids. Off-chain `os:` and `nft:` rows are moved to the fork block, unconfirmed, and keep their ids (see [ADR 0018](../../docs/adr/0018-off-chain-events.md)). Identify events as the [Identity](#identity) table says, and treat events within the last 128 blocks of the chain head as revisable.

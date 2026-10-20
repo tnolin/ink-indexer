@@ -52,13 +52,13 @@ where confirmed and id > $1
 order by id limit 500;
 ```
 
-`confirmed` is set one block after an event's block, in the same commit that writes newer confirmed events, so this query never skips an older row. It does not mean final: a reorg rollback deletes every row above the fork point, up to 128 blocks back, confirmed rows included, and re-inserts the new fork's events with new ids. `(txHash, logIndex)` in a launchpad payload is the stable event identity, so dedupe launchpad events on it. One log can yield several NFT events, so an NFT event's identity is the row's `(tx_hash, log_index, sub)`; from the payload alone, use `txHash`, `logIndex`, `contract` and `tokenId` for `nft.sale`, and `txHash`, `logIndex`, `kind` and `markBps` or `stageIndex` for `nft.mint`. Events from OpenSea have a unique synthetic `txHash`. Treat events within the last 128 blocks of the chain head as revisable. Drop `confirmed` to also read events from the newest block.
+`confirmed` is set one block after an event's block, in the same commit that writes newer confirmed events, so this query never skips an older row. It does not mean final: a reorg rollback deletes every chain row above the fork point, up to 128 blocks back, confirmed rows included, and re-inserts the new fork's events with new ids. Off-chain `os:` and `nft:` rows are moved to the fork block, unconfirmed, and keep their ids (see [ADR 0018](docs/adr/0018-off-chain-events.md)). The event identities are listed in the Identity table of the [events README](packages/events/README.md#identity). Treat events within the last 128 blocks of the chain head as revisable. Drop `confirmed` to also read events from the newest block.
 
 Event shapes are documented in [`packages/events`](packages/events/README.md).
 
 ## NFTs
 
-Ink NFT events are `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`. Mints, burns, SeaDrop drops, Seaport sales and Chimera launches come from chain logs. Collection pages, drop schedules, floors, listings, item ranks and creator accounts come from OpenSea. Each `nft.collection` event carries the collection's verdict: `real` for collections that pass quality checks (a complete OpenSea page, a sound mint structure, traits, and minters who are not mostly repeat farm wallets), `pending` while checks are undecided. Every collection's events stay readable. Read them like any other event:
+Ink NFT events are `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`. Mints, burns, SeaDrop drops, Seaport sales and Chimera launches come from chain logs. Collection pages, drop schedules, floors, listings, item ranks and creator accounts come from OpenSea. Each `nft.collection` event carries the collection's verdict: `real` for collections that pass quality checks (a complete OpenSea page, a sound mint structure, traits, and minters who are not mostly repeat farm wallets), `pending` while checks are undecided, `filtered` once a check fails. Every collection's events stay readable. Read them like any other event:
 
 ```sql
 select id, payload from indexer.events
