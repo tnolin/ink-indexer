@@ -11,12 +11,25 @@ import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
-import { createNftVerdictJob, readNftSettings, startNftServices } from "./wiring"
+import {
+  createNftVerdictJob,
+  readNftSettings,
+  readSources,
+  type SourceSelection,
+  startSourceServices,
+} from "./wiring"
 
 const cli = parseCli(process.argv.slice(2))
 if (!cli.ok) {
   console.error(`${cli.reason}\n${cli.usage}`)
   process.exit(2)
+}
+let sources: SourceSelection
+try {
+  sources = readSources(process.env, log)
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err))
+  process.exit(1)
 }
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) {
@@ -68,11 +81,14 @@ try {
     chain,
     store,
     logger: log,
+    only: sources.groups,
     sources: [inkypumpSource({ sql, chain, logger: log }), nftSource({ sql, chain, logger: log })],
   })
   await indexer.init()
   if (cli.command === "start")
-    stopNft = (await startNftServices({ env: process.env, sql, store, chain, log, report })).stop
+    stopNft = (
+      await startSourceServices(sources, { env: process.env, sql, store, chain, log, report })
+    ).stop
 } catch (err) {
   log("error", cli.command === "mark" ? "mark failed" : "startup failed", {
     error: err instanceof Error ? (err.stack ?? String(err)) : String(err),
@@ -85,7 +101,7 @@ try {
 const { heads, pollHeads, router } = rpc
 
 if (cli.command === "backfill") {
-  await indexer.backfill(cli.from, cli.to, cli.sources)
+  await indexer.backfill(cli.from, cli.to, cli.sources ?? sources.groups)
   log("info", "backfill done", {
     from: cli.from,
     to: cli.to ?? "head",

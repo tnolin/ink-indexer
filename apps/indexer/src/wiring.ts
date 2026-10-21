@@ -25,9 +25,55 @@ import { createStageStartsJob } from "./sources/opensea/stage-starts"
 import { createStats } from "./sources/opensea/stats"
 import { createStream, trackedSlugs, type WebSocketLike } from "./sources/opensea/stream"
 import { createTraitsJob } from "./sources/opensea/traits"
+import type { BackfillSource } from "./sources/source"
 import { CURSOR_ROW, type Store } from "./store"
 
 type Env = Record<string, string | undefined>
+
+/**
+ * The platforms `INDEXER_SOURCES` names: the backfill groups each one reads, and whether it needs
+ * the OpenSea API and Stream services. A new launchpad adds a row.
+ */
+const PLATFORMS = {
+  inkypump: { groups: ["inkypump"], openSea: false },
+  opensea: { groups: ["nft-mints", "nft-sales"], openSea: true },
+  chimera: { groups: ["nft-launches"], openSea: false },
+} as const satisfies Record<string, { groups: readonly BackfillSource[]; openSea: boolean }>
+type Platform = keyof typeof PLATFORMS
+
+export type SourceSelection = {
+  names: Platform[]
+  /** The filter groups of the enabled platforms, for `Indexer`'s `only`. */
+  groups: BackfillSource[]
+  /** Whether `startNftServices` runs. */
+  openSea: boolean
+}
+
+/**
+ * Reads `INDEXER_SOURCES`, a comma-separated list of platform names (trimmed, case-sensitive).
+ * Unset or blank enables every platform. An unknown name, a duplicate or an empty entry throws,
+ * naming the value and the allowed names. Logs what runs.
+ */
+export function readSources(env: Env, log: Logger): SourceSelection {
+  const allowed = Object.keys(PLATFORMS) as Platform[]
+  const raw = env.INDEXER_SOURCES?.trim()
+  const names: Platform[] = []
+  for (const name of raw ? raw.split(",").map((s) => s.trim()) : allowed) {
+    const known = allowed.find((p) => p === name)
+    if (name === "")
+      throw new Error(`INDEXER_SOURCES: empty entry (expected ${allowed.join(", ")})`)
+    if (!known)
+      throw new Error(`INDEXER_SOURCES: unknown platform: ${name} (expected ${allowed.join(", ")})`)
+    if (names.includes(known)) throw new Error(`INDEXER_SOURCES: duplicate platform: ${name}`)
+    names.push(known)
+  }
+  log("info", "sources", { running: names })
+  return {
+    names,
+    groups: names.flatMap((n) => PLATFORMS[n].groups),
+    openSea: names.some((n) => PLATFORMS[n].openSea),
+  }
+}
 
 export type NftSettings = {
   /** Undefined: the OpenSea part is off. */
@@ -285,4 +331,12 @@ export async function startNftServices(
     throw err
   }
   return { stop }
+}
+
+/** `startNftServices` when `opensea` is enabled; otherwise nothing starts. */
+export async function startSourceServices(
+  sources: SourceSelection,
+  deps: Parameters<typeof startNftServices>[0],
+): Promise<{ stop(): void }> {
+  return sources.openSea ? startNftServices(deps) : { stop() {} }
 }
