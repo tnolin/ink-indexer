@@ -3,11 +3,15 @@ import { viemChain } from "./chain"
 import { parseCli } from "./cli"
 import { log } from "./log"
 import { Indexer } from "./loop"
+import { applyMark } from "./mark-cli"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
+import { inkypumpSource } from "./sources/inkypump/index"
+import { nftSource } from "./sources/nft/index"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
+import { createNftVerdictJob, readNftSettings, startNftServices } from "./wiring"
 
 const cli = parseCli(process.argv.slice(2))
 if (!cli.ok) {
@@ -28,8 +32,11 @@ const reporter = initSentry(process.env)
 const sql = connect(databaseUrl)
 const store = createStore(sql)
 let current: Promise<void> | undefined
+let stopNft = () => {}
 const shutdown = createShutdown({
   stop: () => {
+    // The NFT and OpenSea parts first, then the chain loop.
+    stopNft()
     stopHeads()
     clearInterval(stallTimer)
   },
@@ -39,19 +46,35 @@ const shutdown = createShutdown({
   logger: log,
   report: reporter,
 })
+/** For errors the OpenSea parts recover from. Failures cut short by a shutdown are not reported. */
+const report = (err: unknown) => {
+  if (!shutdown.isStopping()) reporter.capture(err)
+}
 let rpc: Awaited<ReturnType<typeof connectRpc>>
 let indexer: Indexer
 try {
   await migrate(sql)
   rpc = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
+  const chain = viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping })
+  if (cli.command === "mark") {
+    const { historyStartBlock } = readNftSettings(process.env, log)
+    const verdict = await createNftVerdictJob({ historyStartBlock, sql, store, chain, log })
+    await applyMark({ sql, verdict }, { contract: cli.contract, value: cli.value })
+    log("info", "mark applied", { contract: cli.contract, mark: cli.value })
+    await sql.end()
+    process.exit(0)
+  }
   indexer = new Indexer({
-    chain: viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping }),
+    chain,
     store,
     logger: log,
+    sources: [inkypumpSource({ sql, chain, logger: log }), nftSource({ sql, chain, logger: log })],
   })
   await indexer.init()
+  if (cli.command === "start")
+    stopNft = (await startNftServices({ env: process.env, sql, store, chain, log, report })).stop
 } catch (err) {
-  log("error", "startup failed", {
+  log("error", cli.command === "mark" ? "mark failed" : "startup failed", {
     error: err instanceof Error ? (err.stack ?? String(err)) : String(err),
   })
   reporter.capture(err)
@@ -62,8 +85,12 @@ try {
 const { heads, pollHeads, router } = rpc
 
 if (cli.command === "backfill") {
-  await indexer.backfill(cli.from, cli.to)
-  log("info", "backfill done", { from: cli.from, to: cli.to ?? "head" })
+  await indexer.backfill(cli.from, cli.to, cli.sources)
+  log("info", "backfill done", {
+    from: cli.from,
+    to: cli.to ?? "head",
+    sources: cli.sources?.join(",") ?? "all",
+  })
   await sql.end()
   process.exit(0)
 }

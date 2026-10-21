@@ -184,6 +184,16 @@ describe("viemChain timeouts, stopping and every read", () => {
       expect(await supplyChain.chain.readTotalSupplies([TOKEN], 1n)).toEqual([3n])
       const metaChain = fullChain(flaky([18, "T"]), async () => ({}))
       expect(await metaChain.chain.readErc20Meta(TOKEN)).toEqual({ decimals: 18, symbol: "T" })
+      const namesChain = fullChain(
+        flaky([
+          { status: "success", result: "T" },
+          { status: "failure", error: new Error("reverted") },
+        ]),
+        async () => ({}),
+      )
+      expect(await namesChain.chain.readErc20Names([TOKEN], 5n)).toEqual([
+        { symbol: "T", name: null },
+      ])
       const launchChain = fullChain(
         flaky([
           {
@@ -201,6 +211,57 @@ describe("viemChain timeouts, stopping and every read", () => {
       )
       expect(await launchChain.chain.readLaunchStates([KEY], 1n)).toHaveLength(1)
     }
+  })
+
+  it("retries a mint stats read on socket errors and returns null for a revert", async () => {
+    const words = (...n: bigint[]) =>
+      `0x${n.map((x) => x.toString(16).padStart(64, "0")).join("")}` as const
+    let calls = 0
+    const client = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => ({}),
+      call: async () => {
+        if (++calls === 1) throw socketError()
+        return { data: words(0n, 7n, 10n) }
+      },
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const chain = viemChain(client, {} as LogRouter, { logger: () => {}, sleep: async () => {} })
+    expect(await chain.readMintStats(TOKEN, TOKEN, 1n)).toEqual({ totalSupply: 7n, maxSupply: 10n })
+    expect(calls).toBe(2)
+
+    const reverting = viemChain(
+      {
+        ...client,
+        call: async () => {
+          throw Object.assign(new Error("reverted"), { code: 3 })
+        },
+      } as never,
+      {} as LogRouter,
+    )
+    expect(await reverting.readMintStats(TOKEN, TOKEN, 1n)).toBeNull()
+  })
+
+  it("reads an NFT total supply and contract code at a block, retrying socket errors", async () => {
+    const words = (n: bigint) => `0x${n.toString(16).padStart(64, "0")}` as const
+    let calls = 0
+    const asked: unknown[] = []
+    const client = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => ({}),
+      call: async () => {
+        if (++calls === 1) throw socketError()
+        return { data: words(100n) }
+      },
+      getCode: async (p: unknown) => {
+        asked.push(p)
+        return "0x6080"
+      },
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const chain = viemChain(client, {} as LogRouter, { logger: () => {}, sleep: async () => {} })
+    expect(await chain.readTotalSupplyAt(TOKEN, 9n)).toBe(100n)
+    expect(calls).toBe(2)
+    expect(await chain.hasCodeAt(TOKEN, 9n)).toBe(true)
+    expect(asked).toEqual([{ address: TOKEN, blockNumber: 9n }])
   })
 
   it("still fails fast from every read on a non-socket error", async () => {

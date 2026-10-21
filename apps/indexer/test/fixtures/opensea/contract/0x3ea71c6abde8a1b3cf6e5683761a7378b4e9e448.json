@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "address": "0x3ea71c6abde8a1b3cf6e5683761a7378b4e9e448",
+    "chain": "ink",
+    "collection": "prtscn-ink",
+    "contract_standard": "erc721",
+    "name": "PRTSCN"
+  }
+}

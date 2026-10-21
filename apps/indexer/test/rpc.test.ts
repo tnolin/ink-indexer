@@ -1,6 +1,6 @@
 import type { PublicClient, RpcLog } from "viem"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { toChainLog, watchHeads } from "../src/rpc"
+import { connectRpc, toChainLog, watchHeads } from "../src/rpc"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -291,5 +291,41 @@ describe("watchHeads reconnects and logs each outage once", () => {
     expect(f.subs.length).toBe(subs)
     expect(ticks).toBe(0)
     expect(f.live().stopped).toBe(true)
+  })
+})
+
+describe("transport getLogs", () => {
+  const A = `0x${"a".repeat(64)}` as const
+  const B = `0x${"b".repeat(64)}` as const
+  const ZERO = `0x${"0".repeat(64)}` as const
+  const SEADROP = "0x00005ea00ac477b1030ce78506496e8c2de24bf5" as const
+
+  /** Answers the startup and head reads and records the params of every eth_getLogs. */
+  async function wire(
+    filter: Parameters<Awaited<ReturnType<typeof connectRpc>>["router"]["getLogs"]>[2],
+  ) {
+    const sent: unknown[] = []
+    const fetchFn = (async (_input: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      if (body.method === "eth_getLogs") sent.push(body.params)
+      const result: Record<string, unknown> = { eth_chainId: "0xdef1", eth_blockNumber: "0x64" }
+      const res = { jsonrpc: "2.0", id: body.id, result: result[body.method] ?? [] }
+      return new Response(JSON.stringify(res), { headers: { "content-type": "application/json" } })
+    }) as typeof fetch
+    const { router } = await connectRpc(["https://a.test"], () => {}, { fetchFn, rank: false })
+    await router.getLogs(16n, 32n, filter)
+    return sent
+  }
+
+  it("sends address and positional topics", async () => {
+    expect(await wire({ address: SEADROP, topics: [[A, B], null, ZERO] })).toEqual([
+      [{ fromBlock: "0x10", toBlock: "0x20", address: SEADROP, topics: [[A, B], null, ZERO] }],
+    ])
+  })
+
+  it("omits address when the filter has none", async () => {
+    expect(await wire({ topics: [[A, B]] })).toEqual([
+      [{ fromBlock: "0x10", toBlock: "0x20", topics: [[A, B]] }],
+    ])
   })
 })

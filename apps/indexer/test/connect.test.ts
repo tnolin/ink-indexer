@@ -93,7 +93,7 @@ describe("connectRpc over http", () => {
 
   it("routes getLogs away from a hanging endpoint", async () => {
     const { router } = await connect({ "a.test": "hang" })
-    expect(await router.getLogs(1n, 50n, [])).toEqual({ logs: [], toBlock: 50n })
+    expect(await router.getLogs(1n, 50n, { topics: [] })).toEqual({ logs: [], toBlock: 50n })
   })
 
   it("fails fast on a revert: one call, no failover, no retry", async () => {

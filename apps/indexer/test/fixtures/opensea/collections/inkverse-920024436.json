@@ -1,0 +1,77 @@
+{
+  "status": 200,
+  "body": {
+    "collection": "inkverse-920024436",
+    "name": "INKverse",
+    "description": "1,000 loops. One mark. Every frame is code.\n\nINKverse is a community art collection for Ink: 1,000 animated loops, each a one-of-one artwork created in code from the INK mark — puns, geometry, retro screens, design movements and living systems.\n\nFree mint on OpenSea. Gas fees apply. Core, Active and Supporter wallets receive first access. Community wallets join in the next phase. Each allowlisted wallet has one presale mint plus one additional public mint, up to two in total, subject to remaining supply.\n\nArtworks and traits are shown after the collection reveal. Each artwork has a fixed rarity tier: 30 Legendary, 70 Epic, 250 Rare and 650 Common. Official rarity tiers and OpenSea OpenRarity rankings are separate classifications.",
+    "image_url": "https://i2c.seadn.io/collection/inkverse-920024436/image_type_logo/c2af51a696049e6eebbe27e8afecfe/71c2af51a696049e6eebbe27e8afecfe.png",
+    "banner_image_url": "https://i2c.seadn.io/collection/inkverse-920024436/image_type_hero_desktop/e3406af48eceb16a92a496dd7800f4/76e3406af48eceb16a92a496dd7800f4.mp4?frame-time=1",
+    "owner": "0xe54342e4cbc3f6bf029f25175cd8c4e62917017d",
+    "safelist_status": "not_requested",
+    "category": "art",
+    "is_disabled": false,
+    "is_nsfw": false,
+    "trait_offers_enabled": false,
+    "collection_offers_enabled": true,
+    "opensea_url": "https://opensea.io/collection/inkverse-920024436",
+    "project_url": "https://inkside.fun/inkverse",
+    "wiki_url": "",
+    "discord_url": "",
+    "telegram_url": "",
+    "twitter_username": "0x_snatch",
+    "instagram_username": "",
+    "contracts": [
+      {
+        "address": "0xfffbd67f37e1e9fd9d9ebef9b687daa72a33da64",
+        "chain": "ink"
+      }
+    ],
+    "editors": [
+      "0xe54342e4cbc3f6bf029f25175cd8c4e62917017d"
+    ],
+    "fees": [
+      {
+        "fee": 1,
+        "recipient": "0x07d3a100c3880830dd43fe5c938b5144721ce9d6",
+        "required": true
+      },
+      {
+        "fee": 5,
+        "recipient": "0xd0b0d7f54c55339aa74ef98b65aaa16d08fd59b8",
+        "required": false
+      }
+    ],
+    "rarity": {
+      "calculated_at": "2026-10-18T12:07:26.898356",
+      "max_rank": 999,
+      "total_supply": 1000,
+      "strategy_id": "openrarity",
+      "strategy_version": "1.0"
+    },
+    "total_supply": 1000,
+    "unique_item_count": 1000,
+    "created_date": "2026-10-14",
+    "pricing_currencies": {
+      "listing_currency": {
+        "symbol": "ETH",
+        "address": "0x0000000000000000000000000000000000000000",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/ETH.svg",
+        "name": "Ethereum",
+        "decimals": 18,
+        "eth_price": "1",
+        "usd_price": "2417.02"
+      },
+      "offer_currency": {
+        "symbol": "WETH",
+        "address": "0x4200000000000000000000000000000000000006",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/WETH.svg",
+        "name": "Wrapped Ethereum",
+        "decimals": 18,
+        "eth_price": "0.999921390803551481",
+        "usd_price": "2416.83"
+      }
+    }
+  }
+}

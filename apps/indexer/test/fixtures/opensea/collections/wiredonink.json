@@ -1,0 +1,78 @@
+{
+  "status": 200,
+  "body": {
+    "collection": "wiredonink",
+    "name": "WIRED",
+    "description": "a little noise. a new collection.\n999 astral feline NFTs. each with a signal of its own. some flicker. some burn a little brighter.",
+    "image_url": "https://i2c.seadn.io/collection/wiredonink/image_type_logo/739ddad08280d58070c630d307be57/5f739ddad08280d58070c630d307be57.png",
+    "banner_image_url": "https://i2c.seadn.io/collection/wiredonink/image_type_hero_desktop/759d95f0959f3af985efe25cc07bd3/3b759d95f0959f3af985efe25cc07bd3.jpeg",
+    "owner": "0xa9b425e86652fef1300bf6767f8291cd3b11d39b",
+    "safelist_status": "verified",
+    "category": "pfps",
+    "is_disabled": false,
+    "is_nsfw": false,
+    "trait_offers_enabled": true,
+    "collection_offers_enabled": true,
+    "opensea_url": "https://opensea.io/collection/wiredonink",
+    "project_url": "https://wired.art",
+    "wiki_url": "",
+    "discord_url": "",
+    "telegram_url": "",
+    "twitter_username": "WiredonInk",
+    "instagram_username": "",
+    "contracts": [
+      {
+        "address": "0x7c701c0148e0e965065aa05e008ac9341e6efc6c",
+        "chain": "ink"
+      }
+    ],
+    "editors": [
+      "0xa9b425e86652fef1300bf6767f8291cd3b11d39b"
+    ],
+    "fees": [
+      {
+        "fee": 1,
+        "recipient": "0x07d3a100c3880830dd43fe5c938b5144721ce9d6",
+        "required": true
+      },
+      {
+        "fee": 5,
+        "recipient": "0x80462c3a48e5b26dc58111a8b628d234e371be82",
+        "required": true
+      }
+    ],
+    "required_zone": "0x000056f7000000ece9003ca63978907a00ffd100",
+    "rarity": {
+      "calculated_at": "2026-10-18T12:07:51.140553",
+      "max_rank": 866,
+      "total_supply": 866,
+      "strategy_id": "openrarity",
+      "strategy_version": "1.0"
+    },
+    "total_supply": 866,
+    "unique_item_count": 866,
+    "created_date": "2026-10-12",
+    "pricing_currencies": {
+      "listing_currency": {
+        "symbol": "ETH",
+        "address": "0x0000000000000000000000000000000000000000",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/ETH.svg",
+        "name": "Ethereum",
+        "decimals": 18,
+        "eth_price": "1",
+        "usd_price": "2417.2"
+      },
+      "offer_currency": {
+        "symbol": "WETH",
+        "address": "0x4200000000000000000000000000000000000006",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/WETH.svg",
+        "name": "Wrapped Ethereum",
+        "decimals": 18,
+        "eth_price": "0.99960284626840973",
+        "usd_price": "2416.24"
+      }
+    }
+  }
+}

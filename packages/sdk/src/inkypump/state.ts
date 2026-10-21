@@ -74,3 +74,27 @@ export async function readErc20Meta(
   })) as [number, string]
   return { decimals, symbol }
 }
+
+/**
+ * `symbol()` and `name()` of each token at a block, in one multicall. A call that reverts, or a
+ * token that answers with something else than a string, gives null for that field; a transport
+ * failure throws.
+ */
+export async function readErc20Names(
+  client: StateReader,
+  tokens: Address[],
+  blockNumber: bigint,
+): Promise<{ symbol: string | null; name: string | null }[]> {
+  if (tokens.length === 0) return []
+  const results = await client.multicall({
+    allowFailure: true,
+    blockNumber,
+    contracts: tokens.flatMap((t) => [
+      { address: t, abi: erc20Abi, functionName: "symbol" } as const,
+      { address: t, abi: erc20Abi, functionName: "name" } as const,
+    ]),
+  })
+  const text = (r: { status: string; result?: unknown } | undefined) =>
+    r?.status === "success" && typeof r.result === "string" && r.result !== "" ? r.result : null
+  return tokens.map((_, i) => ({ symbol: text(results[2 * i]), name: text(results[2 * i + 1]) }))
+}

@@ -37,7 +37,7 @@ All sources are on Ink mainnet (chain ID 57073).
  ┌───────────────────────────────────────┐
  │  Postgres (indexer schema)            │
  │  tokens · curve_state · trades ·      │
- │  collections · nft_events · wallets · │
+ │  nft_* ·                              │
  │  events  ◄── normalized, typed        │
  └───────────────────────────────────────┘
           │                   │
@@ -54,7 +54,8 @@ Each source is a module in `apps/indexer/src/sources/`. Adding a protocol means 
 | InkyPump V2 | Launches, curve buys and sells, curve progress, bond to Uniswap V4, post-bond swaps | V2 hook events; REST API for metadata, King of the INK and rankings. See the [integration guide](https://docs.inkyswap.com/api-reference/contracts/integration-guide.md) and [llms.txt](https://docs.inkyswap.com/llms.txt) |
 | Tsunami | Launches, curve buys and sells, graduation | Both factories: `0x5934a5C377309453746EE8aa5194F671930c09fa` and `0x1fC16511f5Fa4b4C1591ffeB8C38AFfc367076f1`. Factory emits `TokenLaunched` and `PoolCreated`; curves emit `TokenBought`, `TokenSold` and `TokenMigrated`. See [addresses](https://docs.tsunami.trade/#/reference/addresses) and [events](https://docs.tsunami.trade/#/reference/events) |
 | Calamari | Post-graduation swaps and liquidity | PoolManager `0x6E4723A612831AfB9f5B2a5aE22723c37aAB9560` (Uniswap v4 style) `Initialize` and `Swap` logs; StateView and Quoter for prices. See [addresses](https://docs.calamari.trade/#/contracts/addresses) |
-| OpenSea | Sales, listings, floor, collection stats and traits | API v2 with chain slug `ink` and the Stream API; Blockscout token transfers as fallback |
+| NFTs (chain) | ERC-721 and ERC-1155 mints and burns, SeaDrop drops and mint progress, Seaport sales, Chimera collection launches | `Transfer`, SeaDrop, `OrderFulfilled` and `CampaignCreated` logs on Ink. See ADR 0016 |
+| OpenSea | Collection pages, drop schedules, floors and stats, listings, item ranks, creator accounts | API v2 with chain slug `ink`, and the Stream API for listings, both drawing on one shared request budget. See ADR 0017 and ADR 0019 |
 | Tydro | Health factors and liquidations | Scheduled `getUserAccountData` reads on the Aave V3 pool; `LiquidationCall` logs |
 
 **Mechanics the SDK models**
@@ -62,6 +63,26 @@ Each source is a module in `apps/indexer/src/sources/`. Adding a protocol means 
 - InkyPump curves charge 2%. At the target raise, the next buy bonds the token to a Uniswap V4 pool in the same transaction. Post-bond trades pay 0.1%.
 - Tsunami tokens price on the curve until the sellable reserve drains, then the raise seeds a Calamari pool.
 - Every lookup checks whether a token is on its curve or bonded before routing.
+
+## NFT events
+
+NFT events share a `contract` (also the row's `entity`) and a `source` of `chain` or `opensea`. Chain events carry a real transaction hash. OpenSea events carry a synthetic id such as `os:list:<order hash>` and are stamped with the chain cursor's block (ADR 0018).
+
+| Type | Written when | Source |
+| --- | --- | --- |
+| `nft.collection` | A collection is discovered, and whenever its page, kind, quality-check result or creator changes | chain and OpenSea |
+| `nft.drop` | A drop schedule is first read or changes | OpenSea |
+| `nft.mint` | A stage starts, a mint passes 25%, 50% or 75% of the max supply, and at sell-out | chain, with stage starts from the drop schedule and, for a verified collection with no SeaDrop stages, after 10 mints (`nft:start:<contract>`) |
+| `nft.listing` | A Stream listing passes the listing filter | OpenSea |
+| `nft.sale` | A Seaport fill | chain |
+| `nft.stats` | Floor, owners, volume, sales or listed count changes | OpenSea |
+| `nft.launch` | A Chimera campaign is created | chain |
+
+- **Quality checks.** The indexer judges each collection on four checks (OpenSea page, mint structure, traits, and not being farm-minted) and writes the result into `nft.collection`. Collections that pass appear in feeds; the others can still be looked up and followed. ADR 0017 has the rules.
+- **One log, several events.** `indexer.events` is unique on `(tx_hash, log_index, sub)`, so a sweep or a log that crosses two mint milestones yields one row per event (ADR 0016).
+- **OpenSea budget.** Every process using the key draws from one request budget in Postgres (ADR 0019), so the hourly limit holds across processes.
+- **Stream.** Listings arrive over the Stream in shards of 50 collections per connection, with a one-connection fallback for every collection (ADR 0017).
+- **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera).
 
 ## Data model
 
@@ -72,10 +93,17 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | `tokens` | address, launchpad, name, ticker, creator, created_at, phase, quote_asset, paired_stock |
 | `curve_state` | token, progress_bps, curve_value, target, market_cap, updated_block |
 | `trades` | tx_hash, log_index, token, side, trader, amount_in, amount_out, block, venue |
-| `collections` (planned) | address, name, slug, floor, supply, traits_indexed |
-| `nft_events` (planned) | collection, token_id, type (sale, listing), price, from, to, block_or_ts |
+| `nft_collections` | contract, standard, kind, verdict and gates, slug, name, safelist, first mint block and time, launchpad |
+| `nft_mints`, `nft_burns`, `nft_seadrop_mints` | tx_hash, log_index, contract, token_id, recipient, holder or minter, qty, block. Kept 8 days |
+| `nft_sales` | tx_hash, log_index, contract, token_id, qty, price_wei, currency, buyer, seller, order_hash, block. Kept 90 days |
+| `nft_drops`, `nft_stages` | The drop schedule from OpenSea, and each stage's first mint |
+| `nft_seadrop_config`, `nft_items_seen` | SeaDrop configuration logs, and the item names and images the listings saw |
+| `nft_launches` | Chimera campaigns: collection, token, creator, pool, block |
+| `nft_stats`, `nft_listing_state`, `nft_ranks`, `nft_accounts` | Floor and stats history, the last listed price per item, cached item ranks, cached creator accounts |
+| `nft_overrides` | Manual verdicts and kinds set with `pnpm nft:mark` |
+| `opensea_budget` | The shared OpenSea request budget (ADR 0019) |
 | `wallets` (planned) | address, first_seen, funded_by, linked_group, launches_count, bonded_count, labels |
-| `events` | id, type, entity, payload (normalized JSON), block, confirmed |
+| `events` | id, type, entity, payload (normalized JSON), block, confirmed, tx_hash, log_index, sub |
 
 `events` is the contract between the indexer and anything that reads from it. Consumers read normalized, typed events there and never touch source-specific tables. Its payload shapes are defined in `packages/events` and versioned with it.
 

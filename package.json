@@ -14,7 +14,8 @@
     "db:dev": "tsx scripts/dev-db.ts",
     "db:migrate": "tsx --env-file-if-exists=.env packages/db/src/migrate-cli.ts",
     "start": "tsx --env-file-if-exists=.env apps/indexer/src/main.ts start",
-    "backfill": "tsx --env-file-if-exists=.env apps/indexer/src/main.ts backfill"
+    "backfill": "tsx --env-file-if-exists=.env apps/indexer/src/main.ts backfill",
+    "nft:mark": "tsx --env-file-if-exists=.env apps/indexer/src/main.ts mark"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

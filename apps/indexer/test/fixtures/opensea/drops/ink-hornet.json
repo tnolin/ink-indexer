@@ -1,0 +1,64 @@
+{
+  "status": 200,
+  "body": {
+    "collection_slug": "ink-hornet",
+    "collection_name": "Ink Hornet",
+    "chain": "ink",
+    "contract_address": "0x4d243f15743f6df7c832fcd5ee9a3e8453d47a4b",
+    "drop_type": "seadrop_v1_erc721",
+    "is_minting": false,
+    "image_url": "https://i2c.seadn.io/collection/ink-hornet/image_type_logo/a455c9c5ec33729240b6e445a20373/fba455c9c5ec33729240b6e445a20373.png",
+    "opensea_url": "https://opensea.io/collection/ink-hornet",
+    "active_stage": null,
+    "next_stage": null,
+    "stages": [
+      {
+        "uuid": "77f78a73200f4f0a93d1483bd6460f80",
+        "stage_type": "public_sale",
+        "label": "Public stage",
+        "price": "500000000000000",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-09-06T17:00:00Z",
+        "end_time": "2026-09-27T17:00:00Z",
+        "max_per_wallet": "10",
+        "allowlist_wallet_count": null
+      },
+      {
+        "uuid": "58228e3a7ac54cdba2f0019d384dcc93",
+        "stage_type": "signed_presale",
+        "label": "Team",
+        "price": "0",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-09-06T09:00:00Z",
+        "end_time": "2026-09-06T10:00:00Z",
+        "max_per_wallet": "300",
+        "allowlist_wallet_count": 3
+      },
+      {
+        "uuid": "7d01cf2da07049b8829c6ddf968ce228",
+        "stage_type": "signed_presale",
+        "label": "GTD",
+        "price": "0",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-09-06T10:00:00Z",
+        "end_time": "2026-09-06T13:00:00Z",
+        "max_per_wallet": "1",
+        "allowlist_wallet_count": 588
+      },
+      {
+        "uuid": "a94bcd526ce1472e95092a8a371b33c3",
+        "stage_type": "signed_presale",
+        "label": "FCFS",
+        "price": "250000000000000",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-09-06T13:00:00Z",
+        "end_time": "2026-09-06T17:00:00Z",
+        "max_per_wallet": "4",
+        "allowlist_wallet_count": 2152
+      }
+    ],
+    "total_supply": "2222",
+    "max_supply": "2222",
+    "fee_bps": 1000
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { readLaunchStates, type StateReader } from "../src/index"
+import { readErc20Names, readLaunchStates, type StateReader } from "../src/index"
 
 const raw = {
   token: "0xABCDEF0000000000000000000000000000000001",
@@ -45,5 +45,48 @@ describe("readLaunchStates", () => {
       },
     } as unknown as StateReader
     expect(await readLaunchStates(client, [], 10n)).toEqual([])
+  })
+})
+
+describe("readErc20Names", () => {
+  const A = "0x00000000000000000000000000000000000000a1"
+  const B = "0x00000000000000000000000000000000000000b2"
+
+  it("reads symbol and name of each token at a block; a call that fails gives null", async () => {
+    let args: { allowFailure?: boolean; blockNumber?: bigint; contracts?: unknown[] } = {}
+    const client = {
+      multicall: async (a: typeof args) => {
+        args = a
+        return [
+          { status: "success", result: "AAA" },
+          { status: "success", result: "Token A" },
+          { status: "failure", error: new Error("reverted") },
+          { status: "success", result: "Token B" },
+        ]
+      },
+    } as unknown as StateReader
+    expect(await readErc20Names(client, [A, B], 77n)).toEqual([
+      { symbol: "AAA", name: "Token A" },
+      { symbol: null, name: "Token B" },
+    ])
+    expect(args.allowFailure).toBe(true)
+    expect(args.blockNumber).toBe(77n)
+    expect(args.contracts).toHaveLength(4)
+  })
+
+  it("treats an empty string as no value, and makes no call for no tokens", async () => {
+    const client = {
+      multicall: async () => [
+        { status: "success", result: "" },
+        { status: "success", result: "" },
+      ],
+    } as unknown as StateReader
+    expect(await readErc20Names(client, [A], 1n)).toEqual([{ symbol: null, name: null }])
+    const none = {
+      multicall: async () => {
+        throw new Error("should not be called")
+      },
+    } as unknown as StateReader
+    expect(await readErc20Names(none, [], 1n)).toEqual([])
   })
 })

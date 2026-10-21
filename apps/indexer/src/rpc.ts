@@ -19,7 +19,12 @@ import {
 import { ink } from "viem/chains"
 import { type Logger, log } from "./log"
 
-export type GetLogsParams = { fromBlock: bigint; toBlock: bigint; topics: Hex[] }
+/**
+ * An eth_getLogs filter. `topics` is positional: each entry is one topic position, where null matches
+ * anything and an array matches any of its topics. The InkyPump filter is `{ topics: [LOG_TOPICS] }`.
+ */
+export type LogFilter = { address?: Address | Address[]; topics: (Hex | Hex[] | null)[] }
+export type GetLogsParams = { fromBlock: bigint; toBlock: bigint } & LogFilter
 export type LogTransport = {
   name: string
   seed: number
@@ -144,7 +149,7 @@ export class LogRouter {
   async getLogs(
     from: bigint,
     to: bigint,
-    topics: Hex[],
+    filter: LogFilter,
   ): Promise<{ logs: ChainLog[]; toBlock: bigint }> {
     let wait = 1_000
     for (;;) {
@@ -156,7 +161,7 @@ export class LogRouter {
           if (head < from) continue // this transport has not reached `from` yet
           const reach = from + BigInt(s.range) - 1n
           const end = [reach, to, head].reduce((a, b) => (a < b ? a : b))
-          const logs = await s.t.getLogs({ fromBlock: from, toBlock: end, topics })
+          const logs = await s.t.getLogs({ ...filter, fromBlock: from, toBlock: end })
           s.failures = 0
           s.consecutive = 0
           if (++s.successes >= GROW_AFTER) {
@@ -357,7 +362,12 @@ export async function connectRpc(
         const raw = await c.request({
           method: "eth_getLogs",
           params: [
-            { fromBlock: toHex(p.fromBlock), toBlock: toHex(p.toBlock), topics: [[...p.topics]] },
+            {
+              fromBlock: toHex(p.fromBlock),
+              toBlock: toHex(p.toBlock),
+              ...(p.address !== undefined && { address: p.address }),
+              topics: p.topics,
+            },
           ],
         })
         return raw.map(toChainLog)

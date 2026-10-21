@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/node"
-import { httpUrlFor } from "./rpc"
+import { REDACTED, secretsFor } from "./redact"
 
 /** Where fatal errors go. The indexer reports only what stops it; retries stay in the logs. */
 export type Reporter = { capture(err: unknown): void; flush(ms: number): Promise<boolean> }
@@ -9,51 +9,16 @@ export const noopReporter: Reporter = { capture() {}, flush: async () => true }
 type Sdk = Pick<typeof Sentry, "init" | "captureException" | "flush">
 
 const DROPPED_CATEGORIES = new Set(["http", "fetch", "console"])
-const REDACTED = "[redacted]"
 const MAX_DEPTH = 12
 
-/** The strings to hide for one configured endpoint: the URL, its form without a query, its HTTP form, its credentials, path segments and query values. */
-function secretsFor(value: string, withHttpForm: boolean): string[] {
-  const out = [value]
-  const add = (raw: string) => {
-    try {
-      const u = new URL(raw)
-      out.push(raw, `${u.protocol}//${u.host}${u.pathname}`)
-      const parts = [
-        u.username,
-        u.password,
-        ...u.pathname.split("/"),
-        ...[...u.searchParams.values()],
-      ]
-      for (const part of parts) {
-        out.push(part)
-        try {
-          out.push(decodeURIComponent(part))
-        } catch {
-          // malformed escape: the raw part is already listed
-        }
-      }
-    } catch {
-      // not a URL: the raw value above is all there is to hide
-    }
-  }
-  add(value)
-  if (withHttpForm) {
-    try {
-      add(httpUrlFor(value))
-    } catch {
-      // unsupported scheme: no HTTP form exists
-    }
-  }
-  return out
-}
-
-/** Every URL the indexer is configured with: DATABASE_URL and each INK_RPC_WS_URLS entry, longest first so a full URL goes before its prefix. */
+/** Every URL the indexer is configured with (DATABASE_URL and each INK_RPC_WS_URLS entry) and the OpenSea key, longest first so a full URL goes before its prefix. */
 function configuredSecrets(env: Record<string, string | undefined>): string[] {
   const rpc = (env.INK_RPC_WS_URLS ?? "").split(",").map((u) => u.trim())
+  const key = env.OPENSEA_API_KEY?.trim()
   const all = [
     ...(env.DATABASE_URL ? secretsFor(env.DATABASE_URL, false) : []),
     ...rpc.filter(Boolean).flatMap((u) => secretsFor(u, true)),
+    ...(key ? [key, encodeURIComponent(key)] : []),
   ]
   // shortcut: strings under 8 characters are skipped so a bare "/" or a short password cannot blank whole messages, and only exact strings match; match on URL structure (or have providers send keys in headers) to close both gaps
   return [...new Set(all.filter((s) => s.length >= 8))].sort((a, b) => b.length - a.length)

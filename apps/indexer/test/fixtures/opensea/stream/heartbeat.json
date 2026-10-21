@@ -1,0 +1,19 @@
+{
+  "sent": [
+    null,
+    "100",
+    "phoenix",
+    "heartbeat",
+    {}
+  ],
+  "reply": [
+    null,
+    "100",
+    "phoenix",
+    "phx_reply",
+    {
+      "status": "ok",
+      "response": {}
+    }
+  ]
+}

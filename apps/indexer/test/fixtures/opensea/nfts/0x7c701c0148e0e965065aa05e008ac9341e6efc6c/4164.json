@@ -1,0 +1,105 @@
+{
+  "status": 200,
+  "body": {
+    "nft": {
+      "identifier": "4164",
+      "collection": "wiredonink",
+      "contract": "0x7c701c0148e0e965065aa05e008ac9341e6efc6c",
+      "token_standard": "erc721",
+      "name": "WIRED: Whisper #025",
+      "description": "Some things stay with you long after the noise fades.\nWIRED is a collection of 999 animated cat PFPs inspired by Basement guitarist and artist Alex Henery’s artwork for the band’s WIRED album.\nBasement is one of my favorite bands. This collection began with that connection, then grew into a world of its own as an independent tribute to the music and art that sparked it.",
+      "image_url": "https://i2c.seadn.io/ink/0x7c701c0148e0e965065aa05e008ac9341e6efc6c/1b6d07e53758d8b04d011592f818f0/711b6d07e53758d8b04d011592f818f0.gif",
+      "display_image_url": "https://i2c.seadn.io/ink/0x7c701c0148e0e965065aa05e008ac9341e6efc6c/1b6d07e53758d8b04d011592f818f0/711b6d07e53758d8b04d011592f818f0.gif",
+      "display_animation_url": "https://raw2.seadn.io/ink/0x7c701c0148e0e965065aa05e008ac9341e6efc6c/740a58d5e74dc905163e93bee036c2/f3740a58d5e74dc905163e93bee036c2.mp4",
+      "metadata_url": "https://ipfs2.seadn.io/ipfs/bafybeid2fkszyzrjrz2wjllqkwawnnvagkurmw7odlxsn2iaimve7fytye/0901.json",
+      "opensea_url": "https://opensea.io/assets/ink/0x7c701c0148e0e965065aa05e008ac9341e6efc6c/4164",
+      "updated_at": "2026-10-18T12:08:54.676277",
+      "is_disabled": false,
+      "is_nsfw": false,
+      "original_image_url": "ipfs://bafybeiaau53xgmo5rlkz32pbfwhxkstswvf4ttkxd3d66qgtedlge3ngqi/0901.gif",
+      "original_animation_url": "ipfs://bafybeiaau53xgmo5rlkz32pbfwhxkstswvf4ttkxd3d66qgtedlge3ngqi/0901.mp4",
+      "traits": [
+        {
+          "trait_type": "Cat",
+          "display_type": null,
+          "max_value": null,
+          "value": "Whisper"
+        },
+        {
+          "trait_type": "Aura",
+          "display_type": null,
+          "max_value": null,
+          "value": "Poltergeist"
+        },
+        {
+          "trait_type": "Eyes",
+          "display_type": null,
+          "max_value": null,
+          "value": "Lumen"
+        },
+        {
+          "trait_type": "Tier",
+          "display_type": null,
+          "max_value": null,
+          "value": "Flicker"
+        },
+        {
+          "trait_type": "Markings",
+          "display_type": null,
+          "max_value": null,
+          "value": "Silence"
+        },
+        {
+          "trait_type": "Apparition",
+          "display_type": null,
+          "max_value": null,
+          "value": "Dormant"
+        },
+        {
+          "trait_type": "Background",
+          "display_type": null,
+          "max_value": null,
+          "value": "Midnight"
+        },
+        {
+          "trait_type": "External waves",
+          "display_type": null,
+          "max_value": null,
+          "value": "Quietus"
+        },
+        {
+          "trait_type": "Thermal palette",
+          "display_type": null,
+          "max_value": null,
+          "value": "Witchlight"
+        },
+        {
+          "trait_type": "Breed inspiration",
+          "display_type": null,
+          "max_value": null,
+          "value": "Turkish angora"
+        }
+      ],
+      "estimated_value_usd": null,
+      "decimals": null,
+      "animation_url": "https://i2c.seadn.io/ink/0x7c701c0148e0e965065aa05e008ac9341e6efc6c/740a58d5e74dc905163e93bee036c2/f3740a58d5e74dc905163e93bee036c2.mp4",
+      "is_suspicious": false,
+      "creator": "",
+      "owners": [
+        {
+          "address": "0x38ab2e5d760ff1d968a777c96f55d085c416fb85",
+          "quantity": 1,
+          "quantity_string": "1"
+        }
+      ],
+      "rarity": {
+        "strategy_id": "openrarity",
+        "strategy_version": "1.0",
+        "rank": 752
+      },
+      "subscription": null,
+      "agent_binding": null,
+      "agent_metadata": null
+    }
+  }
+}

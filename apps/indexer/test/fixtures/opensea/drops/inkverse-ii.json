@@ -1,0 +1,41 @@
+{
+  "status": 200,
+  "body": {
+    "collection_slug": "inkverse-ii",
+    "collection_name": "INKverse II",
+    "chain": "ink",
+    "contract_address": "0x165dcae7953657e23035c96503b2a5b51ddfa4cd",
+    "drop_type": "seadrop_v1_erc721",
+    "is_minting": true,
+    "image_url": "https://i2c.seadn.io/collection/inkverse-ii/image_type_logo/0e191e5c1638c342ff36e873bfa95f/4c0e191e5c1638c342ff36e873bfa95f.png",
+    "opensea_url": "https://opensea.io/collection/inkverse-ii",
+    "active_stage": {
+      "uuid": "9cd70529-b13d-4259-83a0-4c28bf314158",
+      "stage_type": "public_sale",
+      "label": "Public stage",
+      "price": "700000000000000",
+      "price_currency_address": "0x0000000000000000000000000000000000000000",
+      "start_time": "2026-10-14T18:54:47Z",
+      "end_time": "2027-10-13T18:55:47Z",
+      "max_per_wallet": "33",
+      "allowlist_wallet_count": null
+    },
+    "next_stage": null,
+    "stages": [
+      {
+        "uuid": "9cd70529-b13d-4259-83a0-4c28bf314158",
+        "stage_type": "public_sale",
+        "label": "Public stage",
+        "price": "700000000000000",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-10-14T18:54:47Z",
+        "end_time": "2027-10-13T18:55:47Z",
+        "max_per_wallet": "33",
+        "allowlist_wallet_count": null
+      }
+    ],
+    "total_supply": "30917",
+    "max_supply": "33333",
+    "fee_bps": 1000
+  }
+}

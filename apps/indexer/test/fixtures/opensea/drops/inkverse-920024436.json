@@ -1,0 +1,64 @@
+{
+  "status": 200,
+  "body": {
+    "collection_slug": "inkverse-920024436",
+    "collection_name": "INKverse",
+    "chain": "ink",
+    "contract_address": "0xfffbd67f37e1e9fd9d9ebef9b687daa72a33da64",
+    "drop_type": "seadrop_v1_erc721",
+    "is_minting": false,
+    "image_url": "https://i2c.seadn.io/collection/inkverse-920024436/image_type_logo/c2af51a696049e6eebbe27e8afecfe/71c2af51a696049e6eebbe27e8afecfe.png",
+    "opensea_url": "https://opensea.io/collection/inkverse-920024436",
+    "active_stage": null,
+    "next_stage": null,
+    "stages": [
+      {
+        "uuid": "df758c00-64a4-4b24-abae-5e08bb2782f2",
+        "stage_type": "public_sale",
+        "label": "Public stage",
+        "price": "0",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-10-14T14:00:40Z",
+        "end_time": "2026-10-15T14:00:40Z",
+        "max_per_wallet": "1",
+        "allowlist_wallet_count": null
+      },
+      {
+        "uuid": "eb8abb49-691d-4ac7-877d-53db89d287cc",
+        "stage_type": "signed_presale",
+        "label": "Team",
+        "price": "0",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-10-14T11:45:40Z",
+        "end_time": "2026-10-14T12:00:40Z",
+        "max_per_wallet": "100",
+        "allowlist_wallet_count": 1
+      },
+      {
+        "uuid": "9c081c94-6498-4aeb-8f36-0ffdcf3f96dd",
+        "stage_type": "signed_presale",
+        "label": "Core · Active · Supporter",
+        "price": "0",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-10-14T12:00:40Z",
+        "end_time": "2026-10-14T13:00:40Z",
+        "max_per_wallet": "1",
+        "allowlist_wallet_count": 590
+      },
+      {
+        "uuid": "57e572a5-d288-45eb-8510-65d0c1e7b221",
+        "stage_type": "signed_presale",
+        "label": "Community",
+        "price": "0",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-10-14T13:00:40Z",
+        "end_time": "2026-10-14T14:00:40Z",
+        "max_per_wallet": "1",
+        "allowlist_wallet_count": 593
+      }
+    ],
+    "total_supply": "1000",
+    "max_supply": "1000",
+    "fee_bps": 1000
+  }
+}
