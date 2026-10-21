@@ -15,7 +15,7 @@ Under a supervisor (systemd, launchd, a container) run the entry point directly,
 
     node --env-file=.env --import tsx apps/indexer/src/main.ts start
 
-Environment: `DATABASE_URL` (required), `INK_RPC_WS_URLS` (optional, comma-separated, empty uses the Ink defaults) and `LOG_LEVEL`. For NFTs: `OPENSEA_API_KEY` (empty runs the chain sources only, after one warning), `OPENSEA_REQUESTS_PER_HOUR` (default 500, shared by every process using the key), `OPENSEA_MIN_INTERVAL_MS` (default 300, the shortest gap between two requests on the key) and `NFT_HISTORY_START_BLOCK` (where the mint backfill started; empty uses the first stored mint). These are optional: an invalid value is logged as a warning and its default is used.
+Environment: `DATABASE_URL` (required), `INK_RPC_WS_URLS` (optional, comma-separated, empty uses the Ink defaults) and `LOG_LEVEL`. `INDEXER_SOURCES` (comma-separated platforms: `inkypump`, `opensea`, `chimera`; empty runs all three; an unknown or repeated name stops the start; `backfill` without `--sources` covers the enabled platforms). For NFTs: `OPENSEA_API_KEY` (empty runs the chain sources only, after one warning), `OPENSEA_REQUESTS_PER_HOUR` (default 500, shared by every process using the key), `OPENSEA_MIN_INTERVAL_MS` (default 300, the shortest gap between two requests on the key) and `NFT_HISTORY_START_BLOCK` (where the mint backfill started; empty uses the first stored mint). These are optional: an invalid value is logged as a warning and its default is used.
 
 NFT rows are pruned daily at 03:30 UTC: mints, burns and SeaDrop mints after 8 days, sales after 90 days, stats after 8 days, expired listing state, and ranks after 7 days.
 

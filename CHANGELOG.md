@@ -20,6 +20,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Indexer: OpenSea-derived events with synthetic ids, stamped with the chain cursor's block and moved, not deleted, on a reorg, under an in-process mutex and a Postgres advisory lock. See ADR 0018.
 - DB: a request budget shared by every process using one OpenSea key (`opensea_take`, `opensea_block`, `opensea_configure`). See ADR 0019.
 - Indexer: `OPENSEA_API_KEY`, `OPENSEA_REQUESTS_PER_HOUR`, `OPENSEA_MIN_INTERVAL_MS` and `NFT_HISTORY_START_BLOCK` settings, `backfill --sources` (`inkypump`, `nft-mints`, `nft-sales`, `nft-launches`) and `pnpm nft:mark`.
+- Indexer: `INDEXER_SOURCES` turns platforms (`inkypump`, `opensea`, `chimera`) on or off with one setting and a restart; the default runs all three. See ADR 0020.
 - Indexer: a daily prune of NFT rows (mints, burns and SeaDrop mints after 8 days, sales after 90 days).
 - Optional Sentry reporting for fatal and stall exits (`SENTRY_DSN`, `SENTRY_RELEASE`).
 - Migration 0002: `events_launch_creator` and `events_type_id` indexes for readers of `indexer.events`.

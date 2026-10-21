@@ -70,6 +70,7 @@ Environment variables, all optional. An invalid value is logged and its default 
 
 | Variable | Default | What it does |
 | --- | --- | --- |
+| `INDEXER_SOURCES` | `inkypump,opensea,chimera` | The platforms to run, comma-separated. `opensea` is the NFT mint, sale and OpenSea API parts, `chimera` the Chimera launches. A name that is unknown or repeated stops the start. `backfill` without `--sources` covers the enabled platforms |
 | `OPENSEA_API_KEY` | empty | OpenSea API key. Empty runs the chain sources only, after one warning |
 | `OPENSEA_REQUESTS_PER_HOUR` | 500 | The key's hourly request budget, shared by every process using the key |
 | `OPENSEA_MIN_INTERVAL_MS` | 300 | The shortest gap between two requests on the key |
