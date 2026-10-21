@@ -19,7 +19,14 @@ export class Indexer {
   cursorBlock: bigint | null | undefined
 
   constructor(
-    private readonly deps: { chain: Chain; store: Store; logger: Logger; sources: Source[] },
+    private readonly deps: {
+      chain: Chain
+      store: Store
+      logger: Logger
+      sources: Source[]
+      /** The filter groups the live tick reads (see `Source.filters`); undefined reads all. */
+      only?: readonly BackfillSource[]
+    },
   ) {}
 
   async init() {
@@ -58,7 +65,7 @@ export class Indexer {
       // shortcut: a fresh database starts every source at InkyPump's start block. A source with
       // older history needs a per-source start block, and a backfill for the range it missed.
       let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
-      while (from <= head) from = (await this.ingest(from, head, head, true)) + 1n
+      while (from <= head) from = (await this.ingest(from, head, head, true, this.deps.only)) + 1n
       await store.confirm(head)
       this.tickSuccesses++
     } catch (err) {
