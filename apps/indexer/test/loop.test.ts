@@ -538,11 +538,8 @@ describe("Indexer over several sources", () => {
     await idx.init()
     await idx.trigger()
 
-    expect(recorded).toEqual([
-      [0n, 20n, filterA],
-      [0n, 20n, filterB1],
-      [0n, 20n, filterB2],
-    ])
+    // The three address-bound filters are one request; each source still gets its own logs.
+    expect(recorded).toEqual([[0n, 20n, { address: [A, B], topics: [] }]])
     const hashed = (l: ChainLog) => ({ ...l, blockHash: chain.hashOf(l.blockNumber) })
     expect(a.seen).toEqual([{ logs: [[hashed(la)]], toBlock: S + 20n }])
     expect(b.seen).toEqual([{ logs: [[hashed(lb1)], [hashed(lb2)]], toBlock: S + 20n }])
@@ -573,7 +570,14 @@ describe("Indexer over several sources", () => {
     const calls: string[] = []
     const a = fakeSource("a", [filterA], calls)
     const b = fakeSource("b", [filterB1, filterB2], calls)
-    const idx = new Indexer({ chain, store, logger: () => {}, sources: [a.source, b.source] })
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: () => {},
+      sources: [a.source, b.source],
+      // One request per filter, so the clamp from one request reaches the next.
+      mergeRequests: false,
+    })
     await idx.init()
     await idx.trigger()
 

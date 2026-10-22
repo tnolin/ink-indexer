@@ -1,8 +1,9 @@
-import { type ChainLog, INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
+import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import type { Chain } from "./chain"
 import { BlockNotServedError } from "./errors"
 import type { Logger } from "./log"
+import { readLogs } from "./log-plan"
 import type { BackfillSource, Source, SourceBatch } from "./sources/source"
 import type { Cursor, Store } from "./store"
 
@@ -26,6 +27,8 @@ export class Indexer {
       sources: Source[]
       /** The filter groups the live tick reads (see `Source.filters`); undefined reads all. */
       only?: readonly BackfillSource[]
+      /** False asks for each logical filter on its own, the reference the merged requests are tested against. Default true. */
+      mergeRequests?: boolean
     },
   ) {}
 
@@ -97,25 +100,14 @@ export class Indexer {
       .map((source) => ({ source, filters: source.filters(only) }))
       .filter((s) => s.filters.some((f) => f !== null))
     const sources = picked.map((s) => s.source)
-    // Every filter covers the same range. A transport may serve less than asked, so each call asks
+    // Every request covers the same range. A transport may serve less than asked, so each call asks
     // up to the lowest end returned so far, and logs above the final end are dropped.
-    let toBlock = to
-    const fetched: ChainLog[][][] = []
-    for (const { filters } of picked) {
-      const perFilter: ChainLog[][] = []
-      for (const filter of filters) {
-        if (filter === null) {
-          perFilter.push([])
-          continue
-        }
-        const r = await chain.getLogs(from, toBlock, filter)
-        if (r.toBlock < toBlock) toBlock = r.toBlock
-        perFilter.push(r.logs)
-      }
-      fetched.push(perFilter)
-    }
-    const logs = fetched.map((perFilter) =>
-      perFilter.map((ls) => ls.filter((l) => l.blockNumber <= toBlock)),
+    const { logs, toBlock } = await readLogs(
+      chain,
+      picked.map((p) => p.filters),
+      from,
+      to,
+      this.deps.mergeRequests ?? true,
     )
     let events = 0
     try {

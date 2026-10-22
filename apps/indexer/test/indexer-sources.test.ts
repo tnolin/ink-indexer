@@ -103,8 +103,8 @@ describe("the live tick with INDEXER_SOURCES", () => {
     return asked
   }
 
-  it("reads every filter by default", async () => {
-    expect(await liveFilters({})).toHaveLength(1 + 7)
+  it("reads every filter by default, in 5 requests", async () => {
+    expect(await liveFilters({})).toHaveLength(5)
   })
 
   it("inkypump alone reads no NFT filter", async () => {
@@ -118,8 +118,8 @@ describe("the live tick with INDEXER_SOURCES", () => {
     expect(asked.some((f) => f.address === SEADROP_V1)).toBe(false)
   })
 
-  it("opensea alone reads the mint and sale filters", async () => {
-    expect(await liveFilters({ INDEXER_SOURCES: "opensea" })).toHaveLength(6)
+  it("opensea alone reads the mint and sale filters in 4 requests", async () => {
+    expect(await liveFilters({ INDEXER_SOURCES: "opensea" })).toHaveLength(4)
   })
 })
 

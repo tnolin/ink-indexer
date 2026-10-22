@@ -727,7 +727,8 @@ describe("NFT source", () => {
 
     asked.length = 0
     await idx.backfill(from, chain.head, ["nft-mints"])
-    expect(asked).toHaveLength(5)
+    // Mints, burns and ERC-1155 mints and burns are 3 requests, SeaDrop the 4th.
+    expect(asked).toHaveLength(4)
     expect(asked.at(-1)?.address).toBe(SEADROP_V1)
 
     // A source with none of its filters picked is left out entirely.
@@ -740,7 +741,7 @@ describe("NFT source", () => {
     // No list: every filter of every source, as the live loop reads them.
     asked.length = 0
     await idx.backfill(from, chain.head)
-    expect(asked).toHaveLength(8)
+    expect(asked).toHaveLength(5)
     expect(await store.getCursor()).toBeNull()
   })
 })

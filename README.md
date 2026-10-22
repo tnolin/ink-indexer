@@ -106,7 +106,7 @@ alter table indexer.events drop column sub;
      Postgres `indexer` schema: hooks · tokens · curve_state · trades · events · cursors · recent_blocks
 ```
 
-Each new block triggers a catch-up from the last saved block, so backfill, live indexing and reconnects follow one path. Every source (InkyPump, NFTs) reads the same block range and shares one cursor and one rollback. Events are written unconfirmed and confirmed one block later; a reorg rolls back to the last matching block and re-ingests. Decisions are recorded in [`docs/adr`](docs/adr).
+Each tick asks for the logs of all enabled sources in a few `eth_getLogs` requests (filters that differ only in the event topic or the address share one) and splits the response back to each filter. Each new block triggers a catch-up from the last saved block, so backfill, live indexing and reconnects follow one path. Every source (InkyPump, NFTs) reads the same block range and shares one cursor and one rollback. Events are written unconfirmed and confirmed one block later; a reorg rolls back to the last matching block and re-ingests. Decisions are recorded in [`docs/adr`](docs/adr).
 
 ## Contributing, security and license
 
