@@ -144,6 +144,34 @@ export function readNftSettings(env: Env, log: Logger): NftSettings {
   return settings
 }
 
+/** The longest `TICK_MIN_INTERVAL_MS`, well under the stall watchdog's 5 minutes. */
+const MAX_TICK_MIN_INTERVAL_MS = 60_000
+
+/**
+ * `TICK_MIN_INTERVAL_MS`: the least time between the starts of two live ticks, a whole number from
+ * 0 to 60000 (default 0, no minimum). An invalid value logs one warning, never the value, and uses 0.
+ */
+export function readTickMinIntervalMs(env: Env, log: Logger): number {
+  const v = env.TICK_MIN_INTERVAL_MS?.trim()
+  if (!v) return 0
+  const n = /^\d+$/.test(v) ? Number(v) : Number.NaN
+  if (n <= MAX_TICK_MIN_INTERVAL_MS) return n
+  log("warn", "invalid setting ignored", {
+    variable: "TICK_MIN_INTERVAL_MS",
+    reason: `not a whole number from 0 to ${MAX_TICK_MIN_INTERVAL_MS}`,
+    using: 0,
+  })
+  return 0
+}
+
+/** The one line logged when the live loop is running. */
+export function logStarted(
+  log: Logger,
+  fields: { transports: unknown; tickMinIntervalMs: number },
+) {
+  log("info", "indexer started", fields)
+}
+
 /**
  * Where the mint history starts, for `legacy`: the configured block; else the first stored mint
  * (the earliest `first_mint_block` of a collection, which outlives the pruned mint rows, or the

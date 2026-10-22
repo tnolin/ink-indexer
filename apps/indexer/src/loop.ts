@@ -10,6 +10,11 @@ import type { Cursor, Store } from "./store"
 export class Indexer {
   private running: Promise<void> | null = null
   private again = false
+  /** When the last tick started, in `Date.now()` ms; only kept when `tickMinIntervalMs` is set. */
+  private lastStart = 0
+  /** The deferred-tick timer, and what ends its wait early. A trigger while it waits joins that tick. */
+  private wait: { timer: ReturnType<typeof setTimeout>; done: () => void } | null = null
+  private stopped = false
   /** The chain head the last tick started from; undefined before the first tick. */
   lastHead: bigint | undefined
   /** How many head fetches have succeeded. */
@@ -29,6 +34,8 @@ export class Indexer {
       only?: readonly BackfillSource[]
       /** False asks for each logical filter on its own, the reference the merged requests are tested against. Default true. */
       mergeRequests?: boolean
+      /** The least time between the starts of two live ticks; 0 or unset starts one on every trigger. */
+      tickMinIntervalMs?: number
     },
   ) {}
 
@@ -37,16 +44,23 @@ export class Indexer {
     this.cursorBlock = (await this.deps.store.getCursor())?.block ?? null
   }
 
-  /** Single-flight: triggers during a running tick fold into one more tick. */
+  /**
+   * Single-flight: triggers during a running tick fold into one more tick. With `tickMinIntervalMs`,
+   * a tick that would start sooner than that after the last one waits on one timer, and every
+   * trigger meanwhile joins it. The promise settles when the tick covering the trigger is done.
+   */
   trigger(): Promise<void> {
     if (this.running) {
-      this.again = true
+      if (!this.wait) this.again = true
       return this.running
     }
     const run = async () => {
       try {
         do {
           this.again = false
+          await this.untilDue()
+          if (this.stopped) return
+          this.lastStart = Date.now()
           await this.tick()
         } while (this.again)
       } finally {
@@ -55,6 +69,27 @@ export class Indexer {
     }
     this.running = run()
     return this.running
+  }
+
+  /** Cancels a deferred tick: its timer is cleared, the triggers waiting on it settle and it never runs. */
+  stop() {
+    this.stopped = true
+    if (!this.wait) return
+    clearTimeout(this.wait.timer)
+    this.wait.done()
+  }
+
+  /** Resolves when the minimum interval since the last tick start has passed (at once when it has, or is 0). */
+  private async untilDue() {
+    const delay = this.lastStart + (this.deps.tickMinIntervalMs ?? 0) - Date.now()
+    if (!(delay > 0)) return
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        this.wait = null
+        resolve()
+      }
+      this.wait = { timer: setTimeout(done, delay), done }
+    })
   }
 
   async tick() {

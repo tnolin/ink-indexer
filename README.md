@@ -74,6 +74,7 @@ Environment variables, all optional. An invalid value is logged and its default 
 | `OPENSEA_API_KEY` | empty | OpenSea API key. Empty runs the chain sources only, after one warning |
 | `OPENSEA_REQUESTS_PER_HOUR` | 500 | The key's hourly request budget, shared by every process using the key |
 | `OPENSEA_MIN_INTERVAL_MS` | 300 | The shortest gap between two requests on the key |
+| `TICK_MIN_INTERVAL_MS` | 0 | The least time in milliseconds between the starts of two live ticks (0 to 60000). 0 runs a tick on every new block. A higher value reads several blocks per request and adds up to that much latency for every source. See [ADR 0022](docs/adr/0022-tick-min-interval.md) |
 | `NFT_HISTORY_START_BLOCK` | the first stored mint | The block the mint backfill started from. A collection that minted earlier is `legacy` and has no mint events |
 
 Backfill by source with `pnpm backfill --from <block> --sources nft-mints,nft-sales,nft-launches` (the names are `inkypump`, `nft-mints`, `nft-sales` and `nft-launches`; the default is every source). `pnpm nft:mark <contract> <value>` sets a collection's verdict or kind by hand (the values are listed in the indexer README). Details are in the [indexer README](apps/indexer/README.md) and ADRs [0016](docs/adr/0016-nft-chain-sources.md), [0017](docs/adr/0017-opensea-source.md), [0018](docs/adr/0018-off-chain-events.md) and [0019](docs/adr/0019-opensea-shared-budget.md).
