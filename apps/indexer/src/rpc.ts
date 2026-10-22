@@ -18,6 +18,7 @@ import {
 } from "viem"
 import { ink } from "viem/chains"
 import { type Logger, log } from "./log"
+import { RpcStats } from "./rpc-stats"
 
 /**
  * An eth_getLogs filter. `topics` is positional: each entry is one topic position, where null matches
@@ -316,8 +317,16 @@ export async function connectRpc(
       headers: { "content-type": "text/plain" },
     })
   }
+  // Counts every request of every client built on these transports, under the transport's hostname.
+  const stats = new RpcStats(
+    urls.map((u) => new URL(u).hostname),
+    logger,
+  )
   const httpTransports = urls.map((u) =>
-    http(httpUrlFor(u), { timeout: timeoutMs, retryCount: 0, fetchFn }),
+    stats.wrap(
+      new URL(u).hostname,
+      http(httpUrlFor(u), { timeout: timeoutMs, retryCount: 0, fetchFn }),
+    ),
   )
   const perUrl = httpTransports.map((t) => createPublicClient({ chain: ink, transport: t }))
   for (const [i, c] of perUrl.entries()) {
@@ -376,7 +385,7 @@ export async function connectRpc(
     undefined,
     logger,
   )
-  return { client, heads, pollHeads, router }
+  return { client, heads, pollHeads, router, stats }
 }
 
 /** First and longest wait before subscribing to new heads again after an error or a silent stall. */

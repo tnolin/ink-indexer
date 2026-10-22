@@ -52,6 +52,7 @@ const shutdown = createShutdown({
     stopNft()
     stopHeads()
     clearInterval(stallTimer)
+    rpc.stats.stop()
   },
   inFlight: () => current,
   end: () => sql.end({ timeout: 5 }),
@@ -120,6 +121,7 @@ const stopHeads = watchHeads(
   undefined,
   pollHeads,
 )
+rpc.stats.start()
 const stallTimer = startStallWatch({ indexer, shutdown, logger: log })
 process.on("SIGINT", () => void shutdown.signal())
 process.on("SIGTERM", () => void shutdown.signal())
