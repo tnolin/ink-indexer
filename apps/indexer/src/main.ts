@@ -13,8 +13,10 @@ import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 import {
   createNftVerdictJob,
+  logStarted,
   readNftSettings,
   readSources,
+  readTickMinIntervalMs,
   type SourceSelection,
   startSourceServices,
 } from "./wiring"
@@ -42,6 +44,8 @@ const urls = (process.env.INK_RPC_WS_URLS ?? "")
   .filter(Boolean)
 const reporter = initSentry(process.env)
 
+const tickMinIntervalMs = readTickMinIntervalMs(process.env, log)
+
 const sql = connect(databaseUrl)
 const store = createStore(sql)
 let current: Promise<void> | undefined
@@ -52,6 +56,7 @@ const shutdown = createShutdown({
     stopNft()
     stopHeads()
     clearInterval(stallTimer)
+    indexer.stop()
     rpc.stats.stop()
   },
   inFlight: () => current,
@@ -83,6 +88,7 @@ try {
     store,
     logger: log,
     only: sources.groups,
+    tickMinIntervalMs,
     sources: [inkypumpSource({ sql, chain, logger: log }), nftSource({ sql, chain, logger: log })],
   })
   await indexer.init()
@@ -125,4 +131,4 @@ rpc.stats.start()
 const stallTimer = startStallWatch({ indexer, shutdown, logger: log })
 process.on("SIGINT", () => void shutdown.signal())
 process.on("SIGTERM", () => void shutdown.signal())
-log("info", "indexer started", { transports: router.ranges() })
+logStarted(log, { transports: router.ranges(), tickMinIntervalMs })
