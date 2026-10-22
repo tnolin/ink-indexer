@@ -22,6 +22,8 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Indexer: `OPENSEA_API_KEY`, `OPENSEA_REQUESTS_PER_HOUR`, `OPENSEA_MIN_INTERVAL_MS` and `NFT_HISTORY_START_BLOCK` settings, `backfill --sources` (`inkypump`, `nft-mints`, `nft-sales`, `nft-launches`) and `pnpm nft:mark`.
 - Indexer: `INDEXER_SOURCES` turns platforms (`inkypump`, `opensea`, `chimera`) on or off with one setting and a restart; the default runs all three. See ADR 0020.
 - Indexer: a daily prune of NFT rows (mints, burns and SeaDrop mints after 8 days, sales after 90 days).
+- Indexer: the live tick and backfill read the sources' log filters in fewer `eth_getLogs` requests (5 instead of 8 with every group on) and split the logs back to each filter, so every source receives the same logs as before. See ADR 0021.
+- Indexer: a `rpc calls` log line every 10 minutes with each endpoint's requests by method (`getLogs`, `blockNumber`, `getBlock`, `other`) and its rate-limited failures. See ADR 0021.
 - Optional Sentry reporting for fatal and stall exits (`SENTRY_DSN`, `SENTRY_RELEASE`).
 - Migration 0002: `events_launch_creator` and `events_type_id` indexes for readers of `indexer.events`.
 
