@@ -131,7 +131,27 @@ export type NftDeps = {
 const TRANSFER = NFT_TOPICS.transfer
 const BATCHES = [NFT_TOPICS.transferSingle, NFT_TOPICS.transferBatch]
 
-/** Same order as the log arrays `process` receives. */
+/**
+ * Same order as the log arrays `process` receives. These are logical filters: the loop merges them
+ * into fewer eth_getLogs requests (`planRequests`) and hands `process` the logs each would have
+ * returned. With every group on, the seven become four requests:
+ *
+ * - `[Transfer, 0x0]`: mints (ERC-721), alone. No extra logs.
+ * - `[[Transfer, TransferSingle, TransferBatch], null, 0x0]`: ERC-721 burns and ERC-1155 mints.
+ *   topic0 is the only position that differs, so the response is exactly the union of the two
+ *   filters. No extra logs.
+ * - `[[TransferSingle, TransferBatch], null, null, 0x0]`: ERC-1155 burns, alone. No extra logs.
+ * - the SeaDrop, Seaport and Chimera addresses with no topic restriction, because the SeaDrop filter
+ *   reads every event of its contract. Extra logs: every event of the two Seaport contracts other
+ *   than OrderFulfilled (cancellations, validations, counter increments, OrdersMatched) and every
+ *   event of the Chimera factory other than CampaignCreated. They are rare next to token transfers
+ *   and are dropped when the response is split. Without the SeaDrop filter (no `nft-mints`), topic0
+ *   is restricted to OrderFulfilled and CampaignCreated and the extras shrink to the cross product
+ *   of the addresses and those two topics, which is empty in practice.
+ *
+ * Mints and burns cannot share a request: they constrain different topic positions (from in topic1
+ * against to in topic2), and ORing positions would fetch every transfer.
+ */
 const FILTERS: LogFilter[] = [
   { topics: [TRANSFER, ZERO_TOPIC] },
   { topics: [TRANSFER, null, ZERO_TOPIC] },
