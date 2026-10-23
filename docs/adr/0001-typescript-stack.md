@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-The SDK, indexer, MCP server and the MAKO bot share event types. The closest reference builds (PumpKit, pump-fun-sdk) are TypeScript, and viem is the standard EVM client in that ecosystem.
+The SDK, indexer and the MAKO bot share event types. Existing launchpad tooling in this space is TypeScript, and viem is the standard EVM client in that ecosystem.
 
 ## Decision
 

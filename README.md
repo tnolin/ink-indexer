@@ -14,8 +14,6 @@ ink-indexer watches the Ink blockchain for new memecoin launches, trades and bon
 - [Decision records](docs/adr)
 - [AGENTS.md](AGENTS.md), for coding agents
 
-<!-- Privacy policy: add the link at https://makobot.xyz once the site is live. -->
-
 ## Quick start
 
     pnpm install
