@@ -9,6 +9,7 @@ import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
 import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
+import { createCollectionsFromSales } from "./sources/nft/write"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 import {
@@ -73,6 +74,12 @@ let rpc: Awaited<ReturnType<typeof connectRpc>>
 let indexer: Indexer
 try {
   await migrate(sql)
+  if (cli.command === "collections-from-sales") {
+    const created = await createCollectionsFromSales(sql)
+    log("info", "collections from sales created", { created })
+    await sql.end()
+    process.exit(0)
+  }
   rpc = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
   const chain = viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping })
   if (cli.command === "mark") {
@@ -97,7 +104,7 @@ try {
       await startSourceServices(sources, { env: process.env, sql, store, chain, log, report })
     ).stop
 } catch (err) {
-  log("error", cli.command === "mark" ? "mark failed" : "startup failed", {
+  log("error", cli.command === "start" ? "startup failed" : `${cli.command} failed`, {
     error: err instanceof Error ? (err.stack ?? String(err)) : String(err),
   })
   reporter.capture(err)

@@ -24,6 +24,7 @@ import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
+import { createCollectionsFromSales } from "../src/sources/nft/write"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 
@@ -317,8 +318,18 @@ describe("NFT source", () => {
       expected.map((s) => s.priceWei.toString()).sort(),
     )
     expect(await count("nft_sales")).toBe(50)
-    // Sales alone do not create collection rows.
-    expect(await count("nft_collections")).toBe(0)
+  })
+
+  it("a sale of a contract with no collection row creates the row, due for discovery", async () => {
+    const roles = loadSeaportRoles()
+    const logs = loadNftFixture("seaport-fills").filter((l) => l.transactionHash === roles.sweep)
+    await ingest(logs)
+    const rows = await sql`
+      select contract, slug, first_mint_block, next_discovery_at <= now() as due
+      from indexer.nft_collections`
+    expect(rows.map((r) => ({ ...r }))).toEqual([
+      { contract: SWEEP_COLLECTION, slug: null, first_mint_block: null, due: true },
+    ])
   })
 
   describe("a sale's floor", () => {
@@ -743,5 +754,36 @@ describe("NFT source", () => {
     await idx.backfill(from, chain.head)
     expect(asked).toHaveLength(5)
     expect(await store.getCursor()).toBeNull()
+  })
+})
+
+describe("collections from sales", () => {
+  const sale = (contract: string, logIndex: number) => ({
+    tx_hash: `0x${"22".repeat(32)}`,
+    log_index: logIndex,
+    token_id: "1",
+    contract,
+    qty: "1",
+    price_wei: "1000",
+    currency: "ETH",
+    buyer: BOB,
+    seller: ALICE,
+    order_hash: `0x${"ab".repeat(32)}`,
+    block: "58000000",
+  })
+
+  it("creates a row due for discovery for each contract with sales and no row, and counts them", async () => {
+    await sql`insert into indexer.nft_collections ${sql({ contract: HORNET, slug: "hornet", next_discovery_at: null })}`
+    await sql`insert into indexer.nft_sales ${sql([sale(PRTSCN, 0), sale(PRTSCN, 1), sale(SWEEP_COLLECTION, 2), sale(HORNET, 3)])}`
+    expect(await createCollectionsFromSales(sql)).toBe(2)
+    const rows = await sql`
+      select contract, slug, next_discovery_at <= now() as due
+      from indexer.nft_collections order by contract`
+    expect(rows.map((r) => ({ ...r }))).toEqual([
+      { contract: PRTSCN, slug: null, due: true },
+      { contract: HORNET, slug: "hornet", due: null },
+      { contract: SWEEP_COLLECTION, slug: null, due: true },
+    ])
+    expect(await createCollectionsFromSales(sql)).toBe(0)
   })
 })

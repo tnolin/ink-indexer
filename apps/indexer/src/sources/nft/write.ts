@@ -1,3 +1,4 @@
+import type { Sql } from "@ink-indexer/db"
 import type { Tx } from "../source"
 import type {
   CollectionTouch,
@@ -206,6 +207,19 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
       delete from indexer.nft_listing_state l
       using unnest(${tx.array(part.map((r) => r.contract))}::text[], ${tx.array(part.map((r) => s(r.tokenId)))}::numeric[]) as sold(contract, token_id)
       where l.contract = sold.contract and l.token_id = sold.token_id`
+}
+
+/**
+ * One-time pass for the contracts whose sales came before sales created collection rows: a row for
+ * each contract with sales and no row, due for discovery by its column default. Returns how many.
+ */
+export async function createCollectionsFromSales(sql: Sql): Promise<number> {
+  const rows = await sql`
+    insert into indexer.nft_collections (contract)
+    select distinct contract from indexer.nft_sales
+    on conflict (contract) do nothing
+    returning contract`
+  return rows.length
 }
 
 /**
