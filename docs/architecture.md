@@ -1,6 +1,6 @@
 # Architecture
 
-ink-indexer is an open TypeScript SDK for reading Ink launchpads, DEXs, NFT marketplaces and lending protocols, plus the indexer that stores their events in Postgres. The SDK runs anywhere with an Ink RPC. The indexer powers [MAKO](https://github.com/tnolin/mako) and, later, a keyed hosted API.
+ink-indexer is an open TypeScript SDK for reading Ink launchpads and NFTs, plus the indexer that stores their events in Postgres. The SDK runs anywhere with an Ink RPC. The indexer powers [MAKO](https://github.com/tnolin/mako).
 
 All sources are on Ink mainnet (chain ID 57073).
 
@@ -8,41 +8,40 @@ All sources are on Ink mainnet (chain ID 57073).
 
 | Part | Path | License | What it does |
 | --- | --- | --- | --- |
-| SDK | `packages/sdk` | MIT | Curve state, progress, quotes and event decoders for each supported protocol |
+| SDK | `packages/sdk` | MIT | Event decoders, curve math, event builders and readers for InkyPump V2, decoders for NFT mints, SeaDrop, Seaport and Chimera, and OpenSea response parsers |
 | Events | `packages/events` | MIT | Typed, versioned event schema. The public contract between the indexer and anything that reads it |
 | DB | `packages/db` | AGPL-3.0 | Postgres schema and migrations |
-| Indexer | `apps/indexer` | AGPL-3.0 | Subscribes to chain and marketplace events, writes normalized rows |
-| MCP server | `apps/mcp` | MIT | Local MCP server on the SDK, using the user's own RPC |
-| Hosted API | `apps/api` | AGPL-3.0 | Keyed private beta, built after the indexer is stable |
+| Indexer | `apps/indexer` | AGPL-3.0 | Follows Ink, reads OpenSea, writes normalized rows |
 
 ## Flow
 
 ```text
- Ink RPC (HTTP reads,        Marketplace APIs
- WebSocket heads)
+ Ink RPC (HTTP reads,        OpenSea API v2
+ WebSocket heads)            and Stream
         │                          │
         ▼                          ▼
  ┌───────────────────────────────────────┐
- │  packages/sdk: decoders, curve math   │
+ │  packages/sdk: decoders, curve math,  │
+ │  OpenSea parsers                      │
  └───────────────────────────────────────┘
         │                          │
         ▼                          ▼
  ┌───────────────────────────────────────┐
  │  apps/indexer: sources/*              │
- │  one module per protocol:             │
- │  launchpads · DEXs · NFTs · lending   │
+ │  one module per source:               │
+ │  InkyPump · NFTs · OpenSea            │
  └───────────────────────────────────────┘
                     │
                     ▼
  ┌───────────────────────────────────────┐
  │  Postgres (indexer schema)            │
  │  tokens · curve_state · trades ·      │
- │  nft_* ·                              │
+ │  nft_* · opensea_budget ·             │
  │  events  ◄── normalized, typed        │
  └───────────────────────────────────────┘
-          │                   │
-          ▼                   ▼
-   MAKO bot rules      apps/api (private beta)
+                    │
+                    ▼
+             MAKO bot rules
 ```
 
 ## Event sources
@@ -51,18 +50,13 @@ Each source is a module in `apps/indexer/src/sources/`. Adding a protocol means 
 
 | Source | What is tracked | How |
 | --- | --- | --- |
-| InkyPump V2 | Launches, curve buys and sells, curve progress, bond to Uniswap V4, post-bond swaps | V2 hook events; REST API for metadata, King of the INK and rankings. See the [integration guide](https://docs.inkyswap.com/api-reference/contracts/integration-guide.md) and [llms.txt](https://docs.inkyswap.com/llms.txt) |
-| Tsunami | Launches, curve buys and sells, graduation | Both factories: `0x5934a5C377309453746EE8aa5194F671930c09fa` and `0x1fC16511f5Fa4b4C1591ffeB8C38AFfc367076f1`. Factory emits `TokenLaunched` and `PoolCreated`; curves emit `TokenBought`, `TokenSold` and `TokenMigrated`. See [addresses](https://docs.tsunami.trade/#/reference/addresses) and [events](https://docs.tsunami.trade/#/reference/events) |
-| Calamari | Post-graduation swaps and liquidity | PoolManager `0x6E4723A612831AfB9f5B2a5aE22723c37aAB9560` (Uniswap v4 style) `Initialize` and `Swap` logs; StateView and Quoter for prices. See [addresses](https://docs.calamari.trade/#/contracts/addresses) |
+| InkyPump V2 | Launches, curve buys and sells, curve progress, bond to Uniswap V4 | V2 hook events (`LaunchCreated`, `LaunchMetadata`, `Trade`, `LaunchFinalized`) read with `eth_getLogs`. See the [integration guide](https://docs.inkyswap.com/api-reference/contracts/integration-guide.md) |
 | NFTs (chain) | ERC-721 and ERC-1155 mints and burns, SeaDrop drops and mint progress, Seaport sales, Chimera collection launches | `Transfer`, SeaDrop, `OrderFulfilled` and `CampaignCreated` logs on Ink. See ADR 0016 |
 | OpenSea | Collection pages, drop schedules, floors and stats, listings, item ranks, creator accounts | API v2 with chain slug `ink`, and the Stream API for listings, both drawing on one shared request budget. See ADR 0017 and ADR 0019 |
-| Tydro | Health factors and liquidations | Scheduled `getUserAccountData` reads on the Aave V3 pool; `LiquidationCall` logs |
 
 **Mechanics the SDK models**
 
-- InkyPump curves charge 2%. At the target raise, the next buy bonds the token to a Uniswap V4 pool in the same transaction. Post-bond trades pay 0.1%.
-- Tsunami tokens price on the curve until the sellable reserve drains, then the raise seeds a Calamari pool.
-- Every lookup checks whether a token is on its curve or bonded before routing.
+- InkyPump curves charge 2%. At the target raise, the next buy bonds the token to a Uniswap V4 pool in the same transaction.
 
 ## NFT events
 
@@ -93,6 +87,7 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | `tokens` | address, launchpad, name, ticker, creator, created_at, phase, quote_asset, paired_stock |
 | `curve_state` | token, progress_bps, curve_value, target, market_cap, updated_block |
 | `trades` | tx_hash, log_index, token, side, trader, amount_in, amount_out, block, venue |
+| `hooks` | InkyPump hook contracts: address, launchpad, kind (native or xStocks), ABI family, quote asset |
 | `nft_collections` | contract, standard, kind, verdict and gates, slug, name, safelist, first mint block and time, launchpad |
 | `nft_mints`, `nft_burns`, `nft_seadrop_mints` | tx_hash, log_index, contract, token_id, recipient, holder or minter, qty, block. Kept 8 days |
 | `nft_sales` | tx_hash, log_index, contract, token_id, qty, price_wei, currency, buyer, seller, order_hash, block. Kept 90 days |
@@ -102,8 +97,9 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | `nft_stats`, `nft_listing_state`, `nft_ranks`, `nft_accounts` | Floor and stats history, the last listed price per item, cached item ranks, cached creator accounts |
 | `nft_overrides` | Manual verdicts and kinds set with `pnpm nft:mark` |
 | `opensea_budget` | The shared OpenSea request budget (ADR 0019) |
-| `wallets` (planned) | address, first_seen, funded_by, linked_group, launches_count, bonded_count, labels |
 | `events` | id, type, entity, payload (normalized JSON), block, confirmed, tx_hash, log_index, sub |
+| `cursors`, `recent_blocks` | The shared chain cursor, and the last 128 block hashes the reorg check compares |
+| `migrations` | The migrations applied |
 
 `events` is the contract between the indexer and anything that reads from it. Consumers read normalized, typed events there and never touch source-specific tables. Its payload shapes are defined in `packages/events` and versioned with it.
 
@@ -112,14 +108,7 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 - A WebSocket subscription announces new heads and reconnects automatically; the loop backfills from the last processed block.
 - Events are written unconfirmed and marked confirmed after 1 block, so consumers can choose how to handle reorgs.
 - RPC: dRPC, Ink's public QuickNode and Gelato endpoints over HTTP with a 15 second request limit. Reads go to the endpoint with the best recent success and latency and fail over on error. See ADR 0014 and [Ink RPC docs](https://docs.inkonchain.com/tools/rpc).
-- Planned: a heartbeat that alerts the operator after 10 minutes with no processed events. Not built yet.
-- Planned: error reporting to Sentry. Not built yet. Errors are logged as JSON today.
-
-## Agent-native docs
-
-- `llms.txt` at the docs root.
-- `AGENTS.md` at the repo root: architecture, commands, how to add an event source.
-- `apps/mcp` lets agents read Ink launchpads directly through the SDK.
+- A stall watchdog exits the process when the cursor stops moving, so a supervisor restarts it (ADR 0014). With `SENTRY_DSN` set, fatal and stall exits are reported to Sentry (ADR 0015). Other errors are logged as JSON.
 
 ## Decisions
 

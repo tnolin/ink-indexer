@@ -27,7 +27,7 @@ describe("mainnet fixtures", () => {
     expect(s!.at.raised - curveValue(s!.at, s!.at.sold)).toBeGreaterThan(1000n)
   })
 
-  // GATE: if any of these fail, stop and report to the user. Do not add per-family math.
+  // One curve formula covers every hook family; no per-family math.
   it.each<FixtureName>([
     "current-launch",
     "current-buy",

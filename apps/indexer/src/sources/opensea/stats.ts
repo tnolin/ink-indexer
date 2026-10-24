@@ -43,8 +43,8 @@ export type TierCandidate = {
 /**
  * The tier of each candidate. Hot: collections minting now, and the 30 tracked collections with
  * the most sales in 7 days (at least one). Warm: the next 70 of the tracked collections, in the
- * same order. Cold: every other candidate. Filtered is tracked by nobody but followers, so it is always
- * cold; the order of ties is the contract.
+ * same order. Cold: every other candidate, and every `filtered` collection. The order of ties is
+ * the contract.
  */
 export function planTiers(rows: TierCandidate[]): Map<string, Tier> {
   const plan = new Map<string, Tier>()

@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-The indexer runs InkyPump, the NFT chain filters and the OpenSea services in one process. Each platform needs to be switchable on its own with a settings edit and a restart, and more launchpads will follow.
+The indexer runs InkyPump, the NFT chain filters and the OpenSea services in one process. Each platform needs to be switchable on its own with a settings edit and a restart.
 
 ## Decision
 

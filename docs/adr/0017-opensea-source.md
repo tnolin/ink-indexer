@@ -48,7 +48,7 @@ ADR 0006 chose OpenSea API v2 and the Stream API for Ink NFTs. Chain logs say wh
 - the startup probe shows a connection accepts fewer than 50 topics;
 - two distinct new shards are refused in a row (their first connection or all their joins fail) while another shard is connected. Retries of one shard and plain outages do not count, and a shard that connects resets the count.
 
-The firehose stays on until the process restarts. It logs its messages and bytes per minute every 10 minutes. Bandwidth in the fallback: not measured, since the fallback has not triggered. The all-collections feed carried about 300,000 messages a minute across all chains on 2026-10-17, about 1,400 of them from Ink.
+The firehose stays on until the process restarts. It logs its messages and bytes per minute every 10 minutes. The all-collections feed carried about 300,000 messages a minute across all chains on 2026-10-17, about 1,400 of them from Ink.
 
 **Collection kinds.**
 - `drop`: the collection has a mint phase.

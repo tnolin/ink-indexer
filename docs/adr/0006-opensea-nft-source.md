@@ -11,7 +11,7 @@ Ink is a supported OpenSea chain ([chains](https://support.opensea.io/en/article
 
 ## Decision
 
-Use OpenSea API v2 with chain slug `ink` for collections and stats, the Stream API for live sales (superseded, see ADR 0016: sales come from the chain) and listings, and Blockscout token transfers as fallback (superseded, see ADR 0017). Request a full API key.
+Use OpenSea API v2 with chain slug `ink` for collections and stats, the Stream API for live sales (superseded, see ADR 0016: sales come from the chain) and listings, and Blockscout token transfers as fallback (superseded, see ADR 0017). It uses a full API key.
 
 ## Consequences
 
