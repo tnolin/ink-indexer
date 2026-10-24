@@ -6,6 +6,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Added
 
+- Indexer: a sale of a contract with no collection row creates the row, due for OpenSea discovery, as a first mint does. `pnpm nft:collections-from-sales` creates the rows for contracts that already have sales. See ADR 0023.
 - Indexer: `TICK_MIN_INTERVAL_MS`, the least time between the starts of two live ticks (default 0, a tick on every new block). Early triggers fold into one deferred tick. See ADR 0022.
 - pnpm monorepo with `sdk`, `events`, `db` and `indexer` packages, CI on Node 22 and 24, and gitleaks secret scanning.
 - SDK: InkyPump V2 event decoders for native and xStocks hooks, curve math, event builders and multicall readers.

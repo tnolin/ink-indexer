@@ -4,6 +4,10 @@ import { parseCli } from "../src/cli"
 describe("parseCli", () => {
   it("accepts start and backfill with valid arguments", () => {
     expect(parseCli(["start"])).toEqual({ ok: true, command: "start" })
+    expect(parseCli(["collections-from-sales"])).toEqual({
+      ok: true,
+      command: "collections-from-sales",
+    })
     expect(parseCli(["backfill", "--from", "45252770"])).toEqual({
       ok: true,
       command: "backfill",
@@ -42,10 +46,14 @@ describe("parseCli", () => {
     expect(parseCli([]).ok).toBe(false)
   })
 
+  it("collections-from-sales takes no options", () => {
+    expect(parseCli(["collections-from-sales", "--from", "1"])).toMatchObject({ ok: false })
+  })
+
   it("carries the usage line with every rejection", () => {
     const r = parseCli(["backfill"])
     expect(r.ok === false && r.usage).toBe(
-      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] | mark <contract> <mark>",
+      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] | mark <contract> <mark> | collections-from-sales",
     )
   })
 

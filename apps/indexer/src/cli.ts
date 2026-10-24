@@ -5,7 +5,7 @@ import { BACKFILL_SOURCES, type BackfillSource } from "./sources/source"
 export { BACKFILL_SOURCES }
 
 export const USAGE =
-  "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] | mark <contract> <mark>"
+  "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] | mark <contract> <mark> | collections-from-sales"
 
 export type Cli =
   | { ok: true; command: "start" }
@@ -18,6 +18,7 @@ export type Cli =
       sources?: BackfillSource[]
     }
   | { ok: true; command: "mark"; contract: string; value: MarkValue }
+  | { ok: true; command: "collections-from-sales" }
   | { ok: false; usage: string; reason: string }
 
 const bad = (reason: string): Cli => ({ ok: false, usage: USAGE, reason })
@@ -64,9 +65,9 @@ export function parseCli(argv: string[]): Cli {
   }
   const { positionals, values } = parsed
   const [command] = positionals
-  if (command === "start") {
+  if (command === "start" || command === "collections-from-sales") {
     if (values.from !== undefined || values.to !== undefined || values.sources !== undefined)
-      return bad("start takes no options")
+      return bad(`${command} takes no options`)
     return { ok: true, command }
   }
   if (command !== "backfill") return bad("unknown or missing command")

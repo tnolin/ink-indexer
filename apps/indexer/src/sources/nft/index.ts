@@ -118,7 +118,7 @@ export type NftBatch = SourceBatch & {
   stages: StageRow[]
   /** Per SeaDrop contract that had mint stats: the state the milestones leave it in. */
   milestones: MilestoneUpdate[]
-  /** Every contract in `collections`: those with a mint, a burn, a SeaDrop log or a launch. */
+  /** Every contract in `collections`: those with a mint, a burn, a sale, a SeaDrop log or a launch. */
   touched: Address[]
 }
 
@@ -347,6 +347,8 @@ export async function processLogs(
   for (const [contract, block] of firstMintBlock)
     touch(contract).firstMint = { block, ts: times.get(block)! }
   for (const contract of seadropContracts) touch(contract).seadrop = true
+  // A contract that only trades gets its row (and its discovery) from its first sale.
+  for (const { sales } of saleLogs) for (const r of sales) touch(r.contract)
   // The first launch of a collection wins, as in nft_launches.
   for (const l of launches)
     touch(l.collection).launch ??= { launchpad: l.launchpad, token: l.token, creator: l.creator }
