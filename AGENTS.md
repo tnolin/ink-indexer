@@ -11,6 +11,7 @@
 ## Conventions
 
 - `shortcut:` comments mark deliberate simplifications. Each names its limit and the upgrade path. Search for `shortcut:` before scaling a part of the system.
+- Write commit messages, PR descriptions, comments and docs for outside readers: say what changed and why. Comments explain why non-obvious code works as it does, not how it came to be written.
 
 ## Commands
 

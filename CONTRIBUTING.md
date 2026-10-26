@@ -12,6 +12,7 @@ Outside pull requests open once our contributor license agreement (CLA) is in pl
 
 - Write the failing test first.
 - Conventional commit messages: `feat:`, `fix:`, `docs:`, `test:`, `chore:`, `ci:`, `refactor:`.
+- Write commit messages, PR descriptions, comments and docs for outside readers: say what changed and why. Comments explain why non-obvious code works as it does, not how it came to be written.
 - CI (lint, typecheck, tests, secret scan) must pass before merge.
 - Never commit secrets or `.env` files. `.env.example` lists every variable with an empty value.
 - Record significant technical decisions as a dated ADR in `docs/adr/`.
