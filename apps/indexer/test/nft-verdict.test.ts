@@ -12,11 +12,13 @@ import {
   type NftFixtureName,
 } from "../../../packages/sdk/test/fixtures"
 import { classifyKind, type KindFacts } from "../src/sources/nft/kind"
+import { SHARED_LINK_MAX } from "../src/sources/nft/policy"
 import {
   evaluateGates,
   type GateFacts,
   mintLiveDue,
   nextVerdictAt,
+  pageReason,
   traitsSchedule,
 } from "../src/sources/nft/verdict"
 import { loadOpenSeaFixture } from "./opensea/fixtures"
@@ -46,6 +48,8 @@ function facts(over: Partial<GateFacts> = {}): GateFacts {
       twitter: "x",
       website: null,
     },
+    sharedLinks: { twitter: false, website: false },
+    nameCopy: false,
     discoveryRetrying: false,
     dropStages: [{ type: "signed_presale" }, { type: "public_sale" }],
     stageIndexes: [0, 1],
@@ -445,6 +449,85 @@ describe("gates", () => {
     expect(
       evaluateGates({ ...bare, page: { ...bare.page, twitter: "x", name: null } }).gates.page,
     ).toBe("fail")
+  })
+
+  describe("gate 1 shared links and copied names", () => {
+    const page = (over: Partial<GateFacts["page"]> = {}) => ({
+      slug: "x",
+      name: "X",
+      imageUrl: "https://img",
+      twitter: "x",
+      website: null,
+      ...over,
+    })
+
+    it("counts a link on more than 5 collections as missing", () => {
+      expect(SHARED_LINK_MAX).toBe(5)
+      const shared = facts({ sharedLinks: { twitter: true, website: false } })
+      expect(evaluateGates(shared).gates.page).toBe("fail")
+      expect(evaluateGates(shared).verdict).toBe("filtered")
+      expect(pageReason(shared)).toBe(
+        "page: X shared by more than 5 collections (limit: 5 collections or fewer per link)",
+      )
+    })
+
+    it("passes on a link that is not shared, even when the other one is", () => {
+      const f = facts({
+        page: page({ website: "https://x.art" }),
+        sharedLinks: { twitter: true, website: false },
+      })
+      expect(evaluateGates(f).gates.page).toBe("pass")
+      expect(pageReason(f)).toBeNull()
+    })
+
+    it("names both links when both are shared, and the website alone when only it is", () => {
+      const both = facts({
+        page: page({ website: "https://x.art" }),
+        sharedLinks: { twitter: true, website: true },
+      })
+      expect(evaluateGates(both).gates.page).toBe("fail")
+      expect(pageReason(both)).toBe(
+        "page: X and website shared by more than 5 collections (limit: 5 collections or fewer per link)",
+      )
+      const site = facts({
+        page: page({ twitter: null, website: "https://x.art" }),
+        sharedLinks: { twitter: false, website: true },
+      })
+      expect(pageReason(site)).toMatch(/^page: website shared by more than 5 collections/)
+    })
+
+    it("keeps the existing reason for a page with no links", () => {
+      const bare = facts({ page: page({ twitter: null }) })
+      expect(pageReason(bare)).toBe(
+        "page: missing X or website (limit: name, image, and X or website)",
+      )
+    })
+
+    it("fails a collection whose name copies a verified or manually real collection", () => {
+      const copy = facts({ nameCopy: true })
+      expect(evaluateGates(copy).gates.page).toBe("fail")
+      expect(evaluateGates(copy).verdict).toBe("filtered")
+      expect(pageReason(copy)).toBe(
+        "page: name copies a verified or manually real collection (limit: a name those collections do not hold)",
+      )
+    })
+
+    it("never fails a verified collection or creator on either rule", () => {
+      const both = { nameCopy: true, sharedLinks: { twitter: true, website: true } }
+      expect(evaluateGates(facts({ ...both, safelist: "verified" })).gates.page).toBe("pass")
+      expect(evaluateGates(facts({ ...both, creatorVerified: true })).gates.page).toBe("pass")
+      expect(pageReason(facts({ ...both, safelist: "verified" }))).toBeNull()
+    })
+
+    it("lets a manual real mark override both rules", () => {
+      const f = facts({
+        nameCopy: true,
+        sharedLinks: { twitter: true, website: false },
+        override: "real",
+      })
+      expect(evaluateGates(f).verdict).toBe("real")
+      expect(evaluateGates({ ...f, override: null }).verdict).toBe("filtered")
+    })
   })
 
   it("traits fail only 72h after mint end", () => {

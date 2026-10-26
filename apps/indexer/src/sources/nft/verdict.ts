@@ -25,6 +25,7 @@ import {
   MINT_END_IDLE_S,
   MINT_LIVE_VERIFIED_MINTS,
   SCHEDULER_TICK_MS,
+  SHARED_LINK_MAX,
   STILL_MINTING_S,
   STRUCTURE_MIN_MINT_S,
   TRAITS_CHECKPOINTS_S,
@@ -61,6 +62,10 @@ export type GateFacts = {
     twitter: string | null
     website: string | null
   }
+  /** The X handle, or the website, is on more than SHARED_LINK_MAX collections (any verdict). */
+  sharedLinks: { twitter: boolean; website: boolean }
+  /** The name equals another collection's name, and that one is OpenSea-verified or marked real. */
+  nameCopy: boolean
   /** A slug lookup is still scheduled: discovery has not given up. */
   discoveryRetrying: boolean
   /** The stage types of the stored drop page. */
@@ -83,16 +88,50 @@ const isVerified = (f: Pick<GateFacts, "safelist" | "creatorVerified">) =>
 
 const filled = (s: string | null) => s !== null && s.trim() !== ""
 
-/** Gate 1. A verified collection or creator passes at once. */
-function pageGate(f: GateFacts): GateState {
-  if (isVerified(f)) return "pass"
+const PAGE_LIMIT = "limit: name, image, and X or website"
+
+/**
+ * Gate 1 and the words for its failure. A verified collection or creator passes at once. Otherwise
+ * the page needs a name and an image that no verified or manually real collection already holds,
+ * and an X handle or website that is not on more than SHARED_LINK_MAX collections.
+ */
+function checkPage(f: GateFacts): { state: GateState; reason: string | null } {
+  if (isVerified(f)) return { state: "pass", reason: null }
   const p = f.page
-  if (p.slug)
-    return filled(p.name) && filled(p.imageUrl) && (filled(p.twitter) || filled(p.website))
-      ? "pass"
-      : "fail"
-  return f.discoveryRetrying ? "pending" : "fail"
+  const fail = (what: string, limit = PAGE_LIMIT) => ({
+    state: "fail" as const,
+    reason: `page: ${what} (${limit})`,
+  })
+  if (!p.slug) {
+    return f.discoveryRetrying
+      ? { state: "pending", reason: null }
+      : fail("no collection page found")
+  }
+  if (!filled(p.name) || !filled(p.imageUrl)) return fail("missing name or image")
+  if (f.nameCopy)
+    return fail(
+      "name copies a verified or manually real collection",
+      "limit: a name those collections do not hold",
+    )
+  const shared = [
+    filled(p.twitter) && f.sharedLinks.twitter ? "X" : null,
+    filled(p.website) && f.sharedLinks.website ? "website" : null,
+  ].filter((x) => x !== null)
+  const usable =
+    (filled(p.twitter) && !f.sharedLinks.twitter) || (filled(p.website) && !f.sharedLinks.website)
+  if (usable) return { state: "pass", reason: null }
+  if (shared.length > 0)
+    return fail(
+      `${shared.join(" and ")} shared by more than ${SHARED_LINK_MAX} collections`,
+      `limit: ${SHARED_LINK_MAX} collections or fewer per link`,
+    )
+  return fail("missing X or website")
 }
+
+const pageGate = (f: GateFacts): GateState => checkPage(f).state
+
+/** Why gate 1 failed, or null when it did not. */
+export const pageReason = (f: GateFacts): string | null => checkPage(f).reason
 
 /** More than one stage, or any signed or allowlist stage, on the drop page or on chain. */
 function hasStages(f: Pick<GateFacts, "dropStages" | "stageIndexes">): boolean {
@@ -327,6 +366,9 @@ type FactsRow = {
   traits_due: string | null
   mint_start_emitted: boolean
   prior_minted: boolean | null
+  twitter_shared: boolean
+  website_shared: boolean
+  name_copy: boolean
   creator_verified: boolean
   override_kind: string | null
   override_verdict: string | null
@@ -348,6 +390,21 @@ async function loadFacts(sql: Sql, contract: string): Promise<FactsRow | undefin
       c.slug is null and c.next_discovery_at is not null as discovery_retrying,
       c.traits_state, c.traits_checks, c.mint_start_emitted, c.prior_minted,
       extract(epoch from c.next_traits_at)::bigint::text as traits_due,
+      c.twitter is not null and indexer.nft_handle_key(c.twitter) is not null and (
+        select count(*) from indexer.nft_collections x
+        where indexer.nft_handle_key(x.twitter) = indexer.nft_handle_key(c.twitter)
+      ) > ${SHARED_LINK_MAX} as twitter_shared,
+      c.website is not null and indexer.nft_site_key(c.website) is not null and (
+        select count(*) from indexer.nft_collections x
+        where indexer.nft_site_key(x.website) = indexer.nft_site_key(c.website)
+      ) > ${SHARED_LINK_MAX} as website_shared,
+      exists (
+        select 1 from indexer.nft_collections x
+        left join indexer.nft_overrides xo on xo.contract = x.contract
+        where x.contract <> c.contract
+          and indexer.nft_name_key(x.name) = indexer.nft_name_key(c.name)
+          and (x.safelist = 'verified' or xo.verdict = 'real')
+      ) as name_copy,
       coalesce(a.verified, false) as creator_verified,
       o.kind as override_kind, o.verdict as override_verdict,
       m.last_block::text as last_block, coalesce(m.minted, 0)::text as minted,
@@ -480,6 +537,8 @@ export function createVerdictJob(deps: VerdictDeps): Job {
         twitter: row.twitter,
         website: row.website,
       },
+      sharedLinks: { twitter: row.twitter_shared, website: row.website_shared },
+      nameCopy: row.name_copy,
       discoveryRetrying: row.discovery_retrying,
       dropStages: row.drop_stages ?? [],
       stageIndexes: row.stage_indexes,
@@ -500,6 +559,7 @@ export function createVerdictJob(deps: VerdictDeps): Job {
       kind,
       verdict,
       gates,
+      page_reason: pageReason(facts),
       next_verdict_at: toDate(next),
       next_traits_at: toDate(traits.nextTraitsAt),
       traits_checks: traits.checks,
