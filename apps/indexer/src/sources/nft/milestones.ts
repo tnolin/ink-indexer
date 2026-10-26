@@ -139,6 +139,15 @@ export type MilestoneContext = {
   soldOutBlock: bigint | null
   /** Unix seconds; null when the collection has no first mint yet. */
   firstMintTs: number | null
+  /** The block of the stored first mint; null when there is none yet. */
+  firstMintBlock: bigint | null
+  /**
+   * Whether items were minted before the stored first mint: `nft_collections.prior_minted`, or a
+   * `prior_supply` above zero. Null while undecided.
+   */
+  priorMinted: boolean | null
+  /** A manual kind mark (`nft_overrides.kind`) decides the kind without the prior supply. */
+  kindOverride: boolean
   drop: StoredDrop | null
   /** The first mint of each stage not stored yet, in chain order. */
   newStageRows: SeaDropMintRow[]
@@ -186,10 +195,18 @@ export async function loadMilestoneContexts(
       last_mark_bps: number
       sold_out_block: string | null
       first_ts: string | null
+      first_block: string | null
+      prior_supply: string | null
+      prior_minted: boolean | null
+      kind_override: boolean
     }[]
   >`
-    select contract, last_mark_bps, sold_out_block, extract(epoch from first_mint_ts)::bigint as first_ts
-    from indexer.nft_collections where contract = any(${contracts}::text[])`
+    select c.contract, c.last_mark_bps, c.sold_out_block, extract(epoch from c.first_mint_ts)::bigint as first_ts,
+      c.first_mint_block::text as first_block, c.prior_supply::text as prior_supply, c.prior_minted,
+      o.kind is not null as kind_override
+    from indexer.nft_collections c
+    left join indexer.nft_overrides o on o.contract = c.contract
+    where c.contract = any(${contracts}::text[])`
   const stages = await sql<
     { contract: Address; stage_index: number; ts: string; first_block: string }[]
   >`
@@ -221,6 +238,14 @@ export async function loadMilestoneContexts(
       lastMarkBps: c?.last_mark_bps ?? 0,
       soldOutBlock: c?.sold_out_block != null ? BigInt(c.sold_out_block) : null,
       firstMintTs: c?.first_ts != null ? Number(c.first_ts) : null,
+      firstMintBlock: c?.first_block != null ? BigInt(c.first_block) : null,
+      priorMinted:
+        c?.prior_minted === true || (c?.prior_supply != null && BigInt(c.prior_supply) > 0n)
+          ? true
+          : c?.prior_minted === false || c?.prior_supply != null
+            ? false
+            : null,
+      kindOverride: c?.kind_override ?? false,
       drop: drop
         ? {
             slug: drop.slug,
@@ -269,14 +294,40 @@ export function milestoneBlocks(contexts: MilestoneContext[]): bigint[] {
 
 export type MilestoneDeps = {
   sql: Sql
-  chain: Pick<Chain, "readMintStats">
+  chain: Pick<Chain, "readMintStats" | "readTotalSupplyAt">
   logger: Logger
+}
+
+/**
+ * Whether the contract had items minted before its first stored mint. The stored decision stands
+ * unless this batch holds an earlier first mint, which makes it stale. Otherwise the supply the
+ * block before the first mint decides; a contract that does not answer `totalSupply()` counts as
+ * new, and a manual kind mark skips the question.
+ */
+async function hadPriorMints(
+  ctx: MilestoneContext,
+  batchFirstBlock: bigint | undefined,
+  chain: Pick<Chain, "readTotalSupplyAt">,
+): Promise<boolean> {
+  if (ctx.kindOverride) return false
+  const earlier =
+    batchFirstBlock !== undefined &&
+    (ctx.firstMintBlock === null || batchFirstBlock < ctx.firstMintBlock)
+  if (ctx.priorMinted !== null && !earlier) return ctx.priorMinted
+  const first = earlier ? batchFirstBlock : ctx.firstMintBlock
+  if (first === null || first === undefined || first === 0n) return false
+  const supply = await chain.readTotalSupplyAt(ctx.contract, first - 1n)
+  return supply !== null && supply > 0n
 }
 
 /**
  * Reads each contract's supply once, at the end of the batch, and plans its milestones. A contract
  * that does not answer `getMintStats` gets none, and its stages stay unrecorded so they are
  * announced once it does.
+ *
+ * A contract that had items minted before its first stored mint (see `hadPriorMints`) gets no
+ * `stage_start` and no `progress` events, and its stages and marks are not recorded, so the
+ * milestones are announced if a backfill later shows nothing was minted before.
  *
  * shortcut: `minted` is the supply at the end of the batch, not at the block of the milestone.
  * In live ingestion a batch is a few blocks, so they agree to a handful of mints; a backfill over
@@ -318,7 +369,10 @@ export async function milestoneEvents(
       ...ctx.knownStages,
       ...newStages.map((s) => [s.index, s.ts] as const),
     ])
-    const batchFirst = at.collections.find((c) => c.contract === ctx.contract)?.firstMint?.ts
+    const batchFirstMint = at.collections.find((c) => c.contract === ctx.contract)?.firstMint
+    const batchFirst = batchFirstMint?.ts
+    const prior = await hadPriorMints(ctx, batchFirstMint?.block, deps.chain)
+    const keep = (d: MilestoneDraft) => !prior || d.kind === "sold_out"
     const mintStartTs = Math.min(
       ...[ctx.firstMintTs, batchFirst, ...stageStartTs.values()].filter((t) => t != null),
     )
@@ -337,7 +391,7 @@ export async function milestoneEvents(
       stageCounts: [],
     }
 
-    let drafts = planMilestones(base)
+    let drafts = planMilestones(base).filter(keep)
     if (drafts.length > 0) {
       // The counts cost a query each, so only a contract that announces something pays for them.
       const [minters, stageCounts] = await Promise.all([
@@ -346,7 +400,7 @@ export async function milestoneEvents(
           ? countStages(deps.sql, ctx.contract, ctx.rows)
           : [],
       ])
-      drafts = planMilestones({ ...base, minters, stageCounts })
+      drafts = planMilestones({ ...base, minters, stageCounts }).filter(keep)
     }
 
     for (const d of drafts) {
@@ -368,7 +422,7 @@ export async function milestoneEvents(
       out.events.push({ event, block: row.block, blockHash: at.blockHash(row.block), sub })
     }
 
-    out.stages.push(...newStages.map((s) => ({ contract: ctx.contract, ...s })))
+    if (!prior) out.stages.push(...newStages.map((s) => ({ contract: ctx.contract, ...s })))
     const marks = drafts.map((d) => d.markBps ?? 0)
     out.updates.push({
       contract: ctx.contract,

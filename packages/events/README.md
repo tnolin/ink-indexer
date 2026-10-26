@@ -117,7 +117,7 @@ A snapshot, written at discovery and whenever a field changes.
 
 ### `nft.mint`
 
-A mint milestone: `stage_start`, `progress` or `sold_out`.
+A mint milestone: `stage_start`, `progress` or `sold_out`. A contract that had items minted before the indexer's first stored mint for it gets no `stage_start` or `progress` events, only `sold_out`.
 
 ```json
 {
