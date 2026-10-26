@@ -66,7 +66,7 @@ NFT events share a `contract` (also the row's `entity`) and a `source` of `chain
 | --- | --- | --- |
 | `nft.collection` | A collection is discovered, and whenever its page, kind, quality-check result or creator changes | chain and OpenSea |
 | `nft.drop` | A drop schedule is first read or changes | OpenSea |
-| `nft.mint` | A stage starts, a mint passes 25%, 50% or 75% of the max supply, and at sell-out | chain, with stage starts from the drop schedule and, for a verified collection with no SeaDrop stages, after 10 mints (`nft:start:<contract>`) |
+| `nft.mint` | A stage starts, a mint passes 25%, 50% or 75% of the max supply, and at sell-out | chain, with stage starts from the drop schedule and, for a verified collection with no SeaDrop stages, after 10 mints (`nft:start:<contract>`). A contract that had items minted before its first stored mint gets only `sold_out` (ADR 0027) |
 | `nft.listing` | A Stream listing passes the listing filter | OpenSea |
 | `nft.sale` | A Seaport fill | chain |
 | `nft.stats` | Floor, owners, volume, sales or listed count changes | OpenSea |

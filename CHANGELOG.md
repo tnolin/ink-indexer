@@ -4,6 +4,10 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Fixed
+
+- Indexer: a contract that had items minted before its first stored mint no longer gets `stage_start` and `progress` mint events when it mints again. They were written all at once for a mint that began long before. Its mints, sales, `sold_out` event and collection snapshots are unchanged. See ADR 0027.
+
 ## [indexer-v0.3.4] - 2026-10-26
 
 ### Fixed
