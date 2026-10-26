@@ -545,3 +545,101 @@ describe("mint milestones in the NFT source", () => {
     expect(subs.filter((k) => k === "mint:stage_start:3")).toHaveLength(1)
   })
 })
+
+describe("a contract that minted before its first stored mint", () => {
+  /** The supply the chain reports at a block: the recording's mints up to it. */
+  function totalSupplyFromLogs(chain: FakeChain, contract: Address) {
+    chain.totalSupplyAt.set(contract, (block) => {
+      let supply = 0n
+      for (const l of chain.logs)
+        if (l.blockNumber <= block)
+          for (const t of decodeNftTransfers(l))
+            if (t.kind === "mint" && t.contract === contract) supply += t.qty
+      return supply
+    })
+  }
+  const kinds = async () => (await mintEvents()).map((e) => e.payload.kind)
+
+  it("writes no stage_start or progress events, and still stores its mints", async () => {
+    const logs = loadNftFixture("inkverse-mints")
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    supplyFrom(chain, INKVERSE, 1_000n)
+    // 50 items were minted before the first block the indexer stored.
+    chain.totalSupplyAt.set(INKVERSE, () => 50n)
+    const idx = await start(chain, logs)
+    await idx.trigger()
+
+    expect(await kinds()).not.toContain("stage_start")
+    expect(await kinds()).not.toContain("progress")
+    expect((await sql`select 1 from indexer.nft_mints`).length).toBeGreaterThan(0)
+    expect((await sql`select 1 from indexer.nft_stages`).length).toBe(0)
+    const [c] =
+      await sql`select last_mark_bps from indexer.nft_collections where contract = ${INKVERSE}`
+    expect(c).toMatchObject({ last_mark_bps: 0 })
+    // The supply was read the block before the first stored mint.
+    const first = firstBlock(logs.filter((l) => mintsIn(l) > 0n))
+    expect(chain.priorReads.filter((r) => r.method === "totalSupply")[0]).toMatchObject({
+      address: INKVERSE,
+      block: first - 1n,
+    })
+  })
+
+  it("writes them as before when nothing was minted earlier", async () => {
+    const logs = loadNftFixture("inkverse-mints")
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    supplyFrom(chain, INKVERSE, 1_000n)
+    chain.totalSupplyAt.set(INKVERSE, () => 0n)
+    const idx = await start(chain, logs)
+    await idx.trigger()
+    const k = await kinds()
+    expect(k.filter((x) => x === "stage_start")).toHaveLength(3)
+    expect(k.filter((x) => x === "progress")).toHaveLength(3)
+  })
+
+  it("trusts the stored decision, and a manual kind skips it", async () => {
+    const logs = loadNftFixture("inkverse-mints")
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    supplyFrom(chain, INKVERSE, 1_000n)
+    const first = firstBlock(logs.filter((l) => mintsIn(l) > 0n))
+    await sql`insert into indexer.nft_collections (contract, standard, first_mint_block, prior_supply, prior_minted)
+      values (${INKVERSE}, 'erc721', ${first}, 50, true)`
+    const idx = await start(chain, logs)
+    await idx.trigger()
+    expect(await kinds()).not.toContain("stage_start")
+    expect(chain.priorReads).toEqual([])
+
+    // A manual kind decides the kind without the prior supply, so the mint events are written.
+    await sql`truncate indexer.events, indexer.nft_stages, indexer.nft_mints, indexer.nft_seadrop_mints, indexer.nft_collections, indexer.cursors, indexer.recent_blocks`
+    await sql`insert into indexer.nft_overrides (contract, kind) values (${INKVERSE}, 'drop')`
+    await sql`insert into indexer.nft_collections (contract, standard, first_mint_block, prior_supply, prior_minted)
+      values (${INKVERSE}, 'erc721', ${first}, 50, true)`
+    const idx2 = await start(chain, logs)
+    await idx2.trigger()
+    expect(await kinds()).toContain("stage_start")
+  })
+
+  it("writes them again once a backfill finds the real first mint with nothing minted before it", async () => {
+    const logs = loadNftFixture("inkverse-mints")
+    const mintBlocks = blocksOf(logs.filter((l) => mintsIn(l) > 0n))
+    const live = mintBlocks[300]!
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    supplyFrom(chain, INKVERSE, 1_000n)
+    totalSupplyFromLogs(chain, INKVERSE)
+    // The indexer starts mid-mint, so the mints before block `live` are not stored yet.
+    const idx = await start(
+      chain,
+      logs.filter((l) => l.blockNumber >= live),
+    )
+    await idx.trigger()
+    expect(await kinds()).toEqual(["sold_out"])
+
+    await idx.backfill(firstBlock(logs), live - 1n)
+    const k = await kinds()
+    expect(k).toContain("stage_start")
+    expect(await kinds()).toContain("sold_out")
+  })
+})
