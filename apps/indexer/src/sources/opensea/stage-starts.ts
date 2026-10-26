@@ -58,7 +58,11 @@ type DropRow = { stages: NftDropStage[]; max_supply: string | null }
 
 async function plan(sql: Sql, contract: string, nowMs: number) {
   const [drop] = await sql<DropRow[]>`
-    select stages, max_supply::text as max_supply from indexer.nft_drops where contract = ${contract}`
+    select d.stages, d.max_supply::text as max_supply
+    from indexer.nft_drops d
+    left join indexer.nft_collections c on c.contract = d.contract
+    -- A contract that had items minted before its first stored mint announces no stage start.
+    where d.contract = ${contract} and not coalesce(c.prior_minted or c.prior_supply > 0, false)`
   if (!drop) return null
   const known = (
     await sql<{ stage_index: number; ts: string }[]>`

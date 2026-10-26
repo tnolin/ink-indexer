@@ -386,3 +386,18 @@ describe("scheduled stage starts and the first mint of a stage", () => {
     expect(await startEvents()).toHaveLength(1)
   })
 })
+
+describe("scheduled stage starts of a contract that minted before its first stored mint", () => {
+  it("announces nothing when the stored prior supply is above zero, and announces as before when it is zero", async () => {
+    const start = T0 + 2 * HOUR
+    await addDrop(HORNET, [stage({ startTime: sec(start), label: "Public" })])
+    await sql`update indexer.nft_collections set prior_supply = 40, prior_minted = true where contract = ${HORNET}`
+    clock = start
+    await jobScheduler().tick()
+    expect(await startEvents()).toHaveLength(0)
+
+    await sql`update indexer.nft_collections set prior_supply = 0, prior_minted = false where contract = ${HORNET}`
+    await jobScheduler().tick()
+    expect(await startEvents()).toHaveLength(1)
+  })
+})
