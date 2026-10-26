@@ -4,6 +4,10 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Changed
+
+- Indexer: a listing event carries a floor read within the last 10 minutes. When a listing arrives and the collection's stored floor is older, the indexer reads the floor from OpenSea first, at most once per collection every 10 minutes, and the event carries the new floor and its time. If the read fails or the request budget is blocked, the event carries the stored floor with its own `floorAt`. Before, the floor was read again only after 2 hours, at most once per 30 minutes. See ADR 0028.
+
 ### Fixed
 
 - Indexer: gate 1 no longer passes a collection on a link that many collections share, or on a name copied from a verified or manually real collection. An X handle or website on more than 5 collections counts as missing, and a name that matches a verified or manually real collection fails. A manual mark and a verified collection or creator are unaffected. `nft_collections.page_reason` records why gate 1 failed. When a link goes over the limit, the other collections that use it are judged again. Migration 0013 adds the column and marks every collection's verdict to be re-checked once, so some collections that were `real` can become `filtered` after the update. See ADR 0026.

@@ -667,7 +667,7 @@ describe("listed count", () => {
 })
 
 describe("requestStats", () => {
-  it("requestStats twice within 30 minutes makes one call", async () => {
+  it("requestStats twice within 10 minutes makes one call", async () => {
     const s = setup({ [statsPath(A)]: osStats({ floor: 2, owners: 4 }) })
     await addCollection(A, {
       stats_tier: "warm",
@@ -684,7 +684,7 @@ describe("requestStats", () => {
     // The fresh poll moves the schedule.
     expect((await rowOf(A)).next_stats_at.getTime()).toBe(T0 + 2 * HOUR)
 
-    clock += 29 * MIN
+    clock += 9 * MIN
     expect(await s.stats.requestStats(A, 1000)).toBe(false)
     expect(callsTo(s.fetch, statsPath(A))).toBe(1)
 

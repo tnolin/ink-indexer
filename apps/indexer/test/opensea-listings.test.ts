@@ -460,9 +460,9 @@ describe("the floor", () => {
       })
   })
 
-  it("a floor exactly 2 hours old is not refreshed; a collection with no stats row is", async () => {
+  it("a floor exactly 10 minutes old is not refreshed; a collection with no stats row is", async () => {
     await sql`delete from indexer.nft_stats`
-    await addFloor(PRTSCN, FLOOR, T0 - 2 * HOUR)
+    await addFloor(PRTSCN, FLOOR, T0 - 10 * MIN)
     const s = setup({ [statsPath]: osStats(0.2) })
     await s.handle(listed({ token: "1", price: 3n * FLOOR }))
     expect(callsTo(s.fetch, statsPath)).toBe(0)
@@ -483,6 +483,80 @@ describe("the floor", () => {
       floorWei: FLOOR.toString(),
       floorAt: Math.floor((T0 - 3 * HOUR) / SEC),
     })
+  })
+
+  it("a floor 11 minutes old is read once and the event carries the fresh floor and its time", async () => {
+    await sql`delete from indexer.nft_stats`
+    await addFloor(PRTSCN, FLOOR, T0 - 11 * MIN)
+    const s = setup({ [statsPath]: osStats(0.2) })
+    await s.handle(listed({ token: "1", price: 3n * FLOOR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(1)
+    expect((await listingEvents())[0]).toMatchObject({
+      floorWei: (2n * FLOOR).toString(),
+      floorAt: Math.floor(T0 / SEC),
+    })
+    // The read is stored like a scheduled one.
+    expect((await sql`select 1 from indexer.nft_stats where at = ${new Date(T0)}`).length).toBe(1)
+
+    // A second listing 2 minutes later finds the stored floor fresh and reads nothing.
+    clock += 2 * MIN
+    await s.handle(listed({ token: "2", price: 3n * FLOOR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(1)
+    expect((await listingEvents())[1]).toMatchObject({
+      floorWei: (2n * FLOOR).toString(),
+      floorAt: Math.floor(T0 / SEC),
+    })
+  })
+
+  it("a floor 5 minutes old is used without a read", async () => {
+    await sql`delete from indexer.nft_stats`
+    await addFloor(PRTSCN, FLOOR, T0 - 5 * MIN)
+    const s = setup({ [statsPath]: osStats(0.2) })
+    await s.handle(listed({ token: "1", price: 3n * FLOOR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(0)
+    expect((await listingEvents())[0]).toMatchObject({
+      floorWei: FLOOR.toString(),
+      floorAt: Math.floor((T0 - 5 * MIN) / SEC),
+    })
+  })
+
+  it("a failed read writes the event with the old floor and its old time, and the next listing within 10 minutes does not read again", async () => {
+    await sql`delete from indexer.nft_stats`
+    await addFloor(PRTSCN, FLOOR, T0 - 11 * MIN)
+    const s = setup({ [statsPath]: { status: 500, body: {} } })
+    await s.handle(listed({ token: "1", price: 3n * FLOOR }))
+    const calls = callsTo(s.fetch, statsPath)
+    expect(calls).toBeGreaterThan(0)
+    expect((await listingEvents())[0]).toMatchObject({
+      floorWei: FLOOR.toString(),
+      floorAt: Math.floor((T0 - 11 * MIN) / SEC),
+    })
+    clock += 9 * MIN
+    await s.handle(listed({ token: "2", price: 3n * FLOOR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(calls)
+    expect((await listingEvents())[1]).toMatchObject({
+      floorAt: Math.floor((T0 - 11 * MIN) / SEC),
+    })
+    // Ten minutes after the first attempt, the floor is read again.
+    clock += 1 * MIN
+    await s.handle(listed({ token: "3", price: 3n * FLOOR }))
+    expect(callsTo(s.fetch, statsPath)).toBeGreaterThan(calls)
+  })
+
+  it("the read takes a token from the shared budget", async () => {
+    await sql`delete from indexer.nft_stats`
+    await addFloor(PRTSCN, FLOOR, T0 - 11 * MIN)
+    let taken = 0
+    takeBudget = async () => {
+      taken++
+      return true
+    }
+    const s = setup({ [statsPath]: osStats(0.2) })
+    await s.handle(listed({ token: "1", price: 3n * FLOOR }))
+    expect(taken).toBe(1)
+    // A fresh floor takes none.
+    await s.handle(listed({ token: "2", price: 3n * FLOOR }))
+    expect(taken).toBe(1)
   })
 
   it("no floor: null floor fields and no rank fetch", async () => {

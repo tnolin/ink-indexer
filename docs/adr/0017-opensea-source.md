@@ -30,7 +30,7 @@ ADR 0006 chose OpenSea API v2 and the Stream API for Ink NFTs. Chain logs say wh
 - Hot, every 20 minutes: collections minting now, and the 30 with the most on-chain sales in 7 days.
 - Warm, every 2 hours: the next 70 tracked collections.
 - Cold, every 12 hours: any other collection with a slug and a sale or listing in 30 days.
-- A listing that passes the filter while its collection's floor is more than 2 hours old asks for one refresh (at most one per collection per 30 minutes) and waits up to 10 seconds for it.
+- A listing that passes the filter while its collection's floor is more than 10 minutes old asks for one refresh (at most one per collection per 10 minutes) and waits up to 10 seconds for it (ADR 0028).
 - An `nft.stats` event is written when the floor, owners, volume, sales or listed count changes.
 
 **Listed counts.** The number of active listings is counted from the best-listings pages, 100 per page, up to 3 pages. A count that goes past 300 is reported as 300 with `listedCapped` true. Hot collections are counted hourly, warm ones every 6 hours, and a sold-out collection once.

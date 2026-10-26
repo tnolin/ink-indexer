@@ -410,7 +410,7 @@ export function createStats(deps: StatsDeps) {
   }
 
   /**
-   * An immediate refresh of one collection's stats, at most once per contract per 30 minutes (a
+   * An immediate refresh of one collection's stats, at most once per contract per `STATS_REQUEST_THROTTLE_MS` (a
    * second call inside that time makes no request and answers false). True when the refresh wrote a
    * row within `waitMs`; false when it did not finish in time (it carries on and may still write),
    * when the budget or OpenSea refused, or when the collection has no slug.
