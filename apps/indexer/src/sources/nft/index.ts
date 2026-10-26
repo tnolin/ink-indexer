@@ -124,7 +124,7 @@ export type NftBatch = SourceBatch & {
 
 export type NftDeps = {
   sql: Sql
-  chain: Pick<Chain, "getBlock" | "readMintStats" | "readErc20Names">
+  chain: Pick<Chain, "getBlock" | "readMintStats" | "readTotalSupplyAt" | "readErc20Names">
   logger: Logger
 }
 
