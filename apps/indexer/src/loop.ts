@@ -21,6 +21,8 @@ export class Indexer {
   headFetches = 0
   /** How many ticks have completed without error, for the stall watchdog. */
   tickSuccesses = 0
+  /** True from the tick that found the fallback head stale until one finds it caught up. */
+  private headStale = false
   /** The stored cursor block, kept in memory so liveness checks never wait on the database. */
   cursorBlock: bigint | null | undefined
 
@@ -94,7 +96,7 @@ export class Indexer {
 
   async tick() {
     const { chain, store } = this.deps
-    const head = await chain.getBlockNumber()
+    let head = await chain.getBlockNumber()
     this.lastHead = head
     this.headFetches++
     try {
@@ -103,6 +105,8 @@ export class Indexer {
       // shortcut: a fresh database starts every source at InkyPump's start block. A source with
       // older history needs a per-source start block, and a backfill for the range it missed.
       let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
+      head = await this.headFor(head, from)
+      this.lastHead = head
       while (from <= head) from = (await this.ingest(from, head, head, true, this.deps.only)) + 1n
       await store.confirm(head)
       this.tickSuccesses++
@@ -110,6 +114,41 @@ export class Indexer {
       if (!(err instanceof BlockNotServedError)) throw err
       this.deps.logger("warn", "block not yet served; retrying on next head", { block: err.block })
     }
+  }
+
+  /**
+   * The head this tick works from. A head the fallback transport reports below `from` may be stale
+   * (one endpoint can keep answering eth_blockNumber with an old block while it serves the chain),
+   * so then every endpoint's own head is read and the highest one is used. A head above `from` is
+   * returned as is, with no extra calls.
+   */
+  private async headFor(head: bigint, from: bigint): Promise<bigint> {
+    if (head >= from) {
+      this.headRecovered()
+      return head
+    }
+    const heads = await this.deps.chain.getTransportHeads(from)
+    const highest = heads.reduce((a, h) => (h.head > a ? h.head : a), head)
+    if (highest === head) {
+      this.headRecovered()
+      return head
+    }
+    if (!this.headStale) {
+      this.headStale = true
+      const lowest = heads.reduce((a, h) => (h.head < a.head ? h : a))
+      this.deps.logger("warn", `stale head from ${lowest.name}`, {
+        host: lowest.name,
+        staleHead: head,
+        highestHead: highest,
+      })
+    }
+    return highest
+  }
+
+  private headRecovered() {
+    if (!this.headStale) return
+    this.headStale = false
+    this.deps.logger("info", "head source recovered")
   }
 
   /**

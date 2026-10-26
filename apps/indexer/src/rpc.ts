@@ -214,6 +214,25 @@ export class LogRouter {
     }
   }
 
+  /**
+   * Each healthy transport's own eth_blockNumber, from the same cache `getLogs` uses (a cached head
+   * below `from` is read again). A transport that is benched or fails to answer is left out.
+   */
+  async heads(from: bigint): Promise<{ name: string; head: bigint }[]> {
+    const now = this.clock.now()
+    const read = await Promise.all(
+      this.states
+        .filter((s) => s.benchedUntil <= now)
+        .map((s) =>
+          this.headOf(s, from, now).then(
+            (head) => ({ name: s.t.name, head }),
+            () => null,
+          ),
+        ),
+    )
+    return read.filter((h) => h !== null)
+  }
+
   /** Healthy transports, largest range first; ties keep priority order. */
   private healthyByRange(now: number): TransportState[] {
     return this.states.filter((s) => s.benchedUntil <= now).sort((a, b) => b.range - a.range)

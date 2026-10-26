@@ -71,6 +71,10 @@ export class ReplayChain implements Chain {
     return this.answers.get(key) as T
   }
 
+  async getTransportHeads() {
+    return []
+  }
+
   async getBlockNumber() {
     return this.calls.head
   }

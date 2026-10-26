@@ -75,6 +75,8 @@ const recording: Chain = {
     calls.push({ method: "getBlockNumber", args: [], result: to })
     return to
   },
+  // The recorded range ends at `to`, which no transport has to be asked about.
+  getTransportHeads: async () => [],
   async getBlock(n) {
     const result = await live.getBlock(n)
     calls.push({ method: "getBlock", args: [n], result })

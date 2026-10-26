@@ -96,6 +96,7 @@ class PoolChain implements Chain {
   private readonly replay = new ReplayChain(calls)
   constructor(private readonly pool: ChainLog[]) {}
   getBlockNumber = () => this.replay.getBlockNumber()
+  getTransportHeads = async () => []
   async getBlock(n: bigint) {
     return this.replay.getBlock(n).catch(() => ({ hash: word(Number(n)), timestamp: n }))
   }
