@@ -152,7 +152,7 @@ A listing that passed the indexer's filter: public, paid in ETH or WETH, open fo
 }
 ```
 
-`priceWei` is per unit. `rank` is OpenSea's rarity rank. It is fetched only for listings priced at or under the floor plus 10%, so it is `null` for the rest, and `null` where OpenSea has no rank.
+`priceWei` is per unit. `floorWei` and `floorAt` are the collection's newest stored floor and the time it was read. A floor more than 10 minutes old is read again before the event is written, at most once per collection every 10 minutes; when that read fails, the event carries the older floor with its own `floorAt`. `rank` is OpenSea's rarity rank. It is fetched only for listings priced at or under the floor plus 10%, so it is `null` for the rest, and `null` where OpenSea has no rank.
 
 ### `nft.sale`
 
