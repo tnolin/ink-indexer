@@ -353,3 +353,70 @@ describe("http failures", () => {
     expect(errors.map(([, , f]) => f!.failures)).toEqual([5, 6])
   })
 })
+
+describe("LogRouter.heads", () => {
+  it("reads every transport's own head", async () => {
+    const a = transport("a", 1_000, undefined, 40n)
+    const b = transport("b", 1_000, undefined, 90n)
+    const router = new LogRouter([a, b], fakeClock(), quiet)
+    expect(await router.heads(0n)).toEqual([
+      { name: "a", head: 40n },
+      { name: "b", head: 90n },
+    ])
+  })
+
+  it("skips a transport whose read fails", async () => {
+    const a = transport("a", 1_000, undefined, 40n)
+    const b = transport("b", 1_000, undefined, 90n)
+    a.getBlockNumber = async () => {
+      throw new Error("boom")
+    }
+    const router = new LogRouter([a, b], fakeClock(), quiet)
+    expect(await router.heads(0n)).toEqual([{ name: "b", head: 90n }])
+  })
+
+  it("skips a benched transport without reading it", async () => {
+    const a = transport("a", 10_000, undefined, 40n)
+    const b = transport("b", 1_000, undefined, 90n)
+    a.getLogs = async () => {
+      throw new HttpRequestError({ url: "https://a.example" })
+    }
+    const clock = fakeClock()
+    const router = new LogRouter([a, b], clock, quiet)
+    await router.getLogs(1n, 10n, NO_FILTER)
+    const reads = a.headCalls
+
+    expect(await router.heads(0n)).toEqual([{ name: "b", head: 90n }])
+    expect(a.headCalls).toBe(reads)
+  })
+
+  it("is empty when no transport answers", async () => {
+    const a = transport("a", 1_000)
+    a.getBlockNumber = async () => {
+      throw new Error("boom")
+    }
+    const router = new LogRouter([a], fakeClock(), quiet)
+    expect(await router.heads(0n)).toEqual([])
+  })
+
+  it("shares the one-second head cache with getLogs", async () => {
+    const a = transport("a", 1_000, undefined, 40n)
+    const clock = fakeClock()
+    const router = new LogRouter([a], clock, quiet)
+    await router.getLogs(1n, 10n, NO_FILTER)
+    await router.heads(0n)
+    expect(a.headCalls).toBe(1)
+
+    clock.t += 1_000
+    await router.heads(0n)
+    expect(a.headCalls).toBe(2)
+  })
+
+  it("refreshes a cached head that is below `from`", async () => {
+    const a = transport("a", 1_000, undefined, 40n)
+    const router = new LogRouter([a], fakeClock(), quiet)
+    await router.heads(0n)
+    a.head = 60n
+    expect(await router.heads(50n)).toEqual([{ name: "a", head: 60n }])
+  })
+})

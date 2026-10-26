@@ -21,6 +21,12 @@ import { isTransportError, type LogFilter, type LogRouter } from "./rpc"
 /** Everything the indexer needs from Ink. viemChain is the real one; tests use FakeChain. */
 export type Chain = {
   getBlockNumber(): Promise<bigint>
+  /**
+   * Each healthy endpoint's own eth_blockNumber, for a tick whose head is not above the cursor.
+   * An endpoint that is benched or does not answer is left out; none answering gives an empty list.
+   * A cached answer below `from` is read again.
+   */
+  getTransportHeads(from: bigint): Promise<{ name: string; head: bigint }[]>
   /** null when the serving endpoint does not have the block yet. That is unknown, never a hash mismatch. */
   getBlock(n: bigint): Promise<{ hash: Hash; timestamp: bigint } | null>
   /** Logs matching `filter` from `from` up to at most `to`, and the last block covered. The log transport may be behind head, so this can stop short of `to`. */
@@ -123,6 +129,7 @@ export function viemChain(
         throw err
       }
     },
+    getTransportHeads: (from) => router.heads(from),
     getLogs: (from, to, filter) => router.getLogs(from, to, filter),
     readLaunchStates: (keys, block) =>
       retry("readLaunchStates", () => readLaunchStates(client, keys, block)),

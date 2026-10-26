@@ -43,6 +43,12 @@ export class FakeChain implements Chain {
   stateReads: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
   getBlockNumberCalls = 0
+  /** When set, getBlockNumber answers this instead of `head`: a provider stuck on an old block. */
+  staleHead: bigint | undefined
+  /** What each transport's own eth_blockNumber answers. Empty when none answers. */
+  transportHeads: { name: string; head: bigint }[] = []
+  /** The `from` of every getTransportHeads call. */
+  transportHeadReads: bigint[] = []
   /** The log transport is this many blocks behind head. */
   logLag = 0n
   /** Blocks for which getBlock answers null once (a lagging node that has not seen them yet). */
@@ -77,7 +83,12 @@ export class FakeChain implements Chain {
 
   async getBlockNumber() {
     this.getBlockNumberCalls++
-    return this.head
+    return this.staleHead ?? this.head
+  }
+
+  async getTransportHeads(from: bigint) {
+    this.transportHeadReads.push(from)
+    return this.transportHeads
   }
 
   async getBlock(n: bigint) {

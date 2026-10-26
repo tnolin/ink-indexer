@@ -106,6 +106,7 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 ## Reliability
 
 - A WebSocket subscription announces new heads and reconnects automatically; the loop backfills from the last processed block.
+- A tick whose head is not above the cursor reads every endpoint's own `eth_blockNumber` and uses the highest, so one endpoint stuck on an old block cannot stall ingestion (ADR 0025).
 - Events are written unconfirmed and marked confirmed after 1 block, so consumers can choose how to handle reorgs.
 - RPC: dRPC, Ink's public QuickNode and Gelato endpoints over HTTP with a 15 second request limit. Reads go to the endpoint with the best recent success and latency and fail over on error. See ADR 0014 and [Ink RPC docs](https://docs.inkonchain.com/tools/rpc).
 - A stall watchdog exits the process when the cursor stops moving, so a supervisor restarts it (ADR 0014). With `SENTRY_DSN` set, fatal and stall exits are reported to Sentry (ADR 0015). Other errors are logged as JSON.
