@@ -452,7 +452,7 @@ describe("metadata refresh", () => {
     expect(events.map((e) => e.txHash)).toEqual([`os:col:${HORNET}:1`, `os:col:${HORNET}:2`])
     expect(events[1]?.safelist).toBe("verified")
   })
-  it("a filtered collection and one with no mint or sale in 7 days are read every 7 days, an active one daily", async () => {
+  it("a collection with a mint or sale in 7 days is read daily whatever its verdict; one with neither every 7 days", async () => {
     const s = setup({
       ...discoveryRoutes(HORNET, "ink-hornet"),
       ...discoveryRoutes(PRTSCN, "prtscn-ink"),
@@ -460,14 +460,13 @@ describe("metadata refresh", () => {
     })
     await addCollection(HORNET, { verdict: "filtered" })
     await recentSale(HORNET)
-    await addCollection(PRTSCN)
-    await addCollection(WIRED)
-    await recentSale(WIRED)
+    await addCollection(PRTSCN, { verdict: "filtered" })
+    await addCollection(WIRED, { verdict: "real" })
     await s.scheduler.tick()
     const next = async (c: string) => at((await rowOf(c)).next_metadata_at.getTime())
-    expect(await next(HORNET)).toBe(at(T0 + 7 * DAY))
+    expect(await next(HORNET)).toBe(at(T0 + DAY))
     expect(await next(PRTSCN)).toBe(at(T0 + 7 * DAY))
-    expect(await next(WIRED)).toBe(at(T0 + DAY))
+    expect(await next(WIRED)).toBe(at(T0 + 7 * DAY))
 
     // The same on a refresh. A sale 8 days of blocks back is outside the window.
     await sql`update indexer.cursors set block = block + ${8 * 86400}`
@@ -475,6 +474,103 @@ describe("metadata refresh", () => {
     clock = T0 + 2 * MIN
     await s.scheduler.tick()
     expect(await next(WIRED)).toBe(at(T0 + 2 * MIN + 7 * DAY))
+  })
+})
+
+const mintOf = (contract: string): NftBatch["mints"][number] => ({
+  txHash: `0x${"ee".repeat(32)}`,
+  logIndex: 0,
+  idx: 0,
+  contract: contract as `0x${string}`,
+  tokenId: 1n,
+  account: "0x00000000000000000000000000000000000000aa",
+  qty: 1n,
+  block: 90n,
+})
+
+describe("page read pulled forward by activity", () => {
+  const SLUGGED = { slug: "some-slug", next_discovery_at: null }
+  /** Puts the collection's next page read `ms` from now, by the database clock. */
+  const readIn = (contract: string, ms: number) =>
+    sql`update indexer.nft_collections set next_metadata_at = now() + make_interval(secs => ${ms / 1000}::float8) where contract = ${contract}`
+  const isNow = (d: Date | null, before: number) => {
+    expect(d).not.toBeNull()
+    expect(d!.getTime()).toBeGreaterThanOrEqual(before - 1_000)
+    expect(d!.getTime()).toBeLessThanOrEqual(Date.now() + 1_000)
+  }
+
+  it("a mint for a collection whose read is 7 days away makes it due now", async () => {
+    await addCollection(HORNET, SLUGGED)
+    await readIn(HORNET, 7 * DAY)
+    const before = Date.now()
+    await write(emptyBatch({ collections: [touch(HORNET)], mints: [mintOf(HORNET)] }))
+    isNow((await rowOf(HORNET)).next_metadata_at, before)
+  })
+
+  it("a sale does too", async () => {
+    await addCollection(HORNET, SLUGGED)
+    await readIn(HORNET, 7 * DAY)
+    const before = Date.now()
+    await write(emptyBatch({ sales: [saleOf(HORNET)] }))
+    isNow((await rowOf(HORNET)).next_metadata_at, before)
+  })
+
+  it("a read with no time set is due now too", async () => {
+    await addCollection(HORNET, SLUGGED)
+    await sql`update indexer.nft_collections set next_metadata_at = null where contract = ${HORNET}`
+    const before = Date.now()
+    await write(emptyBatch({ sales: [saleOf(HORNET)] }))
+    isNow((await rowOf(HORNET)).next_metadata_at, before)
+  })
+
+  it("a read already within a day is left where it is", async () => {
+    await addCollection(HORNET, SLUGGED)
+    await readIn(HORNET, 12 * HOUR)
+    const planned = (await rowOf(HORNET)).next_metadata_at
+    await write(emptyBatch({ collections: [touch(HORNET)], mints: [mintOf(HORNET)] }))
+    expect((await rowOf(HORNET)).next_metadata_at).toEqual(planned)
+  })
+
+  it("a collection with no slug is left alone", async () => {
+    await addCollection(HORNET)
+    await readIn(HORNET, 7 * DAY)
+    const planned = (await rowOf(HORNET)).next_metadata_at
+    await write(emptyBatch({ collections: [touch(HORNET)], mints: [mintOf(HORNET)] }))
+    expect((await rowOf(HORNET)).next_metadata_at).toEqual(planned)
+  })
+
+  it("one batch moves every active collection that is 7 days away and no other", async () => {
+    for (const c of [HORNET, PRTSCN, WIRED]) {
+      await addCollection(c, SLUGGED)
+      await readIn(c, 7 * DAY)
+    }
+    const quiet = (await rowOf(WIRED)).next_metadata_at
+    const before = Date.now()
+    await write(
+      emptyBatch({
+        collections: [touch(HORNET)],
+        mints: [mintOf(HORNET)],
+        sales: [saleOf(PRTSCN)],
+      }),
+    )
+    isNow((await rowOf(HORNET)).next_metadata_at, before)
+    isNow((await rowOf(PRTSCN)).next_metadata_at, before)
+    expect((await rowOf(WIRED)).next_metadata_at).toEqual(quiet)
+  })
+
+  it("a collection pulled forward is read, and its read moves a day out", async () => {
+    const s = setup(discoveryRoutes(HORNET, "ink-hornet"))
+    await addCollection(HORNET)
+    await s.scheduler.tick()
+    expect((await rowOf(HORNET)).next_metadata_at.getTime()).toBe(T0 + 7 * DAY)
+    await write(emptyBatch({ collections: [touch(HORNET)], mints: [mintOf(HORNET)] }))
+    const pageReads = () => s.fetch.calls.filter((c) => c.path === "/collections/ink-hornet").length
+    const reads = pageReads()
+    // The pull-forward uses the database clock, so the test clock catches up to it.
+    clock = Date.now() + MIN
+    await s.scheduler.tick()
+    expect(pageReads()).toBe(reads + 1)
+    expect((await rowOf(HORNET)).next_metadata_at.getTime()).toBe(clock + DAY)
   })
 })
 

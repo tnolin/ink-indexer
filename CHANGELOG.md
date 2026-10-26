@@ -33,6 +33,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 - The new-head subscription is created again after the WebSocket closes or goes silent, with backoff up to 5 minutes. An outage logs one warning when it starts and one line when heads return, instead of a warning every 10 seconds.
 - A dropped WebSocket no longer leaves a new-head subscription behind. The indexer subscribed again on every subscription error, and viem's reconnect restored the old one too, so each drop added a subscription and every later drop reported an error for each of them (about a million warning lines a day). It now subscribes again only after 30 s without a head, and a repeating error logs once per outage.
+- A collection with a mint or sale in the last 7 days has its OpenSea page read daily whatever its verdict, and a mint or sale stored for a collection whose page read is more than a day away makes the read due at once. Links added after an early read are now picked up, so gate 1 no longer holds a collection back for a week. See ADR 0024.
 
 ### Changed
 

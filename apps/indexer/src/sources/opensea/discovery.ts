@@ -34,16 +34,13 @@ export function nextDiscoveryDelay(failures: number): number | null {
 }
 
 /**
- * How long until a collection's page is read again: a week for a `filtered` collection and for one
- * with no mint or sale in the last week, a day for the rest.
- *
- * shortcut: activity is read from the mint and sale rows still stored (mints for 8 days, sales for
- * 90) when the page is read, so a quiet collection that wakes up is read up to a week late. Move
- * `next_metadata_at` up from the chain write path when a collection turns active to remove the lag.
+ * How long until a collection's page is read again: a day for one with a mint or sale in the last
+ * week, whatever its verdict, and a week for one with neither. A mint or sale stored for a
+ * collection whose read is further away than a day makes it due at once (`writeRows`).
  */
 async function refreshDelay(sql: Sql, contract: string): Promise<number> {
   const [row] = await sql<{ slow: boolean }[]>`
-    select c.verdict = 'filtered' or not (
+    select not (
       exists (select 1 from indexer.nft_mints m
         where m.contract = c.contract and m.block >= h.block - ${METADATA_ACTIVE_S / BLOCK_S})
       or exists (select 1 from indexer.nft_sales s

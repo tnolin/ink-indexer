@@ -9,7 +9,13 @@ import type {
   SeaDropMintRow,
   TransferRow,
 } from "./index"
-import { DISCOVERY_RESTART_MS, DISCOVERY_RETRY_MS, DROPS_DEBOUNCE_MS, ROW_CHUNK } from "./policy"
+import {
+  DISCOVERY_RESTART_MS,
+  DISCOVERY_RETRY_MS,
+  DROPS_DEBOUNCE_MS,
+  METADATA_REFRESH_MS,
+  ROW_CHUNK,
+} from "./policy"
 
 // The NFT source's tables, written inside the loop's transaction.
 
@@ -137,6 +143,14 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
         and (discovery_attempts > 0 or next_discovery_at is null)
         and (attempts_reset_at is null
           or attempts_reset_at <= now() - make_interval(secs => ${DISCOVERY_RESTART_MS / 1000}::float8))`
+  // A mint or sale makes the page of a collection with a slug due now when its read is more than a
+  // day away, so links added since the last read are seen soon.
+  if (active.length > 0)
+    await tx`
+      update indexer.nft_collections set next_metadata_at = now()
+      where contract = any(${tx.array(active)}::text[]) and slug is not null
+        and (next_metadata_at is null
+          or next_metadata_at > now() + make_interval(secs => ${METADATA_REFRESH_MS / 1000}::float8))`
   const configured = [...new Set(batch.seadropConfig.map((c) => c.contract))]
   if (configured.length > 0)
     await tx`
