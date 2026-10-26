@@ -16,3 +16,4 @@ Outside pull requests open once our contributor license agreement (CLA) is in pl
 - CI (lint, typecheck, tests, secret scan) must pass before merge.
 - Never commit secrets or `.env` files. `.env.example` lists every variable with an empty value.
 - Record significant technical decisions as a dated ADR in `docs/adr/`.
+- A release moves the `CHANGELOG.md` entries under Unreleased to a heading for its version, `## [indexer-vX.Y.Z] - YYYY-MM-DD`, before the tag is created.
