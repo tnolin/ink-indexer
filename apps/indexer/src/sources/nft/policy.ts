@@ -77,6 +77,8 @@ export const CONTINUOUS_BURN_BPS = 2000
 export const PENDING_KIND_BURN_BPS = 500
 /** Mints and burns counted for the kind: this long after the first mint. */
 export const KIND_WINDOW_S = 7 * 86400
+/** An X handle or website on more than this many collections counts as missing for gate 1. */
+export const SHARED_LINK_MAX = 5
 /** Gate 2: a mint with one public stage passes when it runs longer than this. */
 export const STRUCTURE_MIN_MINT_S = 1800
 /** A mint counts as still running when its latest mint is at most this old. */

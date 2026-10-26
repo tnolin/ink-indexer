@@ -72,7 +72,7 @@ NFT events share a `contract` (also the row's `entity`) and a `source` of `chain
 | `nft.stats` | Floor, owners, volume, sales or listed count changes | OpenSea |
 | `nft.launch` | A Chimera campaign is created | chain |
 
-- **Quality checks.** The indexer judges each collection on four checks (OpenSea page, mint structure, traits, and not being farm-minted) and writes the result into `nft.collection`. Collections that pass appear in feeds; the others can still be looked up and followed. ADR 0017 has the rules.
+- **Quality checks.** The indexer judges each collection on four checks (OpenSea page, mint structure, traits, and not being farm-minted). A page needs an X or website link that is not on more than 5 collections, and a name that no verified or manually real collection holds and writes the result into `nft.collection`. Collections that pass appear in feeds; the others can still be looked up and followed. ADR 0017 has the rules.
 - **One log, several events.** `indexer.events` is unique on `(tx_hash, log_index, sub)`, so a sweep or a log that crosses two mint milestones yields one row per event (ADR 0016).
 - **OpenSea budget.** Every process using the key draws from one request budget in Postgres (ADR 0019), so the hourly limit holds across processes.
 - **Stream.** Listings arrive over the Stream in shards of 50 collections per connection, with a one-connection fallback for every collection (ADR 0017).
@@ -88,7 +88,7 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | `curve_state` | token, progress_bps, curve_value, target, market_cap, updated_block |
 | `trades` | tx_hash, log_index, token, side, trader, amount_in, amount_out, block, venue |
 | `hooks` | InkyPump hook contracts: address, launchpad, kind (native or xStocks), ABI family, quote asset |
-| `nft_collections` | contract, standard, kind, verdict and gates, slug, name, safelist, first mint block and time, launchpad |
+| `nft_collections` | contract, standard, kind, verdict and gates, why gate 1 failed, slug, name, safelist, first mint block and time, launchpad |
 | `nft_mints`, `nft_burns`, `nft_seadrop_mints` | tx_hash, log_index, contract, token_id, recipient, holder or minter, qty, block. Kept 8 days |
 | `nft_sales` | tx_hash, log_index, contract, token_id, qty, price_wei, currency, buyer, seller, order_hash, block. Kept 90 days |
 | `nft_drops`, `nft_stages` | The drop schedule from OpenSea, and each stage's first mint |

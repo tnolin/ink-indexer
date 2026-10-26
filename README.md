@@ -56,7 +56,7 @@ Event shapes are documented in [`packages/events`](packages/events/README.md).
 
 ## NFTs
 
-Ink NFT events are `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`. Mints, burns, SeaDrop drops, Seaport sales and Chimera launches come from chain logs. Collection pages, drop schedules, floors, listings, item ranks and creator accounts come from OpenSea. Each `nft.collection` event carries the collection's verdict: `real` for collections that pass quality checks (a complete OpenSea page, a sound mint structure, traits, and minters who are not mostly repeat farm wallets), `pending` while checks are undecided, `filtered` once a check fails. Every collection's events stay readable. Read them like any other event:
+Ink NFT events are `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`. Mints, burns, SeaDrop drops, Seaport sales and Chimera launches come from chain logs. Collection pages, drop schedules, floors, listings, item ranks and creator accounts come from OpenSea. Each `nft.collection` event carries the collection's verdict: `real` for collections that pass quality checks (a complete OpenSea page with a link of its own and a name of its own, a sound mint structure, traits, and minters who are not mostly repeat farm wallets), `pending` while checks are undecided, `filtered` once a check fails. Every collection's events stay readable. Read them like any other event:
 
 ```sql
 select id, payload from indexer.events

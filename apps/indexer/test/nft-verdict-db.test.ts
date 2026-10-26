@@ -757,3 +757,141 @@ function emptyBatch(): NftBatch {
     touched: [],
   }
 }
+
+describe("gate 1 across collections", () => {
+  const contractN = (n: number) => `0x${n.toString(16).padStart(40, "0")}`
+  /** `n` collections with their own names and the given link columns, and the verdict job run on each. */
+  async function addMany(links: Record<string, string | null>[]) {
+    const s = setup()
+    const contracts = links.map((_, i) => contractN(0x100 + i))
+    for (const [i, c] of contracts.entries())
+      await addCollection(c, { name: `Collection ${i}`, twitter: null, website: null, ...links[i] })
+    for (const c of contracts) await s.verdict.run(c)
+    return { s, contracts }
+  }
+  const pages = async (contracts: string[]) =>
+    Promise.all(contracts.map(async (c) => (await rowOf(c)).gates.page))
+
+  it("an X handle on 6 collections fails gate 1 and on 5 passes, whatever its case", async () => {
+    const { s, contracts } = await addMany(
+      ["Fan", "fan", "FAN", "fAn", "faN", "fan"].map((twitter) => ({ twitter })),
+    )
+    expect(await pages(contracts)).toEqual(Array(6).fill("fail"))
+    expect(await rowOf(contracts[0]!)).toMatchObject({
+      verdict: "filtered",
+      page_reason:
+        "page: X shared by more than 5 collections (limit: 5 collections or fewer per link)",
+    })
+    // The sixth collection leaves: five remain, and each passes once its verdict is looked at again.
+    await sql`update indexer.nft_collections set twitter = 'other' where contract = ${contracts[5]!}`
+    await sql`update indexer.nft_collections set verdict_dirty = true`
+    for (const c of contracts) await s.verdict.run(c)
+    expect(await pages(contracts)).toEqual(Array(6).fill("pass"))
+    expect((await rowOf(contracts[0]!)).page_reason).toBeNull()
+  })
+
+  it("a collection that takes a handle past 5 marks the other holders dirty, and they then fail", async () => {
+    const s = setup()
+    const first = Array.from({ length: 5 }, (_, i) => contractN(0x400 + i))
+    for (const [i, c] of first.entries())
+      await addCollection(c, { name: `Holder ${i}`, twitter: "farm", website: null })
+    for (const c of first) await s.verdict.run(c)
+    expect(await pages(first)).toEqual(Array(5).fill("pass"))
+    expect(await sql`select 1 from indexer.nft_collections where verdict_dirty`).toHaveLength(0)
+
+    const sixth = contractN(0x405)
+    await addCollection(sixth, { name: "Holder 5", twitter: "farm", website: null })
+    await s.verdict.run(sixth)
+    expect((await rowOf(sixth)).gates.page).toBe("fail")
+    // The five that passed are due again at once.
+    expect(
+      (
+        await sql`select contract from indexer.nft_collections where verdict_dirty order by contract`
+      ).map((r) => r.contract),
+    ).toEqual(first)
+    expect(await s.verdict.due(sql, new Date(clock))).toEqual(first)
+    for (const c of first) await s.verdict.run(c)
+    expect(await pages(first)).toEqual(Array(5).fill("fail"))
+
+    // They settle: the judged collections do not keep marking each other dirty.
+    for (let i = 0; i < 5; i++)
+      for (const c of await s.verdict.due(sql, new Date(clock))) await s.verdict.run(c)
+    expect(await sql`select 1 from indexer.nft_collections where verdict_dirty`).toHaveLength(0)
+  })
+
+  it("a website counts by lowercase host and path, ignoring www and a trailing slash", async () => {
+    const { contracts } = await addMany(
+      [
+        "https://Example.com/a/",
+        "http://www.example.com/a",
+        "example.com/a",
+        "https://WWW.EXAMPLE.COM/a/",
+        "https://example.com/a",
+        "https://example.com/a/?ref=1",
+      ].map((website) => ({ website })),
+    )
+    expect(await pages(contracts)).toEqual(Array(6).fill("fail"))
+    expect((await rowOf(contracts[0]!)).page_reason).toMatch(/^page: website shared by more than 5/)
+  })
+
+  it("a different path on the same host is a different website", async () => {
+    const { contracts } = await addMany([
+      ...Array.from({ length: 5 }, () => ({ website: "https://example.com/a" })),
+      { website: "https://example.com/b" },
+    ])
+    expect(await pages(contracts)).toEqual(Array(6).fill("pass"))
+  })
+
+  it("collections of any verdict count toward the 5", async () => {
+    const s = setup()
+    const contracts = Array.from({ length: 6 }, (_, i) => contractN(0x200 + i))
+    for (const [i, c] of contracts.entries())
+      await addCollection(c, { name: `Filtered ${i}`, twitter: "farm", verdict: "filtered" })
+    await sql`update indexer.nft_collections set verdict_dirty = false where contract <> ${contracts[0]!}`
+    await s.verdict.run(contracts[0]!)
+    expect((await rowOf(contracts[0]!)).gates.page).toBe("fail")
+  })
+
+  it("a copy of a verified name fails gate 1, and the verified original passes", async () => {
+    const s = setup()
+    const original = contractN(0x301)
+    const copy = contractN(0x302)
+    await addCollection(original, { name: "Ink Cat", safelist: "verified", twitter: "cat" })
+    await addCollection(copy, { name: "  inK   cat ", twitter: "copycat" })
+    await s.verdict.run(original)
+    await s.verdict.run(copy)
+    expect((await rowOf(original)).gates.page).toBe("pass")
+    expect(await rowOf(copy)).toMatchObject({
+      verdict: "filtered",
+      gates: { page: "fail" },
+      page_reason:
+        "page: name copies a verified or manually real collection (limit: a name those collections do not hold)",
+    })
+  })
+
+  it("a copy of a manually real name fails, and a manual real mark on the copy passes", async () => {
+    const s = setup()
+    const original = contractN(0x311)
+    const copy = contractN(0x312)
+    await addCollection(original, { name: "Ink Dog", twitter: "dog" })
+    await addCollection(copy, { name: "ink dog", twitter: "copydog" })
+    const deps = { sql, verdict: s.verdict }
+    await applyMark(deps, { contract: original, value: "real" })
+    await s.verdict.run(copy)
+    expect(await rowOf(copy)).toMatchObject({ verdict: "filtered", gates: { page: "fail" } })
+    expect((await rowOf(original)).verdict).toBe("real")
+    await applyMark(deps, { contract: copy, value: "real" })
+    expect((await rowOf(copy)).verdict).toBe("real")
+  })
+
+  it("a name held only by unverified, unmarked collections is not a copy", async () => {
+    const s = setup()
+    const a = contractN(0x321)
+    const b = contractN(0x322)
+    await addCollection(a, { name: "Same", twitter: "a" })
+    await addCollection(b, { name: "Same", twitter: "b" })
+    await s.verdict.run(a)
+    await s.verdict.run(b)
+    expect(await pages([a, b])).toEqual(["pass", "pass"])
+  })
+})
