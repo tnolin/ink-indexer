@@ -117,8 +117,8 @@ export type ListingsDeps = {
  * Stream events to `nft.listing` events and listing state.
  *
  * An `item_listed` goes through the filter (ADR 0017): the payload checks, then the
- * item's state (only a strictly lower price than the last one written), then the floor (refreshed
- * first when older than 2 hours), then the rank (fetched only for a price at or under floor × 11/10;
+ * item's state (only a strictly lower price than the last one written), then the floor (read from OpenSea
+ * first when older than 10 minutes, at most once per collection per 10 minutes), then the rank (fetched only for a price at or under floor × 11/10;
  * a cached rank is attached whatever the price). The floor refresh and the rank fetch each wait up
  * to 10 s, and both finish before the write transaction opens. A cancel, sale or transfer of the item
  * clears its state. A burst of `item_metadata_updated` of one collection marks its traits re-check due.
@@ -156,7 +156,11 @@ export function createListings(deps: ListingsDeps) {
     return p
   }
 
-  /** The collection's newest floor row, refreshed first when it is missing or older than 2 hours. */
+  /**
+   * The collection's newest floor row, read again first when it is missing or older than
+   * `FLOOR_MAX_AGE_MS`. A read that fails, or that the budget or the per-collection limit refuses,
+   * leaves the stored row, so the event carries that floor with its own time.
+   */
   async function currentFloor(contract: string) {
     const first = await stats.latestFloor(contract)
     if (first && now() - first.at.getTime() <= FLOOR_MAX_AGE_MS) return first

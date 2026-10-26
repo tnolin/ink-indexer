@@ -128,8 +128,8 @@ export const LISTED_INTERVAL_S = { hot: 3600, warm: 6 * 3600 } as const
 export const LISTED_PAGES = 3
 /** Listings in one page. */
 export const LISTED_PAGE_SIZE = 100
-/** A collection's on-demand stats refresh runs at most this often. */
-export const STATS_REQUEST_THROTTLE_MS = 30 * MINUTE_MS
+/** A collection's on-demand stats refresh runs at most this often, whether or not the last one worked. */
+export const STATS_REQUEST_THROTTLE_MS = 10 * MINUTE_MS
 /** A listed count that was due and could not be taken (the poll or its listing pages failed) is tried again this much later. */
 export const LISTED_RETRY_MS = HOUR_MS
 /** A due listed count of a collection OpenSea does not know is dropped after this many polls. */
@@ -172,8 +172,8 @@ export const FIREHOSE_METER_EVERY_MS = 10 * MINUTE_MS
 export const LISTING_MIN_LIFE_S = 3600
 /** A rank is fetched for a listing priced at or under the floor times this ratio (11/10). */
 export const NEAR_FLOOR_RATIO = { num: 11n, den: 10n } as const
-/** A floor older than this is refreshed before a listing is judged against it. */
-export const FLOOR_MAX_AGE_MS = 2 * HOUR_MS
+/** A floor older than this is read again from OpenSea before a listing carries it. */
+export const FLOOR_MAX_AGE_MS = 10 * MINUTE_MS
 /** How long a listing waits for the floor refresh, then (separately) for the rank fetch. */
 export const LISTING_WAIT_MS = 10_000
 /** A cached rank is fetched again after this long, or sooner when the collection's rarity changes. */
