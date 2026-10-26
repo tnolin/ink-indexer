@@ -66,6 +66,7 @@ export type CollectionPatch = Partial<
     prior_minted: boolean | null
     /** Why gate 1 failed, in words; null while it has not failed. Not part of the snapshot. */
     page_reason: string | null
+    links_shared: boolean
   }
 >
 

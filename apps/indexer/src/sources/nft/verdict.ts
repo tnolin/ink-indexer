@@ -366,6 +366,7 @@ type FactsRow = {
   traits_due: string | null
   mint_start_emitted: boolean
   prior_minted: boolean | null
+  links_shared: boolean
   twitter_shared: boolean
   website_shared: boolean
   name_copy: boolean
@@ -390,6 +391,7 @@ async function loadFacts(sql: Sql, contract: string): Promise<FactsRow | undefin
       c.slug is null and c.next_discovery_at is not null as discovery_retrying,
       c.traits_state, c.traits_checks, c.mint_start_emitted, c.prior_minted,
       extract(epoch from c.next_traits_at)::bigint::text as traits_due,
+      c.links_shared,
       c.twitter is not null and indexer.nft_handle_key(c.twitter) is not null and (
         select count(*) from indexer.nft_collections x
         where indexer.nft_handle_key(x.twitter) = indexer.nft_handle_key(c.twitter)
@@ -549,6 +551,25 @@ export function createVerdictJob(deps: VerdictDeps): Job {
       traits: { state: row.traits_state, checks: row.traits_checks },
       farmShareBps: farm?.share ?? null,
       distinctMinters: row.minters,
+    }
+    // A link that crosses the limit changes the other holders' pages too, and they are not judged
+    // again unless something marks them. Only the crossing marks them, so holders do not keep
+    // marking each other.
+    //
+    // shortcut: a holder that leaves the link (its own link changed) cannot name the old link here,
+    // so the others are judged again at their next scheduled look. Keep the previous keys to mark them.
+    const linksShared = row.twitter_shared || row.website_shared
+    if (linksShared !== row.links_shared) {
+      if (linksShared)
+        await sql`
+        update indexer.nft_collections p set verdict_dirty = true
+        from indexer.nft_collections c
+        where c.contract = ${contract} and p.contract <> c.contract and not p.verdict_dirty
+          and ((indexer.nft_handle_key(c.twitter) is not null
+              and indexer.nft_handle_key(p.twitter) = indexer.nft_handle_key(c.twitter))
+            or (indexer.nft_site_key(c.website) is not null
+              and indexer.nft_site_key(p.website) = indexer.nft_site_key(c.website)))`
+      patch.links_shared = linksShared
     }
     const { gates, verdict } = evaluateGates(facts)
     const traits = traitsSchedule(facts, row.traits_due === null ? null : Number(row.traits_due))

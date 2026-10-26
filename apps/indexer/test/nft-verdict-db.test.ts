@@ -790,6 +790,35 @@ describe("gate 1 across collections", () => {
     expect((await rowOf(contracts[0]!)).page_reason).toBeNull()
   })
 
+  it("a collection that takes a handle past 5 marks the other holders dirty, and they then fail", async () => {
+    const s = setup()
+    const first = Array.from({ length: 5 }, (_, i) => contractN(0x400 + i))
+    for (const [i, c] of first.entries())
+      await addCollection(c, { name: `Holder ${i}`, twitter: "farm", website: null })
+    for (const c of first) await s.verdict.run(c)
+    expect(await pages(first)).toEqual(Array(5).fill("pass"))
+    expect(await sql`select 1 from indexer.nft_collections where verdict_dirty`).toHaveLength(0)
+
+    const sixth = contractN(0x405)
+    await addCollection(sixth, { name: "Holder 5", twitter: "farm", website: null })
+    await s.verdict.run(sixth)
+    expect((await rowOf(sixth)).gates.page).toBe("fail")
+    // The five that passed are due again at once.
+    expect(
+      (
+        await sql`select contract from indexer.nft_collections where verdict_dirty order by contract`
+      ).map((r) => r.contract),
+    ).toEqual(first)
+    expect(await s.verdict.due(sql, new Date(clock))).toEqual(first)
+    for (const c of first) await s.verdict.run(c)
+    expect(await pages(first)).toEqual(Array(5).fill("fail"))
+
+    // They settle: the judged collections do not keep marking each other dirty.
+    for (let i = 0; i < 5; i++)
+      for (const c of await s.verdict.due(sql, new Date(clock))) await s.verdict.run(c)
+    expect(await sql`select 1 from indexer.nft_collections where verdict_dirty`).toHaveLength(0)
+  })
+
   it("a website counts by lowercase host and path, ignoring www and a trailing slash", async () => {
     const { contracts } = await addMany(
       [

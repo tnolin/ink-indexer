@@ -28,5 +28,9 @@ create index nft_collections_name_key on indexer.nft_collections (indexer.nft_na
 -- Why gate 1 failed, in words; null while it has not failed.
 alter table indexer.nft_collections add column page_reason text;
 
+-- Whether the collection's X handle or website was on more than the allowed number of collections
+-- when its verdict was last judged. A change marks the other holders of the link for a new look.
+alter table indexer.nft_collections add column links_shared boolean not null default false;
+
 -- Every collection is looked at once more, so the new gate 1 rules apply to the ones already stored.
 update indexer.nft_collections set verdict_dirty = true;
