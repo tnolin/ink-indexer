@@ -4,6 +4,10 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Fixed
+
+- Indexer: gate 1 no longer passes a collection on a link that many collections share, or on a name copied from a verified or manually real collection. An X handle or website on more than 5 collections counts as missing, and a name that matches a verified or manually real collection fails. A manual mark and a verified collection or creator are unaffected. `nft_collections.page_reason` records why gate 1 failed. Migration 0013 adds it and marks every collection's verdict to be re-checked once, so some collections that were `real` can become `filtered` after the update. See ADR 0026.
+
 ## [indexer-v0.3.4] - 2026-10-26
 
 ### Fixed

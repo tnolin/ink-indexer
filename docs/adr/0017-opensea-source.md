@@ -1,7 +1,7 @@
 # 0017. OpenSea source: REST jobs, Stream shards and collection quality checks
 
 Date: 2026-10-17
-Status: Accepted. Amends ADR 0006.
+Status: Accepted. Amends ADR 0006. Amended by ADR 0026 for gate 1.
 
 ## Context
 
@@ -58,7 +58,7 @@ The firehose stays on until the process restarts. It logs its messages and bytes
 
 **Quality checks.** A collection passes when it meets four checks, in this order. A collection that fails any check is not marked as passing, so readers can leave it out of feeds, but can still be looked up and followed. The result can change in either direction as checks resolve, and it is written into `nft.collection` as the collection's `verdict`, with the state of each gate.
 
-1. **Page.** The contract resolves to a slug, and the collection has a name, an image, and a Twitter account or a website. Waiting while discovery retries; failing when a slug exists without those fields or no slug appears in 7 days. It passes later if a daily refresh finds the fields or new activity restarts discovery.
+1. **Page.** The contract resolves to a slug, and the collection has a name, an image, and a Twitter account or a website. Waiting while discovery retries; failing when a slug exists without those fields or no slug appears in 7 days. It passes later if a daily refresh finds the fields or new activity restarts discovery. An X or website link that is on more than 5 collections counts as missing, and a name copied from a verified or manually real collection fails (ADR 0026).
 2. **Mint structure** (`drop` only). The drop has more than one stage or any signed or allowlist stage, or the mint ran longer than 30 minutes: still minting 30 minutes after the first mint, or sold out more than 30 minutes after it. A single free stage that finishes in minutes fails.
 3. **Traits.** A sampled item has traits or an OpenSea rank. It fails only when the sampled item has neither, 72 hours after the mint ended (sell-out, or 24 hours without mints). Until then it is pending, which allows a late reveal.
 4. **Not farm-minted** (`drop` only). At most 30% of the distinct minters are farm wallets, meaning wallets that received mints from 5 or more other `drop` collections in the last 7 days. Decided once the collection has 50 distinct minters, and re-checked at each mint milestone.
