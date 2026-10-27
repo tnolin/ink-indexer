@@ -4,6 +4,8 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+## [indexer-v0.3.5] - 2026-10-27
+
 ### Changed
 
 - Indexer: a listing event carries a floor read within the last 10 minutes. When a listing arrives and the collection's stored floor is older, the indexer reads the floor from OpenSea first, at most once per collection every 10 minutes, and the event carries the new floor and its time. If the read fails or the request budget is blocked, the event carries the stored floor with its own `floorAt`. Before, the floor was read again only after 2 hours, at most once per 30 minutes. See ADR 0028.
