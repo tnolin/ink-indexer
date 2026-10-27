@@ -175,8 +175,13 @@ function listed(o: ListedOpts = {}): Ev {
   }
 }
 /** An event that ends an item's listing. No `item_sold` was recorded: it has the shape of the recorded cancel. */
-function ends(type: "item_cancelled" | "item_sold" | "item_transferred", token = "1506"): Ev {
+function ends(
+  type: "item_cancelled" | "item_sold" | "item_transferred",
+  token = "1506",
+  orderHash?: string,
+): Ev {
   const payload = structuredClone(RECORDED_CANCELLED[4].payload)
+  if (orderHash) payload.order_hash = orderHash
   payload.item.nft_id = `ink/${PRTSCN}/${token}`
   return { type, slug: "prtscn-ink", contract: PRTSCN, tokenId: token, payload, receivedAt: clock }
 }
@@ -321,20 +326,46 @@ describe("the filter", () => {
     "%s resets: next listing at any price writes",
     async (type) => {
       const s = setup()
-      await s.handle(listed({ price: 900n }))
-      await s.handle(listed({ price: 900n }))
+      const order = hash()
+      await s.handle(listed({ price: 900n, hash: order }))
+      await s.handle(listed({ price: 900n, hash: order }))
       expect(await listingEvents()).toHaveLength(1)
 
       // Another item's end changes nothing.
-      await s.handle(ends(type, "99"))
+      await s.handle(ends(type, "99", order))
       expect(await stateOf("1506")).toBeDefined()
-      await s.handle(ends(type))
+      await s.handle(ends(type, "1506", order))
       expect(await stateOf("1506")).toBeUndefined()
 
       await s.handle(listed({ price: 5_000n }))
       expect((await listingEvents()).map((e) => e.priceWei)).toEqual(["900", "5000"])
     },
   )
+
+  it("a cancel of an older order leaves the stored listing; a cancel of the stored order, a sale and a transfer clear it", async () => {
+    const s = setup()
+    const older = hash()
+    const current = hash()
+    await s.handle(listed({ price: 900n, hash: older }))
+    await s.handle(listed({ price: 800n, hash: current }))
+    expect((await stateOf("1506"))?.order_hash).toBe(current)
+
+    await s.handle(ends("item_cancelled", "1506", older))
+    expect((await stateOf("1506"))?.order_hash).toBe(current)
+    // The same price is still a repeat, so the cancel did not reset the dedupe.
+    await s.handle(listed({ price: 800n, hash: current }))
+    expect((await listingEvents()).map((e) => e.priceWei)).toEqual(["900", "800"])
+
+    await s.handle(ends("item_cancelled", "1506", current))
+    expect(await stateOf("1506")).toBeUndefined()
+
+    // A sale or a transfer ends the item's listing whatever order it names.
+    for (const type of ["item_sold", "item_transferred"] as const) {
+      await s.handle(listed({ price: 700n, hash: hash() }))
+      await s.handle(ends(type, "1506", older))
+      expect(await stateOf("1506")).toBeUndefined()
+    }
+  })
 
   it("chain sale resets the state", async () => {
     const s = setup()
@@ -377,8 +408,9 @@ describe("the filter", () => {
     let release!: () => void
     takeBudget = () => new Promise<boolean>((r) => (release = () => r(true)))
     const s = setup({ [nftPath(RANKED)]: ranked() })
-    const first = s.handle(listed({ token: RANKED, price: NEAR }))
-    const cancel = s.handle(ends("item_cancelled", RANKED))
+    const order = hash()
+    const first = s.handle(listed({ token: RANKED, price: NEAR, hash: order }))
+    const cancel = s.handle(ends("item_cancelled", RANKED, order))
     await new Promise((r) => setTimeout(r, 50))
     expect(await listingEvents()).toEqual([])
     release()
