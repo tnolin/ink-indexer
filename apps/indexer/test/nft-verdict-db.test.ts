@@ -381,6 +381,56 @@ describe("the verdict job", () => {
     expect(await rowOf(BURST)).toMatchObject({ verdict: "real", gates: { structure: "pass" } })
   })
 
+  it("a mint after a day without mints re-checks a collection filtered by the structure gate, once per resume", async () => {
+    const mintAt = (n: number, block: number) => ({
+      ...emptyBatch(),
+      mints: [
+        {
+          txHash: `0x${(n + 100).toString(16).padStart(64, "0")}` as `0x${string}`,
+          logIndex: 0,
+          idx: 0,
+          contract: BURST as Address,
+          tokenId: BigInt(n),
+          account: minter(n) as Address,
+          qty: 1n,
+          block: BigInt(block),
+        },
+      ],
+    })
+    const write = (n: number, ms: number) =>
+      sql.begin((tx) => writeRows(tx, mintAt(n, blockAt(ms))))
+    const clean = () =>
+      sql`update indexer.nft_collections set verdict_dirty = false where contract = ${BURST}`
+
+    await addCollection(BURST, {
+      kind: "drop",
+      verdict: "filtered",
+      gates: { page: "pass", structure: "fail", traits: "pending", farm: "pass" },
+      verdict_dirty: false,
+    })
+    await addMints(BURST, [minter(0)], [blockAt(T0)])
+
+    // Minting resumes after a pause of more than a day: one re-check.
+    await write(1, T0 + 2 * DAY)
+    expect((await rowOf(BURST)).verdict_dirty).toBe(true)
+
+    // The next mints of the same run do not mark it again.
+    await clean()
+    await write(2, T0 + 2 * DAY + MIN)
+    expect((await rowOf(BURST)).verdict_dirty).toBe(false)
+
+    // A gate other than the structure gate, or another verdict, is left alone.
+    await write(3, T0 + 4 * DAY)
+    expect((await rowOf(BURST)).verdict_dirty).toBe(true)
+    await clean()
+    await sql`update indexer.nft_collections set gates = jsonb_set(gates, '{structure}', '"pass"') where contract = ${BURST}`
+    await write(4, T0 + 6 * DAY)
+    expect((await rowOf(BURST)).verdict_dirty).toBe(false)
+    await sql`update indexer.nft_collections set gates = jsonb_set(gates, '{structure}', '"fail"'), verdict = 'real' where contract = ${BURST}`
+    await write(5, T0 + 8 * DAY)
+    expect((await rowOf(BURST)).verdict_dirty).toBe(false)
+  })
+
   it("milestone marks and a first mint mark the verdict dirty; giving up discovery does too", async () => {
     const s = setup({ [`/chain/ink/contract/${INKVERSE}`]: { status: 404, body: {} } })
     await addCollection(BURST, { seadrop: true, verdict_dirty: false })

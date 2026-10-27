@@ -4,6 +4,10 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Fixed
+
+- Indexer: a collection filtered by the structure gate is judged again when its minting resumes. A drop that paused for a day counted as ended and stayed filtered after it minted again. The first mint after a day without mints marks the verdict for a new look, once per resume. See ADR 0029.
+
 ## [indexer-v0.3.5] - 2026-10-27
 
 ### Changed
