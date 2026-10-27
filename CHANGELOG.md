@@ -6,6 +6,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Fixed
 
+- Indexer: OpenSea errors that keep failing for a collection (a 400, a 5xx, a network error) are retried less and less often in the discovery, metadata, drops, traits and stats jobs: after 5 minutes, 30 minutes and 2 hours, then daily for a 4xx answer such as a 400, and every 2 hours at most for a 5xx or a network error, so an OpenSea outage does not leave collections on a daily retry. They were retried every 5 minutes for good. An answer from OpenSea starts the count again; 404 and 429 handling is unchanged. Migration 0014 adds `nft_job_failures`. See ADR 0030.
 - Indexer: an item whose OpenSea rarity rank is above its collection's highest rank (`max_rank`) is treated as unranked. The rank was stored and emitted, so alerts could show "rank 149 / 130". Ranks already cached above the maximum are no longer served.
 - Indexer: a cancelled listing only clears the stored listing state when the cancel names the stored order. A cancel for an older order of the same item no longer clears the state of the current listing, so the current listing is not written again at the same price.
 - Indexer: a collection filtered by the structure gate is judged again when its minting resumes. A drop that paused for a day counted as ended and stayed filtered after it minted again. The first mint after a day without mints marks the verdict for a new look, once per resume. See ADR 0029.

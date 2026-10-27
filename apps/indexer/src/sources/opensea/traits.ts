@@ -1,6 +1,7 @@
 import { parseNft } from "@ink-indexer/sdk"
-import { JOBS_PER_TICK, SCHEDULER_TICK_MS, TRANSIENT_RETRY_MS } from "../nft/policy"
+import { JOBS_PER_TICK, SCHEDULER_TICK_MS } from "../nft/policy"
 import type { TraitsState } from "../nft/verdict"
+import { answeredFor, failedFor } from "./backoff"
 import { commonOutcome, type Job, type JobOutcome, OS_REQUEST, type OsJobDeps } from "./scheduler"
 
 /**
@@ -8,7 +9,7 @@ import { commonOutcome, type Job, type JobOutcome, OS_REQUEST, type OsJobDeps } 
  * that has not been burned is read from `GET /chain/ink/contract/{contract}/nfts/{id}` (budget
  * class 4). Traits, or a rarity rank, make it `pass`; neither makes it `empty`; an item OpenSea does
  * not know counts as `empty` too. Each sample counts one checkpoint and marks the verdict dirty, and
- * the verdict job schedules the next. Another error tries again in five minutes without counting.
+ * the verdict job schedules the next. Another error tries again later without counting, after 5 minutes, then 30 minutes, 2 hours and a day.
  */
 export function createTraitsJob(deps: OsJobDeps): Job {
   const { sql, rest } = deps
@@ -54,14 +55,19 @@ export function createTraitsJob(deps: OsJobDeps): Job {
       if (!res.ok) {
         const early = commonOutcome(res)
         if (early) return early
-        if (res.reason === "not_found") return void (await record(contract, "empty"))
+        if (res.reason === "not_found") {
+          await answeredFor(sql, contract, "traits")
+          return void (await record(contract, "empty"))
+        }
       }
       if (!res.ok || !res.value) {
+        const wait = await failedFor(sql, contract, "traits", !res.ok && res.client === true)
         await sql`
-          update indexer.nft_collections set next_traits_at = ${new Date(now() + TRANSIENT_RETRY_MS)}
+          update indexer.nft_collections set next_traits_at = ${new Date(now() + wait)}
           where contract = ${contract}`
         return
       }
+      await answeredFor(sql, contract, "traits")
       const nft = res.value
       await record(contract, nft.traits.length > 0 || nft.rank !== null ? "pass" : "empty")
     },

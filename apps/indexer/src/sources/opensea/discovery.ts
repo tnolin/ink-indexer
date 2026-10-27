@@ -15,6 +15,7 @@ import {
   SLOW_JOB_EVERY_MS,
   TRANSIENT_RETRY_MS,
 } from "../nft/policy"
+import { answeredFor, failedFor } from "./backoff"
 import type { OsResult } from "./rest"
 import { commonOutcome, type Job, type JobOutcome, OS_REQUEST, type OsJobDeps } from "./scheduler"
 import type { CollectionPatch } from "./snapshot"
@@ -123,9 +124,10 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
   }
 
   /** An error that says nothing about the contract: try again soon, without counting it. */
-  async function transient(contract: string): Promise<void> {
+  async function transient(contract: string, client = false): Promise<void> {
+    const wait = await failedFor(sql, contract, "discovery", client)
     await sql`
-      update indexer.nft_collections set next_discovery_at = ${new Date(now() + TRANSIENT_RETRY_MS)}
+      update indexer.nft_collections set next_discovery_at = ${new Date(now() + wait)}
       where contract = ${contract}`
   }
 
@@ -158,9 +160,15 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
       if (!found.ok) {
         const early = commonOutcome(found)
         if (early) return early
-        return void (await (found.reason === "not_found" ? failed(contract) : transient(contract)))
+        if (found.reason === "not_found") await answeredFor(sql, contract, "discovery")
+        return void (await (found.reason === "not_found"
+          ? failed(contract)
+          : transient(contract, found.client === true)))
       }
-      if (!found.value?.slug) return void (await failed(contract))
+      if (!found.value?.slug) {
+        await answeredFor(sql, contract, "discovery")
+        return void (await failed(contract))
+      }
 
       const page = await rest.get(
         `/collections/${found.value.slug}`,
@@ -171,8 +179,12 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
       if (!page.ok) {
         const early = commonOutcome(page)
         if (early) return early
-        return void (await (page.reason === "not_found" ? failed(contract) : transient(contract)))
+        if (page.reason !== "not_found")
+          return void (await transient(contract, page.client === true))
+        await answeredFor(sql, contract, "discovery")
+        return void (await failed(contract))
       }
+      await answeredFor(sql, contract, "discovery")
       if (!page.value) return void (await failed(contract))
 
       // The creator's account is read before the snapshot so that the first snapshot carries it. If
@@ -216,6 +228,8 @@ export function createMetadataJob(deps: OsJobDeps): Job {
     sql`
       update indexer.nft_collections set next_metadata_at = ${new Date(now() + ms)}
       where contract = ${contract}`
+  const errored = async (contract: string, client = false) =>
+    reschedule(contract, await failedFor(sql, contract, "metadata", client))
 
   return {
     name: "opensea-metadata",
@@ -241,14 +255,14 @@ export function createMetadataJob(deps: OsJobDeps): Job {
       if (!page.ok) {
         const early = commonOutcome(page)
         if (early) return early
-        // Gone from OpenSea: look again tomorrow. Any other error: soon.
-        await reschedule(
-          contract,
-          page.reason === "not_found" ? METADATA_REFRESH_MS : TRANSIENT_RETRY_MS,
-        )
+        // Gone from OpenSea: look again tomorrow. Any other error: backed off.
+        if (page.reason !== "not_found") return void (await errored(contract, page.client === true))
+        await answeredFor(sql, contract, "metadata")
+        await reschedule(contract, METADATA_REFRESH_MS)
         return
       }
-      if (!page.value) return void (await reschedule(contract, TRANSIENT_RETRY_MS))
+      if (!page.value) return void (await errored(contract))
+      await answeredFor(sql, contract, "metadata")
 
       // The creator's account is read again when its cache has expired; the snapshot is written
       // again if the account changed, and a change of its verified flag (gates 1 and 2) marks the

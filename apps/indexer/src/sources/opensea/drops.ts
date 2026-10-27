@@ -2,14 +2,9 @@ import type { NftDropEvent, NftDropStage } from "@ink-indexer/events"
 import { SCHEMA_VERSION } from "@ink-indexer/events"
 import { INK_CHAIN_ID, type OsDrop, parseDrop } from "@ink-indexer/sdk"
 import type { Address } from "viem"
-import {
-  DROP_404_RECHECK_MS,
-  DROPS_LEAD_MS,
-  JOBS_PER_TICK,
-  SCHEDULER_TICK_MS,
-  TRANSIENT_RETRY_MS,
-} from "../nft/policy"
+import { DROP_404_RECHECK_MS, DROPS_LEAD_MS, JOBS_PER_TICK, SCHEDULER_TICK_MS } from "../nft/policy"
 import type { Tx } from "../source"
+import { answeredFor, failedFor } from "./backoff"
 import { commonOutcome, type Job, type JobOutcome, OS_REQUEST, type OsJobDeps } from "./scheduler"
 import { canonicalJson } from "./snapshot"
 
@@ -35,6 +30,10 @@ export function createDropsJob(deps: OsJobDeps): Job {
 
   const reschedule = (contract: string, at: Date | null) =>
     sql`update indexer.nft_collections set next_drops_at = ${at} where contract = ${contract}`
+
+  /** An error that is not "not found": try again later, further apart while it keeps failing. */
+  const errored = async (contract: string, client = false) =>
+    reschedule(contract, new Date(now() + (await failedFor(sql, contract, "drops", client))))
 
   /** No drop page: record it, and look again a day later unless the collection has minted. */
   const missing = (contract: string, minted: boolean) =>
@@ -76,12 +75,14 @@ export function createDropsJob(deps: OsJobDeps): Job {
         if (early) return early
         // No drop page: asked again daily until the collection's first mint, then not until a
         // configuration log names it. Another error: soon.
-        if (page.reason === "not_found") await missing(contract, row.first_mint_block !== null)
-        else await reschedule(contract, new Date(now() + TRANSIENT_RETRY_MS))
+        if (page.reason === "not_found") {
+          await answeredFor(sql, contract, "drops")
+          await missing(contract, row.first_mint_block !== null)
+        } else await errored(contract, page.client === true)
         return
       }
-      if (!page.value)
-        return void (await reschedule(contract, new Date(now() + TRANSIENT_RETRY_MS)))
+      if (!page.value) return void (await errored(contract))
+      await answeredFor(sql, contract, "drops")
 
       const t = now()
       const stages = stagesOf(page.value)

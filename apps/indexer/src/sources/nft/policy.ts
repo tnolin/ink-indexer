@@ -25,6 +25,17 @@ export const KEY_REJECTED_PAUSE_MS = HOUR_MS
 export const OPENSEA_MAX_WAIT_MS = 2_000
 /** Wait before trying again after an error that says nothing about the contract (network, 5xx, unusable body). */
 export const TRANSIENT_RETRY_MS = 5 * MINUTE_MS
+/**
+ * Waits after the first, second and third consecutive failure of one job for one collection; every
+ * failure after that waits `ERROR_BACKOFF_DAILY_MS`. A success starts the count again.
+ */
+export const ERROR_BACKOFF_MS = [TRANSIENT_RETRY_MS, 30 * MINUTE_MS, 2 * HOUR_MS] as const
+export const ERROR_BACKOFF_DAILY_MS = DAY_MS
+/**
+ * The longest wait after a server error (5xx) or a network error. Those come from OpenSea being
+ * down, which hits every collection at once, so no collection is pushed to a daily retry by one.
+ */
+export const OUTAGE_BACKOFF_MAX_MS = ERROR_BACKOFF_MS[2]
 
 /** Waits after the first four failed slug lookups; after that the wait is `DISCOVERY_DAILY_MS`. */
 export const DISCOVERY_RETRY_MS = [5 * MINUTE_MS, 30 * MINUTE_MS, 2 * HOUR_MS, 6 * HOUR_MS] as const

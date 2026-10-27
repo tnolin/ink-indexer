@@ -25,6 +25,7 @@ import {
   WARM_SIZE,
 } from "../nft/policy"
 import type { Tx } from "../source"
+import { answeredFor, failedFor } from "./backoff"
 import type { OsResult } from "./rest"
 import { commonOutcome, type Job, type JobOutcome, type OsJobDeps } from "./scheduler"
 
@@ -272,16 +273,22 @@ export function createStats(deps: StatsDeps) {
       }
       if (opts.scheduled) {
         await holdListed(contract, !res.ok && res.reason === "not_found")
-        // Unknown to OpenSea: look again at the tier's own pace. Any other failure: soon.
+        // Unknown to OpenSea: look again at the tier's own pace. Any other failure: backed off.
         const unknown = !res.ok && res.reason === "not_found"
+        if (unknown) await answeredFor(sql, contract, "stats")
         await reschedule(
           contract,
-          unknown && row.stats_tier ? STATS_INTERVAL_S[row.stats_tier] * 1000 : TRANSIENT_RETRY_MS,
+          unknown && row.stats_tier
+            ? STATS_INTERVAL_S[row.stats_tier] * 1000
+            : unknown
+              ? TRANSIENT_RETRY_MS
+              : await failedFor(sql, contract, "stats", !res.ok && res.client === true),
         )
       }
       return { wrote: false, outcome: undefined }
     }
 
+    if (opts.scheduled) await answeredFor(sql, contract, "stats")
     const at = new Date(now())
     let listed: { count: number; capped: boolean } | null = null
     let listingFailed: Extract<OsResult<unknown>, { ok: false }> | null = null
