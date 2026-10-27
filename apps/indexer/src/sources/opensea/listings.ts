@@ -256,8 +256,21 @@ export function createListings(deps: ListingsDeps) {
     }
   }
 
-  /** A cancel, sale or transfer: the next listing of the item is judged afresh. */
+  /**
+   * A cancel, sale or transfer: the next listing of the item is judged afresh. A cancel ends only
+   * the order it names, so one for an older order leaves the stored listing in place.
+   */
   async function onEnded(e: StreamEvent): Promise<void> {
+    if (e.type === "item_cancelled") {
+      const cancelled = str(
+        (e.payload as { order_hash?: unknown } | null)?.order_hash,
+      )?.toLowerCase()
+      if (!cancelled) return
+      await sql`
+        delete from indexer.nft_listing_state
+        where contract = ${e.contract} and token_id = ${e.tokenId} and order_hash = ${cancelled}`
+      return
+    }
     await sql`
       delete from indexer.nft_listing_state where contract = ${e.contract} and token_id = ${e.tokenId}`
   }

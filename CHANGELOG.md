@@ -6,6 +6,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Fixed
 
+- Indexer: a cancelled listing only clears the stored listing state when the cancel names the stored order. A cancel for an older order of the same item no longer clears the state of the current listing, so the current listing is not written again at the same price.
 - Indexer: a collection filtered by the structure gate is judged again when its minting resumes. A drop that paused for a day counted as ended and stayed filtered after it minted again. The first mint after a day without mints marks the verdict for a new look, once per resume. See ADR 0029.
 
 ## [indexer-v0.3.5] - 2026-10-27
