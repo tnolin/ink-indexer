@@ -120,8 +120,9 @@ type TransportState = {
 /**
  * Sends each eth_getLogs to the healthy transport with the largest range.
  * Any error halves that transport's range; the message is never parsed (dRPC's are unreliable).
- * The one exception is position: an error that is not a transport failure (see isTransportError), on a
- * span that lies within TIP_BLOCKS of that transport's own head, means the blocks are not there yet.
+ * The one exception is position: a refusal (see isTipRefusal) on a span that lies within TIP_BLOCKS of
+ * that transport's own head means the blocks are not there yet. Such a refusal does not count toward
+ * the repeated-failure error either.
  * It changes no state and logs only at debug; the next transport is tried, and when none serves the
  * span, the router waits and asks again from the same block.
  * The span's end is also clamped to that transport's own eth_blockNumber: a transport behind the
@@ -181,7 +182,7 @@ export class LogRouter {
           }
           return { logs, toBlock: end }
         } catch (err) {
-          if (!isTransportError(err) && s.head - from < TIP_BLOCKS) {
+          if (isTipRefusal(err) && s.head - from < TIP_BLOCKS) {
             this.logger("debug", "getLogs at the tip not served yet", {
               transport: s.t.name,
               from,
@@ -319,6 +320,21 @@ export function isTransportError(err: unknown): boolean {
   for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
     if (e instanceof HttpRequestError) return true
     if (RATE_LIMIT_CODES.has((e as { code?: unknown }).code as number)) return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
+}
+
+/**
+ * An error an endpoint can give for a span at its tip that its head already covers: an RPC error
+ * response that is not a transport failure, or an HTTP 5xx response (dRPC answers 500 with no useful
+ * message). Connection failures, timeouts and rate limits (including HTTP 429) are not included.
+ */
+export function isTipRefusal(err: unknown): boolean {
+  if (!isTransportError(err)) return true
+  if (isSocketError(err) || isTimeoutError(err)) return false
+  for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
+    if (e instanceof HttpRequestError) return e.status !== undefined && e.status >= 500
     e = (e as { cause?: unknown }).cause
   }
   return false

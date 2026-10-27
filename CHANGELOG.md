@@ -6,7 +6,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Fixed
 
-- Indexer: an `eth_getLogs` that an endpoint refuses at the chain tip (for example "block range extends beyond current head block" from an endpoint whose `eth_blockNumber` is a block ahead of the node that answers) no longer halves that endpoint's range or logs a warning. The blocks are read from the next endpoint or on the next attempt, and the cursor does not move past them. Other errors still halve the range, log and bench the endpoint. See ADR 0031.
+- Indexer: an `eth_getLogs` that an endpoint refuses at the chain tip no longer halves that endpoint's range, logs a warning or counts toward the repeated-failure error. This covers the "block range extends beyond current head block" error from an endpoint whose `eth_blockNumber` is a block ahead of the node that answers, and an HTTP 5xx response, when the span starts less than 5 blocks below the endpoint's own head. The blocks are read from the next endpoint or on the next attempt, and the cursor does not move past them. Other errors, a 5xx below the tip, timeouts, rate limits and connection failures are handled as before. See ADR 0031.
 
 ## [indexer-v0.3.6] - 2026-10-27
 

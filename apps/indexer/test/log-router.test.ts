@@ -172,15 +172,49 @@ describe("LogRouter", () => {
       expect(router.ranges()[0]!.range).toBe(500)
     })
 
-    it("keeps benching on a rate limit at the tip", async () => {
-      const gel = transport("gel", 1_000, () => false, 100n)
-      gel.getLogs = async () => {
+    it("treats an HTTP 500 at the tip as not there yet, and never as a repeated failure", async () => {
+      const { lines, logger } = record()
+      const drpc = transport("drpc", 100, () => false, 59_300_000n)
+      drpc.getLogs = async ({ fromBlock, toBlock }) => {
+        drpc.calls.push([fromBlock, toBlock])
+        throw new HttpRequestError({ url: "x", status: 500 })
+      }
+      const ok = transport("ok", 50, () => false, 59_300_000n)
+      const router = new LogRouter([drpc, ok], fakeClock(), logger)
+      for (let i = 0; i < 8; i++) await router.getLogs(59_299_998n, FAR, NO_FILTER)
+      expect(drpc.calls.length).toBe(8)
+      expect(router.ranges()[0]).toEqual({ name: "drpc", range: 100, healthy: true })
+      expect(lines.filter(([l]) => l === "warn" || l === "error")).toEqual([])
+    })
+
+    it("still halves and warns on an HTTP 500 below the tip", async () => {
+      const { lines, logger } = record()
+      const drpc = transport("drpc", 100, () => false, 59_300_000n)
+      drpc.getLogs = async ({ fromBlock, toBlock }) => {
+        drpc.calls.push([fromBlock, toBlock])
+        if (drpc.calls.length === 1) throw new HttpRequestError({ url: "x", status: 500 })
+        return []
+      }
+      const router = new LogRouter([drpc], fakeClock(), logger)
+      await router.getLogs(59_000_000n, FAR, NO_FILTER)
+      expect(router.ranges()[0]!.range).toBe(50)
+      expect(lines).toContainEqual(["warn", "getLogs failed"])
+    })
+
+    it("still treats a 429 at the tip as a rate limit", async () => {
+      const { lines, logger } = record()
+      const drpc = transport("drpc", 1_000, () => false, 100n)
+      drpc.getLogs = async () => {
         throw new HttpRequestError({ url: "x", status: 429 })
       }
-      const ok = transport("ok", 1_000, () => false, 100n)
-      const router = new LogRouter([gel, ok], fakeClock(), quiet)
+      const router = new LogRouter(
+        [drpc, transport("ok", 1_000, () => false, 100n)],
+        fakeClock(),
+        logger,
+      )
       await router.getLogs(99n, FAR, NO_FILTER)
       expect(router.ranges()[0]!.range).toBe(500)
+      expect(lines).toContainEqual(["warn", "getLogs failed"])
     })
 
     it("does not stall when another transport can serve the range", async () => {
