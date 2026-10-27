@@ -4,6 +4,8 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+## [indexer-v0.3.6] - 2026-10-27
+
 ### Fixed
 
 - Indexer: OpenSea errors that keep failing for a collection (a 400, a 5xx, a network error) are retried less and less often in the discovery, metadata, drops, traits and stats jobs: after 5 minutes, 30 minutes and 2 hours, then daily for a 4xx answer such as a 400, and every 2 hours at most for a 5xx or a network error, so an OpenSea outage does not leave collections on a daily retry. They were retried every 5 minutes for good. An answer from OpenSea starts the count again; 404 and 429 handling is unchanged. Migration 0014 adds `nft_job_failures`. See ADR 0030.
