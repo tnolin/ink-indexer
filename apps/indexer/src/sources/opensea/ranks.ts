@@ -29,7 +29,7 @@ export async function cachedRanks(
       ${sql.array(items.map((i) => i.tokenId))}::numeric[]) as q(contract, token_id)
     join indexer.nft_ranks r on r.contract = q.contract and r.token_id = q.token_id
     join indexer.nft_collections c on c.contract = r.contract
-    where r.fetched_at > ${since}
+    where r.fetched_at > ${since} and r.rank <= r.max_rank
       and r.calculated_at is not distinct from c.rarity_calculated_at`
   return new Map(
     rows.map((r) => [
@@ -48,8 +48,8 @@ export type RanksDeps = {
 
 /**
  * Item ranks, fetched lazily and one item at a time (budget class 1): never for a whole collection
- * and never for a sale. A rank OpenSea does not give is never invented, so an item without one has
- * no row.
+ * and never for a sale. A rank OpenSea does not give, or one above the collection's highest rank,
+ * is never invented or kept, so an item without one has no row.
  */
 export function createRanks(deps: RanksDeps) {
   const { sql, rest } = deps
@@ -78,6 +78,7 @@ export function createRanks(deps: RanksDeps) {
   type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>
   function valid(row: Loaded): Rank | null {
     if (row.rank === null || row.cached_max_rank === null || row.fetched_at === null) return null
+    if (row.rank > row.cached_max_rank) return null
     if (now() - row.fetched_at.getTime() >= RANK_CACHE_MS) return null
     if (row.cached_calculated_at?.getTime() !== row.rarity_calculated_at?.getTime()) return null
     return { rank: row.rank, maxRank: row.cached_max_rank }
@@ -114,7 +115,9 @@ export function createRanks(deps: RanksDeps) {
       )
       if (!res.ok || !res.value) return null
       const rank = res.value.rank
+      // A rank past the collection's highest is not a rank the collection has: treat the item as unranked.
       if (rank === null || !Number.isInteger(rank) || rank < 1 || rank > INT_MAX) return null
+      if (rank > row.max_rank) return null
       // The calculated_at read before the request is the one kept: if the collection's rarity moved
       // meanwhile, the row no longer matches it and the next listing fetches again.
       await sql`

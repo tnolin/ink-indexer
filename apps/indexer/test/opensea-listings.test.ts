@@ -650,6 +650,24 @@ describe("ranks", () => {
     expect((await listingEvents())[1]).toMatchObject({ rank: null, maxRank: null })
   })
 
+  it("a rank above the collection's max_rank is not stored or used; the highest rank itself is", async () => {
+    const s = setup({ [nftPath(RANKED)]: ranked() })
+    // The item's rank is 2960.
+    await sql`update indexer.nft_collections set max_rank = 2959 where contract = ${PRTSCN}`
+    await s.handle(listed({ token: RANKED, price: NEAR }))
+    expect(await rankRows()).toEqual([])
+    expect((await listingEvents())[0]).toMatchObject({ rank: null, maxRank: null })
+
+    // A row cached before the check is not served either.
+    await sql`insert into indexer.nft_ranks values (${PRTSCN}, ${RANKED}, 2960, 2959, ${CALCULATED}, ${new Date(T0)})`
+    expect(await s.ranks.cachedRank(PRTSCN, RANKED)).toBeNull()
+
+    await sql`delete from indexer.nft_ranks`
+    await sql`update indexer.nft_collections set max_rank = 2960 where contract = ${PRTSCN}`
+    await s.handle(listed({ token: RANKED, price: NEAR - 1n }))
+    expect((await listingEvents())[1]).toMatchObject({ rank: 2960, maxRank: 2960 })
+  })
+
   it("no rank without the collection's max_rank, on a failed request or a budget that cannot serve it", async () => {
     const s = setup({ [nftPath(RANKED)]: ranked(), [nftPath("8")]: { status: 500 } })
     await sql`update indexer.nft_collections set max_rank = null where contract = ${PRTSCN}`
