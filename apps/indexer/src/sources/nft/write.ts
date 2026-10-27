@@ -10,10 +10,12 @@ import type {
   TransferRow,
 } from "./index"
 import {
+  BLOCK_S,
   DISCOVERY_RESTART_MS,
   DISCOVERY_RETRY_MS,
   DROPS_DEBOUNCE_MS,
   METADATA_REFRESH_MS,
+  MINT_END_IDLE_S,
   ROW_CHUNK,
 } from "./policy"
 
@@ -158,6 +160,25 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
         next_drops_at = least(coalesce(next_drops_at, 'infinity'::timestamptz), now() + make_interval(secs => ${DROPS_DEBOUNCE_MS / 1000}::float8))
       where contract = any(${tx.array(configured)}::text[])`
 
+  // A collection filtered by the structure gate (it stopped minting early) is judged again when
+  // minting resumes: the first mint after a gap of a mint-end day marks it. Mints of the same run
+  // follow a recent mint, so one resume marks it once. This runs before the batch's mints are
+  // stored, to compare them with the last mint stored. Mints pruned from the table count as a gap.
+  const firstBlocks = new Map<string, bigint>()
+  for (const m of batch.mints) {
+    const b = firstBlocks.get(m.contract)
+    if (b === undefined || m.block < b) firstBlocks.set(m.contract, m.block)
+  }
+  if (firstBlocks.size > 0)
+    await tx`
+      update indexer.nft_collections c set verdict_dirty = true
+      from unnest(${tx.array([...firstBlocks.keys()])}::text[], ${tx.array([...firstBlocks.values()].map(s))}::bigint[]) as resumed(contract, block)
+      where c.contract = resumed.contract and c.verdict = 'filtered' and c.gates->>'structure' = 'fail'
+        and not c.verdict_dirty
+        and not exists (
+          select 1 from indexer.nft_mints m
+          where m.contract = c.contract and m.block > resumed.block - ${MINT_END_IDLE_S / BLOCK_S}::bigint
+            and m.block <= resumed.block)`
   for (const part of chunks(batch.mints.map((t) => transferRecord(t, "recipient"))))
     await tx`insert into indexer.nft_mints ${tx(part)} on conflict do nothing`
   // A verified collection's (or creator's) drop with no SeaDrop stages is announced after its
