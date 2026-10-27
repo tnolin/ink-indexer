@@ -282,7 +282,7 @@ export function createStats(deps: StatsDeps) {
             ? STATS_INTERVAL_S[row.stats_tier] * 1000
             : unknown
               ? TRANSIENT_RETRY_MS
-              : await failedFor(sql, contract, "stats"),
+              : await failedFor(sql, contract, "stats", !res.ok && res.client === true),
         )
       }
       return { wrote: false, outcome: undefined }

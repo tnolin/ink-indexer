@@ -61,7 +61,7 @@ export function createTraitsJob(deps: OsJobDeps): Job {
         }
       }
       if (!res.ok || !res.value) {
-        const wait = await failedFor(sql, contract, "traits")
+        const wait = await failedFor(sql, contract, "traits", !res.ok && res.client === true)
         await sql`
           update indexer.nft_collections set next_traits_at = ${new Date(now() + wait)}
           where contract = ${contract}`

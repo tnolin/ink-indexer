@@ -3,7 +3,12 @@ import type { Budget, BudgetClass } from "./budget"
 
 export type OsResult<T> =
   | { ok: true; value: T }
-  | { ok: false; reason: "budget" | "not_found" | "rejected" | "rate_limited" | "error" }
+  | {
+      ok: false
+      reason: "budget" | "not_found" | "rejected" | "rate_limited" | "error"
+      /** An `error` that is an HTTP 4xx (other than 404, 429, 401 and 403): about this request, not an outage. */
+      client?: true
+    }
 
 export type OpenSeaRest = {
   /**
@@ -113,7 +118,9 @@ export function createOpenSeaRest(deps: {
           return { ok: false, reason: "rate_limited" }
         }
         warn("opensea request failed", where, { status: res.status })
-        return { ok: false, reason: "error" }
+        return res.status >= 400 && res.status < 500
+          ? { ok: false, reason: "error", client: true }
+          : { ok: false, reason: "error" }
       } catch (err) {
         warn("opensea request failed", where, { error: scrub(err) })
         return { ok: false, reason: "error" }

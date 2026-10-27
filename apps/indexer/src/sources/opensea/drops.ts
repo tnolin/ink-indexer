@@ -32,8 +32,8 @@ export function createDropsJob(deps: OsJobDeps): Job {
     sql`update indexer.nft_collections set next_drops_at = ${at} where contract = ${contract}`
 
   /** An error that is not "not found": try again later, further apart while it keeps failing. */
-  const errored = async (contract: string) =>
-    reschedule(contract, new Date(now() + (await failedFor(sql, contract, "drops"))))
+  const errored = async (contract: string, client = false) =>
+    reschedule(contract, new Date(now() + (await failedFor(sql, contract, "drops", client))))
 
   /** No drop page: record it, and look again a day later unless the collection has minted. */
   const missing = (contract: string, minted: boolean) =>
@@ -78,7 +78,7 @@ export function createDropsJob(deps: OsJobDeps): Job {
         if (page.reason === "not_found") {
           await answeredFor(sql, contract, "drops")
           await missing(contract, row.first_mint_block !== null)
-        } else await errored(contract)
+        } else await errored(contract, page.client === true)
         return
       }
       if (!page.value) return void (await errored(contract))

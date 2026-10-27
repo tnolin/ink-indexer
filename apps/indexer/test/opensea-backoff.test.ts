@@ -26,7 +26,8 @@ const T0 = Date.parse("2026-10-19T00:00:00Z")
 let sql: Sql
 let store: Store
 let clock: number
-let status: number
+/** What the routes answer: an HTTP status, or a failed connection. */
+let status: number | "network"
 
 beforeEach(async () => {
   sql = await resetDb(inject("databaseUrl"))
@@ -59,7 +60,7 @@ describe("errorBackoffMs", () => {
 
 /** The failing route answers `status`, whatever the test sets it to. */
 function jobs() {
-  const answer = () => ({ status, body: {} })
+  const answer = () => (status === "network" ? new Error("connection reset") : { status, body: {} })
   const fetch = fakeFetch({
     [`/chain/ink/contract/${C}`]: answer,
     [`/collections/${SLUG}`]: answer,
@@ -94,9 +95,18 @@ const CASES = [
 ] as const
 
 describe("a job that keeps failing backs off", () => {
-  it.each(CASES)(
-    "%s: 5 minutes, 30 minutes, 2 hours, then daily; a success starts over",
-    async (name, column, row) => {
+  /** The waits after five failures in a row, by kind of failure. */
+  const KINDS = [
+    ["a 400", 400, [5 * MIN, 30 * MIN, 2 * HOUR, DAY, DAY]],
+    ["a 500", 500, [5 * MIN, 30 * MIN, 2 * HOUR, 2 * HOUR, 2 * HOUR]],
+    ["a network error", "network", [5 * MIN, 30 * MIN, 2 * HOUR, 2 * HOUR, 2 * HOUR]],
+  ] as const
+  const RUNS = CASES.flatMap((c) => KINDS.map((k) => [...c, ...k] as const))
+
+  it.each(RUNS)(
+    "%s with %s failing: the waits are as the ladder gives; a success starts over",
+    async (name, column, row, _kind, failing, waits) => {
+      status = failing
       const job: Job = jobs()[name]
       await sql`insert into indexer.nft_collections ${sql({ contract: C, standard: "erc721", next_discovery_at: null, ...row })}`
       await sql`insert into indexer.nft_mints (tx_hash, log_index, idx, contract, token_id, recipient, qty, block)
@@ -106,7 +116,7 @@ describe("a job that keeps failing backs off", () => {
           await sql`select ${sql(column)} as at from indexer.nft_collections where contract = ${C}`
         )[0]!.at as Date
 
-      for (const wait of [5 * MIN, 30 * MIN, 2 * HOUR, DAY, DAY]) {
+      for (const wait of waits) {
         await job.run(C)
         expect((await nextAt()).getTime()).toBe(clock + wait)
         clock = (await nextAt()).getTime()
@@ -115,7 +125,7 @@ describe("a job that keeps failing backs off", () => {
       // An answer (here, a 404) ends the streak: the next failure waits five minutes again.
       status = 404
       await job.run(C)
-      status = 500
+      status = failing
       await sql`update indexer.nft_collections set ${sql({ [column]: new Date(clock) })} where contract = ${C}`
       await job.run(C)
       expect((await nextAt()).getTime()).toBe(clock + 5 * MIN)
