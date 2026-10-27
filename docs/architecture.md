@@ -94,6 +94,7 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | `nft_drops`, `nft_stages` | The drop schedule from OpenSea, and each stage's first mint |
 | `nft_seadrop_config`, `nft_items_seen` | SeaDrop configuration logs, and the item names and images the listings saw |
 | `nft_launches` | Chimera campaigns: collection, token, creator, pool, block |
+| `nft_job_failures` | Consecutive failed OpenSea requests per collection and job, for the retry back-off (ADR 0030) |
 | `nft_stats`, `nft_listing_state`, `nft_ranks`, `nft_accounts` | Floor and stats history, the last listed price per item, cached item ranks, cached creator accounts |
 | `nft_overrides` | Manual verdicts and kinds set with `pnpm nft:mark` |
 | `opensea_budget` | The shared OpenSea request budget (ADR 0019) |
