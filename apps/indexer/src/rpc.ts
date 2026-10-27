@@ -98,6 +98,12 @@ const BENCH_AFTER = 5
 const BENCH_MS = 60_000
 const MAX_WAIT_MS = 30_000
 const HEAD_TTL_MS = 1_000
+/**
+ * A request whose first block is within this many blocks of the transport's own head lies entirely at
+ * its tip. An endpoint's eth_blockNumber and eth_getLogs can be answered by nodes a block or two apart,
+ * so a request at the tip can be refused as beyond the head although the head it reported covers it.
+ */
+const TIP_BLOCKS = 5n
 
 type TransportState = {
   t: LogTransport
@@ -114,6 +120,10 @@ type TransportState = {
 /**
  * Sends each eth_getLogs to the healthy transport with the largest range.
  * Any error halves that transport's range; the message is never parsed (dRPC's are unreliable).
+ * The one exception is position: an error that is not a transport failure (see isTransportError), on a
+ * span that lies within TIP_BLOCKS of that transport's own head, means the blocks are not there yet.
+ * It changes no state and logs only at debug; the next transport is tried, and when none serves the
+ * span, the router waits and asks again from the same block.
  * The span's end is also clamped to that transport's own eth_blockNumber: a transport behind the
  * chain head can answer a query above its head with a successful but incomplete result.
  */
@@ -171,6 +181,15 @@ export class LogRouter {
           }
           return { logs, toBlock: end }
         } catch (err) {
+          if (!isTransportError(err) && s.head - from < TIP_BLOCKS) {
+            this.logger("debug", "getLogs at the tip not served yet", {
+              transport: s.t.name,
+              from,
+              head: s.head,
+              error: String(err),
+            })
+            continue
+          }
           const consecutive = ++s.consecutive
           if (isConnectionError(err)) {
             // The connection to the endpoint is down: skip it for a while. The range says nothing about this.
