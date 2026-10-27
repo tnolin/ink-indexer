@@ -113,6 +113,127 @@ describe("LogRouter", () => {
     ])
   })
 
+  describe("a failure at the transport's own tip", () => {
+    const BEYOND = () =>
+      new RpcRequestError({
+        body: {},
+        url: "x",
+        error: { code: -32602, message: "block range extends beyond current head block" },
+      })
+    const record = () => {
+      const lines: [string, string][] = []
+      return { lines, logger: (level: string, msg: string) => lines.push([level, msg]) }
+    }
+
+    it("neither halves nor warns, and the next call fetches the blocks", async () => {
+      const { lines, logger } = record()
+      let tipServed = false
+      const gel = transport("gel", 1_000, () => false, 59_626_729n)
+      gel.getLogs = async ({ fromBlock, toBlock }) => {
+        gel.calls.push([fromBlock, toBlock])
+        if (!tipServed) throw BEYOND()
+        return []
+      }
+      const clock = fakeClock()
+      const sleep = clock.sleep
+      clock.sleep = async (ms) => {
+        await sleep(ms)
+        tipServed = true
+      }
+      const router = new LogRouter([gel], clock, logger)
+      const r = await router.getLogs(59_626_727n, FAR, NO_FILTER)
+      expect(r.toBlock).toBe(59_626_729n)
+      expect(gel.calls).toEqual([
+        [59_626_727n, 59_626_729n],
+        [59_626_727n, 59_626_729n],
+      ])
+      expect(router.ranges()[0]!.range).toBe(1_000)
+      expect(lines.filter(([l]) => l === "warn" || l === "error")).toEqual([])
+    })
+
+    it("still halves and warns when the failing span is well below the head", async () => {
+      const { lines, logger } = record()
+      const gel = transport("gel", 1_000, (_f, _t, call) => call === 1, 10_000n)
+      gel.getLogs = async ({ fromBlock, toBlock }) => {
+        gel.calls.push([fromBlock, toBlock])
+        if (gel.calls.length === 1) throw BEYOND()
+        return []
+      }
+      const router = new LogRouter([gel], fakeClock(), logger)
+      await router.getLogs(100n, FAR, NO_FILTER)
+      expect(router.ranges()[0]!.range).toBe(500)
+      expect(lines).toContainEqual(["warn", "getLogs failed"])
+    })
+
+    it("still halves a large span that ends at the head", async () => {
+      const gel = transport("gel", 1_000, (_f, _t, call) => call === 1, 5_000n)
+      const router = new LogRouter([gel], fakeClock(), quiet)
+      await router.getLogs(1n, FAR, NO_FILTER)
+      expect(router.ranges()[0]!.range).toBe(500)
+    })
+
+    it("treats an HTTP 500 at the tip as not there yet, and never as a repeated failure", async () => {
+      const { lines, logger } = record()
+      const drpc = transport("drpc", 100, () => false, 59_300_000n)
+      drpc.getLogs = async ({ fromBlock, toBlock }) => {
+        drpc.calls.push([fromBlock, toBlock])
+        throw new HttpRequestError({ url: "x", status: 500 })
+      }
+      const ok = transport("ok", 50, () => false, 59_300_000n)
+      const router = new LogRouter([drpc, ok], fakeClock(), logger)
+      for (let i = 0; i < 8; i++) await router.getLogs(59_299_998n, FAR, NO_FILTER)
+      expect(drpc.calls.length).toBe(8)
+      expect(router.ranges()[0]).toEqual({ name: "drpc", range: 100, healthy: true })
+      expect(lines.filter(([l]) => l === "warn" || l === "error")).toEqual([])
+    })
+
+    it("still halves and warns on an HTTP 500 below the tip", async () => {
+      const { lines, logger } = record()
+      const drpc = transport("drpc", 100, () => false, 59_300_000n)
+      drpc.getLogs = async ({ fromBlock, toBlock }) => {
+        drpc.calls.push([fromBlock, toBlock])
+        if (drpc.calls.length === 1) throw new HttpRequestError({ url: "x", status: 500 })
+        return []
+      }
+      const router = new LogRouter([drpc], fakeClock(), logger)
+      await router.getLogs(59_000_000n, FAR, NO_FILTER)
+      expect(router.ranges()[0]!.range).toBe(50)
+      expect(lines).toContainEqual(["warn", "getLogs failed"])
+    })
+
+    it("still treats a 429 at the tip as a rate limit", async () => {
+      const { lines, logger } = record()
+      const drpc = transport("drpc", 1_000, () => false, 100n)
+      drpc.getLogs = async () => {
+        throw new HttpRequestError({ url: "x", status: 429 })
+      }
+      const router = new LogRouter(
+        [drpc, transport("ok", 1_000, () => false, 100n)],
+        fakeClock(),
+        logger,
+      )
+      await router.getLogs(99n, FAR, NO_FILTER)
+      expect(router.ranges()[0]!.range).toBe(500)
+      expect(lines).toContainEqual(["warn", "getLogs failed"])
+    })
+
+    it("does not stall when another transport can serve the range", async () => {
+      const { lines, logger } = record()
+      const clock = fakeClock()
+      const gel = transport("gel", 1_000, () => false, 200n)
+      gel.getLogs = async () => {
+        throw BEYOND()
+      }
+      const qn = transport("qn", 100, () => false, 200n)
+      const router = new LogRouter([gel, qn], clock, logger)
+      for (let i = 0; i < 30; i++)
+        expect((await router.getLogs(198n, FAR, NO_FILTER)).toBlock).toBe(200n)
+      expect(clock.t).toBe(0)
+      expect(router.ranges()[0]).toEqual({ name: "gel", range: 1_000, healthy: true })
+      expect(lines.filter(([l]) => l === "warn" || l === "error")).toEqual([])
+    })
+  })
+
   it("doubles back after 20 consecutive successes, never past the seed", async () => {
     const gel = transport("gel", 1_000, (_f, _t, call) => call === 1)
     const router = new LogRouter([gel], fakeClock(), quiet)
