@@ -99,11 +99,12 @@ const BENCH_MS = 60_000
 const MAX_WAIT_MS = 30_000
 const HEAD_TTL_MS = 1_000
 /**
- * A request whose first block is within this many blocks of the transport's own head lies entirely at
- * its tip. An endpoint's eth_blockNumber and eth_getLogs can be answered by nodes a block or two apart,
- * so a request at the tip can be refused as beyond the head although the head it reported covers it.
+ * A request whose first block is fewer than this many blocks below the transport's own head lies
+ * entirely at its tip. An endpoint's eth_blockNumber and eth_getLogs can be answered by nodes several
+ * blocks apart, so a request at the tip can be refused as beyond the head although the head it reported
+ * covers it. A span this short is far below any endpoint's range limit, so a size refusal cannot hide here.
  */
-const TIP_BLOCKS = 5n
+const TIP_BLOCKS = 32n
 
 type TransportState = {
   t: LogTransport

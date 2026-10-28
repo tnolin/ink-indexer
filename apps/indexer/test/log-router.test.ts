@@ -165,6 +165,49 @@ describe("LogRouter", () => {
       expect(lines).toContainEqual(["warn", "getLogs failed"])
     })
 
+    it("treats a refusal as at the tip when the span starts exactly 5 blocks below the head", async () => {
+      const { lines, logger } = record()
+      const gel = transport("gel", 1_000, () => false, 59_626_729n)
+      gel.getLogs = async ({ fromBlock, toBlock }) => {
+        gel.calls.push([fromBlock, toBlock])
+        throw BEYOND()
+      }
+      const ok = transport("ok", 1_000, () => false, 59_626_729n)
+      const router = new LogRouter([gel, ok], fakeClock(), logger)
+      await router.getLogs(59_626_724n, FAR, NO_FILTER)
+      expect(router.ranges()[0]!.range).toBe(1_000)
+      expect(lines.filter(([l]) => l === "warn" || l === "error")).toEqual([])
+    })
+
+    it("treats a refusal as at the tip for a 20-block span that ends at the head", async () => {
+      const { lines, logger } = record()
+      const gel = transport("gel", 1_000, () => false, 59_626_729n)
+      gel.getLogs = async ({ fromBlock, toBlock }) => {
+        gel.calls.push([fromBlock, toBlock])
+        throw BEYOND()
+      }
+      const ok = transport("ok", 1_000, () => false, 59_626_729n)
+      const router = new LogRouter([gel, ok], fakeClock(), logger)
+      await router.getLogs(59_626_710n, FAR, NO_FILTER)
+      expect(gel.calls).toEqual([[59_626_710n, 59_626_729n]])
+      expect(router.ranges()[0]!.range).toBe(1_000)
+      expect(lines.filter(([l]) => l === "warn" || l === "error")).toEqual([])
+    })
+
+    it("still halves a refusal on a span that starts 40 blocks below the head", async () => {
+      const { lines, logger } = record()
+      const gel = transport("gel", 1_000, () => false, 59_626_729n)
+      gel.getLogs = async ({ fromBlock, toBlock }) => {
+        gel.calls.push([fromBlock, toBlock])
+        if (gel.calls.length === 1) throw BEYOND()
+        return []
+      }
+      const router = new LogRouter([gel], fakeClock(), logger)
+      await router.getLogs(59_626_689n, FAR, NO_FILTER)
+      expect(router.ranges()[0]!.range).toBe(500)
+      expect(lines).toContainEqual(["warn", "getLogs failed"])
+    })
+
     it("still halves a large span that ends at the head", async () => {
       const gel = transport("gel", 1_000, (_f, _t, call) => call === 1, 5_000n)
       const router = new LogRouter([gel], fakeClock(), quiet)

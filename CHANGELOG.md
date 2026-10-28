@@ -4,6 +4,14 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Changed
+
+- Indexer: "block not yet served; retrying on next head" and "stale head from <host>" are logged once at warn when an episode starts and at debug while it lasts. "block served after retrying" (info) closes the first with its retry count and duration; "head source recovered" now carries the duration and tick count. A lagging endpoint no longer produces a warning per retry. See ADR 0032.
+
+### Fixed
+
+- Indexer: an `eth_getLogs` refusal at the chain tip is recognised for spans that start fewer than 32 blocks below the endpoint's head, up from 5. Refusals on a span starting exactly 5 blocks below the head, and on a 20-block span, were halved and logged as warnings. See ADR 0032.
+
 ## [indexer-v0.3.7] - 2026-10-27
 
 ### Fixed

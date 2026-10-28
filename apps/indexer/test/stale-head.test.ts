@@ -1,7 +1,7 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import { INKYPUMP_START_BLOCK as S } from "@ink-indexer/sdk"
-import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, inject, it, vi } from "vitest"
 import type { Level } from "../src/log"
 import { Indexer } from "../src/loop"
 import { inkypumpSource } from "../src/sources/inkypump/index"
@@ -46,6 +46,10 @@ async function caughtUpTo(cursor: bigint) {
 const cursorBlock = async () => (await store.getCursor())?.block
 const staleWarnings = (lines: Line[]) => lines.filter((l) => l.msg.startsWith("stale head from"))
 const recoveries = (lines: Line[]) => lines.filter((l) => l.msg === "head source recovered")
+const notServed = (lines: Line[]) =>
+  lines.filter((l) => l.msg === "block not yet served; retrying on next head")
+const served = (lines: Line[]) => lines.filter((l) => l.msg === "block served after retrying")
+const levels = (ls: Line[]) => ls.map((l) => l.level)
 
 describe("a head at or below the cursor", () => {
   it("ingests up to the highest transport head when the fallback head is stale", async () => {
@@ -105,7 +109,7 @@ describe("a head at or below the cursor", () => {
     await idx.tick()
 
     expect(chain.getLogsCalls).toEqual([])
-    expect(staleWarnings(lines)).toHaveLength(1)
+    expect(levels(staleWarnings(lines))).toEqual(["warn"])
   })
 
   it("keeps the original head when no transport answers", async () => {
@@ -138,7 +142,10 @@ describe("a head at or below the cursor", () => {
 })
 
 describe("stale head incidents", () => {
+  afterEach(() => vi.useRealTimers())
+
   it("warns once per incident and logs the recovery once", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
     const { chain, idx, lines } = await caughtUpTo(S + 200n)
     chain.staleHead = S + 100n
     for (const head of [300n, 310n, 320n]) {
@@ -148,9 +155,10 @@ describe("stale head incidents", () => {
         { name: B, head: S + head },
       ]
       await idx.tick()
+      vi.advanceTimersByTime(1_000)
     }
     expect(await cursorBlock()).toBe(S + 320n)
-    expect(staleWarnings(lines)).toHaveLength(1)
+    expect(levels(staleWarnings(lines))).toEqual(["warn", "debug", "debug"])
     expect(recoveries(lines)).toHaveLength(0)
 
     // the provider moves again, so its head is above the cursor
@@ -159,8 +167,10 @@ describe("stale head incidents", () => {
       chain.head = S + head
       await idx.tick()
     }
-    expect(recoveries(lines)).toEqual([{ level: "info", msg: "head source recovered" }])
-    expect(staleWarnings(lines)).toHaveLength(1)
+    expect(levels(staleWarnings(lines))).toEqual(["warn", "debug", "debug"])
+    expect(recoveries(lines)).toEqual([
+      { level: "info", msg: "head source recovered", fields: { durationMs: 3_000, ticks: 3 } },
+    ])
     expect(chain.transportHeadReads).toHaveLength(3)
   })
 
@@ -201,7 +211,7 @@ describe("stale head incidents", () => {
     await idx.tick()
     await stale(320n)
 
-    expect(staleWarnings(lines)).toHaveLength(2)
+    expect(levels(staleWarnings(lines))).toEqual(["warn", "warn"])
     expect(recoveries(lines)).toHaveLength(1)
   })
 })
@@ -217,5 +227,58 @@ describe("a head above the cursor", () => {
     expect(chain.transportHeadReads).toEqual([])
     expect(await cursorBlock()).toBe(S + 250n)
     expect(lines).toEqual([])
+  })
+})
+
+describe("a block the endpoint does not serve yet", () => {
+  afterEach(() => vi.useRealTimers())
+
+  /** Fails the next `n` ticks at their first getBlock; each tick has a log to ingest. */
+  async function lagging() {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    const run = await caughtUpTo(S + 200n)
+    launch(run.chain, { n: 1, block: S + 210n })
+    run.chain.head = S + 220n
+    return run
+  }
+  const failTicks = async (chain: FakeChain, idx: Indexer, n: number, every = 1_000) => {
+    for (let i = 0; i < n; i++) {
+      chain.nullOnce.add(S + 220n)
+      await idx.tick()
+      vi.advanceTimersByTime(every)
+    }
+  }
+
+  it("logs one warning for a long episode, then one line when the block is served", async () => {
+    const { chain, idx, lines } = await lagging()
+    await failTicks(chain, idx, 40)
+    await idx.tick()
+
+    expect(levels(notServed(lines))).toEqual(["warn", ...Array(39).fill("debug")])
+    expect(notServed(lines)[0]!.fields).toEqual({ block: S + 220n })
+    expect(served(lines)).toEqual([
+      {
+        level: "info",
+        msg: "block served after retrying",
+        fields: { block: S + 220n, retries: 40, durationMs: 40_000 },
+      },
+    ])
+    expect(await cursorBlock()).toBe(S + 220n)
+  })
+
+  it("logs a second warning for an episode that starts after the first ended", async () => {
+    const { chain, idx, lines } = await lagging()
+    await failTicks(chain, idx, 3)
+    await idx.tick()
+    chain.head = S + 230n
+    chain.nullOnce.delete(S + 230n)
+    for (let i = 0; i < 2; i++) {
+      chain.nullOnce.add(S + 230n)
+      await idx.tick()
+    }
+    await idx.tick()
+
+    expect(levels(notServed(lines))).toEqual(["warn", "debug", "debug", "warn", "debug"])
+    expect(served(lines)).toHaveLength(2)
   })
 })

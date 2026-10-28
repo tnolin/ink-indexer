@@ -7,6 +7,31 @@ import { readLogs } from "./log-plan"
 import type { BackfillSource, Source, SourceBatch } from "./sources/source"
 import type { Cursor, Store } from "./store"
 
+/**
+ * A run of consecutive occurrences of one condition. `hit` says whether it starts a new run, so the
+ * caller can log the first occurrence loudly and the rest quietly; `end` closes the run and returns
+ * how long it lasted and how many occurrences it had, or null when none was open.
+ */
+class Episode {
+  private since: number | null = null
+  private hits = 0
+
+  hit(): boolean {
+    this.hits++
+    if (this.since !== null) return false
+    this.since = Date.now()
+    return true
+  }
+
+  end(): { durationMs: number; hits: number } | null {
+    if (this.since === null) return null
+    const ended = { durationMs: Date.now() - this.since, hits: this.hits }
+    this.since = null
+    this.hits = 0
+    return ended
+  }
+}
+
 export class Indexer {
   private running: Promise<void> | null = null
   private again = false
@@ -21,8 +46,10 @@ export class Indexer {
   headFetches = 0
   /** How many ticks have completed without error, for the stall watchdog. */
   tickSuccesses = 0
-  /** True from the tick that found the fallback head stale until one finds it caught up. */
-  private headStale = false
+  /** From the tick that found the fallback head stale until one finds it caught up. */
+  private readonly staleHead = new Episode()
+  /** From the first tick that could not read a block until a tick that served it. */
+  private readonly notServed = new Episode()
   /** The stored cursor block, kept in memory so liveness checks never wait on the database. */
   cursorBlock: bigint | null | undefined
 
@@ -110,9 +137,20 @@ export class Indexer {
       while (from <= head) from = (await this.ingest(from, head, head, true, this.deps.only)) + 1n
       await store.confirm(head)
       this.tickSuccesses++
+      const ended = this.notServed.end()
+      if (ended)
+        this.deps.logger("info", "block served after retrying", {
+          block: head,
+          retries: ended.hits,
+          durationMs: ended.durationMs,
+        })
     } catch (err) {
       if (!(err instanceof BlockNotServedError)) throw err
-      this.deps.logger("warn", "block not yet served; retrying on next head", { block: err.block })
+      this.deps.logger(
+        this.notServed.hit() ? "warn" : "debug",
+        "block not yet served; retrying on next head",
+        { block: err.block },
+      )
     }
   }
 
@@ -133,22 +171,22 @@ export class Indexer {
       this.headRecovered()
       return head
     }
-    if (!this.headStale) {
-      this.headStale = true
-      const lowest = heads.reduce((a, h) => (h.head < a.head ? h : a))
-      this.deps.logger("warn", `stale head from ${lowest.name}`, {
-        host: lowest.name,
-        staleHead: head,
-        highestHead: highest,
-      })
-    }
+    const lowest = heads.reduce((a, h) => (h.head < a.head ? h : a))
+    this.deps.logger(this.staleHead.hit() ? "warn" : "debug", `stale head from ${lowest.name}`, {
+      host: lowest.name,
+      staleHead: head,
+      highestHead: highest,
+    })
     return highest
   }
 
   private headRecovered() {
-    if (!this.headStale) return
-    this.headStale = false
-    this.deps.logger("info", "head source recovered")
+    const ended = this.staleHead.end()
+    if (ended)
+      this.deps.logger("info", "head source recovered", {
+        durationMs: ended.durationMs,
+        ticks: ended.hits,
+      })
   }
 
   /**
