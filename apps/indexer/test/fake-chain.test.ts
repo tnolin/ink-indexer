@@ -49,3 +49,25 @@ describe("FakeChain log filters", () => {
     expect(chain.logsIn(0n, 10n, { topics: [T, ZERO, ZERO] })).toEqual([])
   })
 })
+
+describe("FakeChain block senders and balances", () => {
+  it("fake chain counts getBlockSenders and readBalances calls", async () => {
+    const chain = new FakeChain(10n)
+    const tx = pad("0x7") as Hex
+    chain.senders.set(5n, { hash: chain.hashOf(5n), senders: new Map([[tx, NFT_A]]) })
+    chain.balances.set(`${NFT_A}:${NFT_B}`, 42n)
+    expect((await chain.getBlockSenders(5n))?.senders.get(tx)).toBe(NFT_A)
+    expect(await chain.getBlockSenders(6n)).toBeNull()
+    expect(
+      await chain.readBalances(
+        [
+          { token: NFT_A, holder: NFT_B },
+          { token: NFT_B, holder: NFT_A },
+        ],
+        5n,
+      ),
+    ).toEqual([42n, 0n])
+    expect(chain.getBlockSendersCalls).toBe(2)
+    expect(chain.readBalancesCalls).toBe(1)
+  })
+})

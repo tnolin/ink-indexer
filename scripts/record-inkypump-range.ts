@@ -103,6 +103,20 @@ const recording: Chain = {
     calls.push({ method: "readErc20Meta", args: [token], result })
     return result
   },
+  async getBlockSenders(n) {
+    const result = await live.getBlockSenders(n)
+    calls.push({
+      method: "getBlockSenders",
+      args: [n],
+      result: result && { ...result, senders: [...result.senders] },
+    })
+    return result
+  },
+  async readBalances(pairs, block) {
+    const result = await live.readBalances(pairs, block)
+    calls.push({ method: "readBalances", args: [pairs, block], result })
+    return result
+  },
   // Only the NFT source, its verdict job and the stats job read mint stats, supplies, contract
   // code and token names, and the recording runs without them.
   readErc20Names: (tokens, block) => live.readErc20Names(tokens, block),
@@ -207,6 +221,14 @@ writeFileSync(
       token: (c.args as [Address])[0],
       result: c.result,
     })),
+    getBlockSenders: unique("getBlockSenders").map((c) => ({
+      block: (c.args as [bigint])[0],
+      result: c.result,
+    })),
+    readBalances: unique("readBalances").map((c) => {
+      const [pairs, block] = c.args as [unknown, bigint]
+      return { pairs, block, result: c.result }
+    }),
   }),
 )
 writeFileSync(

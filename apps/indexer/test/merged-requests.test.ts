@@ -116,6 +116,8 @@ class PoolChain implements Chain {
     this.replay.readTotalSupplies(...a)
   readErc20Meta = (...a: Parameters<Chain["readErc20Meta"]>) => this.replay.readErc20Meta(...a)
   readErc20Names = async (tokens: string[]) => tokens.map(() => ({ symbol: null, name: null }))
+  getBlockSenders = async () => null
+  readBalances = async () => []
   readMintStats = async () => null
   readMaxSupply = async () => null
   readTotalSupplyAt = async () => null

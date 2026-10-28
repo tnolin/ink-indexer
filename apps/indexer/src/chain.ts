@@ -5,6 +5,7 @@ import {
   type LaunchKey,
   type LaunchState,
   type NftReader,
+  readBalances,
   readErc20Meta,
   readErc20Names,
   readLaunchStates,
@@ -35,6 +36,15 @@ export type Chain = {
     to: bigint,
     filter: LogFilter,
   ): Promise<{ logs: ChainLog[]; toBlock: bigint }>
+  /**
+   * One block read with its transactions: the block's hash and timestamp, and each transaction's
+   * sender by transaction hash. null when the serving endpoint does not have the block yet.
+   */
+  getBlockSenders(
+    n: bigint,
+  ): Promise<{ hash: Hash; timestamp: number; senders: Map<Hash, Address> } | null>
+  /** `balanceOf(holder)` on each token at a block, in the order given. */
+  readBalances(pairs: { token: Address; holder: Address }[], block: bigint): Promise<bigint[]>
   readLaunchStates(keys: LaunchKey[], block: bigint): Promise<LaunchState[]>
   readTotalSupplies(tokens: Address[], block: bigint): Promise<bigint[]>
   readErc20Meta(token: Address): Promise<{ decimals: number; symbol: string }>
@@ -60,7 +70,11 @@ export type Chain = {
 /** The slice of a PublicClient that viemChain reads blocks with. Structural, so chain-specific block shapes (Ink's deposit transactions) still fit. */
 export type BlockReader = {
   getBlockNumber(args: { cacheTime: number }): Promise<bigint>
-  getBlock(args: { blockNumber: bigint }): Promise<{ hash: Hash | null; timestamp: bigint }>
+  getBlock(args: { blockNumber: bigint; includeTransactions?: boolean }): Promise<{
+    hash: Hash | null
+    timestamp: bigint
+    transactions?: ({ hash: Hash; from: Address } | Hash)[]
+  }>
 }
 
 const sleepMs = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -129,6 +143,23 @@ export function viemChain(
         throw err
       }
     },
+    async getBlockSenders(n) {
+      try {
+        const b = await retry("getBlockSenders", () =>
+          client.getBlock({ blockNumber: n, includeTransactions: true }),
+        )
+        if (!b.hash) return null
+        const senders = new Map<Hash, Address>()
+        for (const tx of b.transactions ?? [])
+          if (typeof tx !== "string")
+            senders.set(tx.hash.toLowerCase() as Hash, tx.from.toLowerCase() as Address)
+        return { hash: b.hash.toLowerCase() as Hash, timestamp: Number(b.timestamp), senders }
+      } catch (err) {
+        if (err instanceof BlockNotFoundError) return null
+        throw err
+      }
+    },
+    readBalances: (pairs, block) => retry("readBalances", () => readBalances(client, pairs, block)),
     getTransportHeads: (from) => router.heads(from),
     getLogs: (from, to, filter) => router.getLogs(from, to, filter),
     readLaunchStates: (keys, block) =>

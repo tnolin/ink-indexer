@@ -17,6 +17,15 @@ export type RecordedCalls = {
   readLaunchStates: { keys: LaunchKey[]; block: bigint; result: LaunchState[] }[]
   readTotalSupplies: { tokens: Address[]; block: bigint; result: bigint[] }[]
   readErc20Meta: { token: Address; result: { decimals: number; symbol: string } }[]
+  getBlockSenders?: {
+    block: bigint
+    result: { hash: Hash; timestamp: number; senders: [Hash, Address][] } | null
+  }[]
+  readBalances?: {
+    pairs: { token: Address; holder: Address }[]
+    block: bigint
+    result: bigint[]
+  }[]
 }
 
 export type GoldenEvent = {
@@ -62,6 +71,13 @@ export class ReplayChain implements Chain {
       this.answers.set(`readTotalSupplies:${stringify([c.tokens, c.block])}`, c.result)
     for (const c of calls.readErc20Meta)
       this.answers.set(`readErc20Meta:${stringify([c.token])}`, c.result)
+    for (const c of calls.getBlockSenders ?? [])
+      this.answers.set(
+        `getBlockSenders:${stringify([c.block])}`,
+        c.result && { ...c.result, senders: new Map(c.result.senders) },
+      )
+    for (const c of calls.readBalances ?? [])
+      this.answers.set(`readBalances:${stringify([c.pairs, c.block])}`, c.result)
   }
 
   private answer<T>(method: string, args: unknown[]): T {
@@ -113,6 +129,18 @@ export class ReplayChain implements Chain {
 
   async readErc20Meta(token: Address) {
     return this.answer<{ decimals: number; symbol: string }>("readErc20Meta", [token])
+  }
+
+  async getBlockSenders(n: bigint) {
+    return this.answer<{
+      hash: Hash
+      timestamp: number
+      senders: Map<Hash, Address>
+    } | null>("getBlockSenders", [n])
+  }
+
+  async readBalances(pairs: { token: Address; holder: Address }[], block: bigint) {
+    return this.answer<bigint[]>("readBalances", [pairs, block])
   }
 
   async readErc20Names(): Promise<never> {
