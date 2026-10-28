@@ -29,11 +29,36 @@ export type Fixture = {
 }
 
 /** Fixtures store bigints as "123n" strings. */
-export function loadFixture(name: FixtureName): Fixture {
+function readFixtureJson<T>(name: string): T {
   const raw = readFileSync(join(import.meta.dirname, "fixtures", `${name}.json`), "utf8")
   return JSON.parse(raw, (_k, v) =>
     typeof v === "string" && /^-?\d+n$/.test(v) ? BigInt(v.slice(0, -1)) : v,
   )
+}
+
+export function loadFixture(name: FixtureName): Fixture {
+  return readFixtureJson(name)
+}
+
+/** Transactions recorded with `capture-fixture.ts --topics v4`. */
+export const V4_FIXTURES = ["v4-inkypump-buy", "v4-inkypump-sell", "v4-inkypump-bond"] as const
+export type V4FixtureName = (typeof V4_FIXTURES)[number]
+
+export type V4Fixture = {
+  name: V4FixtureName
+  txHash: Hash
+  blockNumber: bigint
+  blockHash: Hash
+  timestamp: number
+  logs: ChainLog[]
+  /** Transaction hash to the transaction's sender. */
+  senders: Record<string, Address>
+  /** StateView reads at the block for each pool a LaunchFinalized log names. */
+  pools: { poolId: Hash; sqrtPriceX96: bigint; liquidity: bigint }[]
+}
+
+export function loadV4Fixture(name: V4FixtureName): V4Fixture {
+  return readFixtureJson(name)
 }
 
 export const NFT_FIXTURES = [
