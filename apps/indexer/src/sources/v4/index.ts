@@ -78,6 +78,7 @@ export function v4Source(deps: {
       asked = only === undefined || only.includes("v4-swaps") ? new Set(poolIds) : null
       // Topic filters keep each response to tracked swaps and burns. Their topics past position 0
       // differ from every other filter's, so each is its own request.
+      // shortcut: no request is made while the registry is empty, so on a fresh database the swaps of the first bonded pool that fall in its bond's span are missed; a seeded database is unaffected. Always emit the filters once a pool can appear in the span to close the gap.
       // shortcut: the poolId list grows with every bonded token and is sent on every request. Split it into several requests if an endpoint rejects the list's length.
       return [
         poolIds.length > 0 ? pick(only, "v4-swaps", swapFilter(poolIds)) : null,

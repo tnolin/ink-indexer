@@ -4,6 +4,13 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Added
+
+- Events: schema version 2 and the `launchpad.swap` event for a swap in a tracked Uniswap v4 pool, with the trader, side, amounts, price, `marketCap`, `athMarketCap`, `quoteLiquidity` and `supply`. `launchpad.trade` carries `athMarketCap`, `launchpad.bond` carries `poolManager`, and `launchpad.launch` carries `startsInPool`, `poolId`, `poolManager`, `customHook` and `hookModules`, with `targetRaise` null for a token that has no curve. Rows written earlier keep `v: 1`; `LaunchEventV1`, `TradeEventV1` and `BondEventV1` describe them. Readers that ignore unknown event types keep working. See ADR 0034.
+- Indexer: Uniswap v4 swaps for InkyPump's bonded tokens, from a pool registry that the InkyPump source fills at bond. Market cap uses the pool price and the supply outside the dead address, the all-time-high market cap is kept per token across curve and pool, and the trader is the transaction's sender. `backfill --sources v4-swaps` reads the swaps of registered pools. Each tick makes two more `eth_getLogs` requests once a pool is registered. See ADR 0033.
+- SDK: Uniswap v4 `Swap` decoding, pool price and market cap math, and a balance read.
+- DB: migration 0015 adds `indexer.pools`, seeds it from past bonds, and adds `ath_market_cap`, `ath_block`, `dead_balance` and `dead_balance_block` to `tokens` and `pool_id` to `trades`.
+
 ## [indexer-v0.3.8] - 2026-10-28
 
 ### Changed
