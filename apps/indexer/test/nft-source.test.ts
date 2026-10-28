@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { NftLaunchEvent } from "@ink-indexer/events"
+import { type NftLaunchEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import {
   CHIMERA_FACTORY,
   type ChainLog,
@@ -171,7 +171,7 @@ describe("NFT source", () => {
     const w = rows.find((r) => r.entity === WIRED)!
     expect(w.sub).toBe("")
     expect(w.payload).toEqual({
-      v: 1,
+      v: SCHEMA_VERSION,
       chainId: 57073,
       type: "nft.launch",
       source: "chain",
@@ -301,7 +301,7 @@ describe("NFT source", () => {
     }
     const expected = logs.flatMap(decodeOrderFulfilled)
     expect(rows[0]!.payload).toMatchObject({
-      v: 1,
+      v: SCHEMA_VERSION,
       chainId: 57073,
       type: "nft.sale",
       source: "chain",

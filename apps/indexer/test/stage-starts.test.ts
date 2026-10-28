@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { NftDropStage, NftMintEvent } from "@ink-indexer/events"
+import { type NftDropStage, type NftMintEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import { type ChainLog, decodeNftTransfers } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
@@ -98,7 +98,7 @@ describe("scheduled stage starts", () => {
       sub: "mint:stage_start:0",
     })
     expect(events[0]?.payload).toEqual({
-      v: 1,
+      v: SCHEMA_VERSION,
       chainId: 57073,
       type: "nft.mint",
       contract: HORNET,

@@ -297,6 +297,7 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
             totalSupply: launch.totalSupply,
             quoteAsset: launch.quoteAsset,
             progressBpsBefore: launch.progressBps,
+            athMarketCap: marketCap(d.price, launch.totalSupply),
           },
           meta,
         )

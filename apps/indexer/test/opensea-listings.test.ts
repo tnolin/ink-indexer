@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { NftListingEvent } from "@ink-indexer/events"
+import { type NftListingEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
 import type { NftBatch } from "../src/sources/nft/index"
@@ -735,7 +735,7 @@ describe("the event", () => {
     const orderHash = e.payload as { order_hash: string }
     expect(await listingEvents()).toEqual([
       {
-        v: 1,
+        v: SCHEMA_VERSION,
         chainId: 57073,
         contract: PRTSCN,
         source: "opensea",

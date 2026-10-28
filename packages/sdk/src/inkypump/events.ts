@@ -5,6 +5,7 @@ import {
   type TradeEvent,
 } from "@ink-indexer/events"
 import type { Address, Hash } from "viem"
+import { UNISWAP_V4_POOL_MANAGER } from "../v4/constants"
 import { type CurveParams, curveValue, marketCap, progressBps, soldBps } from "./curve"
 import type { LaunchCreated, LaunchFinalized, LaunchMetadata, Trade } from "./decode"
 
@@ -52,6 +53,11 @@ export function launchEvent(
     quoteAsset: ctx.quoteAsset,
     targetRaise: created.targetRaise.toString(),
     totalSupply: ctx.totalSupply.toString(),
+    startsInPool: false,
+    poolId: null,
+    poolManager: null,
+    customHook: null,
+    hookModules: null,
   }
 }
 
@@ -63,6 +69,7 @@ export function tradeEvent(
     totalSupply: bigint
     quoteAsset: Address
     progressBpsBefore: number
+    athMarketCap: bigint
   },
   m: LogMeta,
 ): TradeEvent {
@@ -81,6 +88,7 @@ export function tradeEvent(
     progressBpsAfter: progressBps(value, ctx.params.targetRaise),
     soldBps: soldBps(trade.sold, ctx.params.saleSupply),
     marketCap: marketCap(trade.price, ctx.totalSupply).toString(),
+    athMarketCap: ctx.athMarketCap.toString(),
     quoteAsset: ctx.quoteAsset,
   }
 }
@@ -94,6 +102,7 @@ export function bondEvent(
     type: "launchpad.bond",
     ...base(ctx.token, fin.launchId, m),
     poolId: fin.poolId,
+    poolManager: UNISWAP_V4_POOL_MANAGER,
     liquidityQuote: fin.liquidityQuote.toString(),
     liquidityTokens: fin.liquidityTokens.toString(),
     quoteAsset: ctx.quoteAsset,

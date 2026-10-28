@@ -55,6 +55,7 @@ export function entityOf(e: IndexerEvent): string {
     case "launchpad.launch":
     case "launchpad.trade":
     case "launchpad.bond":
+    case "launchpad.swap":
       return e.token
     case "nft.collection":
     case "nft.drop":
