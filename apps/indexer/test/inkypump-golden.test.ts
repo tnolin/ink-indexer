@@ -4,6 +4,7 @@ import { LOG_TOPICS } from "@ink-indexer/sdk"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import { Indexer } from "../src/loop"
 import { inkypumpSource } from "../src/sources/inkypump/index"
+import { PoolRegistry } from "../src/sources/pools"
 import { createStore } from "../src/store"
 import { goldenEvents, loadCalls, ReplayChain } from "./replay-chain"
 
@@ -17,7 +18,7 @@ afterEach(() => sql.end())
 
 async function run(chain: ReplayChain, from: bigint, to: bigint) {
   const logger = () => {}
-  const sources = [inkypumpSource({ sql, chain, logger })]
+  const sources = [inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger })]
   const idx = new Indexer({ chain, store: createStore(sql), logger, sources })
   await idx.init()
   await idx.backfill(from, to)

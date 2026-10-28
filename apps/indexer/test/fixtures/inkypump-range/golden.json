@@ -514,7 +514,7 @@
       "blockNumber": "55908506",
       "quoteAmount": "98000000000000001",
       "tokenAmount": "142691867682226119120606169",
-      "athMarketCap": "450898083000000000",
+      "athMarketCap": "954424351000000000",
       "blockTimestamp": 1789406917,
       "progressBpsAfter": 2,
       "progressBpsBefore": 1004
@@ -866,7 +866,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "45086994617837629",
       "tokenAmount": "16633548235941860097251808",
-      "athMarketCap": "2678789820000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 844,
       "progressBpsBefore": 996
@@ -900,7 +900,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "44386732898622607",
       "tokenAmount": "17513952357266110472530882",
-      "athMarketCap": "2494343237000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 693,
       "progressBpsBefore": 844
@@ -934,7 +934,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "65736441433961445",
       "tokenAmount": "28631654937038524393573431",
-      "athMarketCap": "2192859762000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 471,
       "progressBpsBefore": 693
@@ -968,7 +968,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "54473284511627978",
       "tokenAmount": "27124045014250352689934065",
-      "athMarketCap": "1907259814000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 286,
       "progressBpsBefore": 471
@@ -1002,7 +1002,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "33475481088660577",
       "tokenAmount": "18901294180745332528245675",
-      "athMarketCap": "1708223874000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 173,
       "progressBpsBefore": 286
@@ -1036,7 +1036,7 @@
       "blockNumber": "55910226",
       "quoteAmount": "66999999999999999",
       "tokenAmount": "35349927317639747916405421",
-      "athMarketCap": "2084151015000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408637,
       "progressBpsAfter": 398,
       "progressBpsBefore": 173
@@ -1070,7 +1070,7 @@
       "blockNumber": "55910226",
       "quoteAmount": "66999999999999999",
       "tokenAmount": "29879903574304141879850703",
-      "athMarketCap": "2401945482000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408637,
       "progressBpsAfter": 622,
       "progressBpsBefore": 398
@@ -1104,7 +1104,7 @@
       "blockNumber": "55910226",
       "quoteAmount": "66999999999999999",
       "tokenAmount": "26362527038116114838999312",
-      "athMarketCap": "2682349483000000000",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408637,
       "progressBpsAfter": 847,
       "progressBpsBefore": 622
@@ -1240,7 +1240,7 @@
       "blockNumber": "55910260",
       "quoteAmount": "40188708756893840",
       "tokenAmount": "13100558637003713517776780",
-      "athMarketCap": "3061681721000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789408671,
       "progressBpsAfter": 1190,
       "progressBpsBefore": 1326
@@ -1274,7 +1274,7 @@
       "blockNumber": "55910263",
       "quoteAmount": "34322800537470342",
       "tokenAmount": "11674869897937914738856092",
-      "athMarketCap": "2938718976000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789408674,
       "progressBpsAfter": 1073,
       "progressBpsBefore": 1190
@@ -1308,7 +1308,7 @@
       "blockNumber": "55910376",
       "quoteAmount": "44399999999999999",
       "tokenAmount": "14718431356135796698829852",
-      "athMarketCap": "3095292027000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789408787,
       "progressBpsAfter": 1222,
       "progressBpsBefore": 1073
@@ -1342,7 +1342,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "86006033193784167",
       "tokenAmount": "29879903574304141879850703",
-      "athMarketCap": "2780645585000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 931,
       "progressBpsBefore": 1222
@@ -1376,7 +1376,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "62054134062435151",
       "tokenAmount": "23855146047574918595597264",
-      "athMarketCap": "2529433326000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 721,
       "progressBpsBefore": 931
@@ -1410,7 +1410,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "81144856184360221",
       "tokenAmount": "35349927317639747916405421",
-      "athMarketCap": "2157241103000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 446,
       "progressBpsBefore": 721
@@ -1444,7 +1444,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "52127845787517641",
       "tokenAmount": "26362527038116114838999312",
-      "athMarketCap": "1879658041000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 270,
       "progressBpsBefore": 446
@@ -1478,7 +1478,7 @@
       "blockNumber": "55911019",
       "quoteAmount": "999999999999999",
       "tokenAmount": "531217008296003855716514",
-      "athMarketCap": "1885309738000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409430,
       "progressBpsAfter": 273,
       "progressBpsBefore": 270
@@ -1512,7 +1512,7 @@
       "blockNumber": "55911038",
       "quoteAmount": "59999999999999999",
       "tokenAmount": "29398501244239550957019040",
-      "athMarketCap": "2197976400000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409449,
       "progressBpsAfter": 474,
       "progressBpsBefore": 273
@@ -1546,7 +1546,7 @@
       "blockNumber": "55911137",
       "quoteAmount": "58841642462082105",
       "tokenAmount": "29398501244239550957019040",
-      "athMarketCap": "1888438823000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409548,
       "progressBpsAfter": 275,
       "progressBpsBefore": 474
@@ -1688,7 +1688,7 @@
       "blockNumber": "55912260",
       "quoteAmount": "7440030237002776",
       "tokenAmount": "5413791096099227091386298",
-      "athMarketCap": "1373664015000000000",
+      "athMarketCap": "1430976016000000000",
       "blockTimestamp": 1789410671,
       "progressBpsAfter": 11,
       "progressBpsBefore": 36
@@ -1722,7 +1722,7 @@
       "blockNumber": "55912272",
       "quoteAmount": "2412439034613528",
       "tokenAmount": "1804597032033075697128766",
-      "athMarketCap": "1354560014000000000",
+      "athMarketCap": "1430976016000000000",
       "blockTimestamp": 1789410683,
       "progressBpsAfter": 3,
       "progressBpsBefore": 11
@@ -1756,7 +1756,7 @@
       "blockNumber": "55912460",
       "quoteAmount": "726459926922142",
       "tokenAmount": "700639546792177063374523",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1430976016000000000",
       "blockTimestamp": 1789410871,
       "progressBpsAfter": 0,
       "progressBpsBefore": 3
@@ -1932,7 +1932,7 @@
       "blockNumber": "55912535",
       "quoteAmount": "12992236545488359",
       "tokenAmount": "7218388128132302788515064",
-      "athMarketCap": "1798404831000000000",
+      "athMarketCap": "1874820833000000000",
       "blockTimestamp": 1789410946,
       "progressBpsAfter": 223,
       "progressBpsBefore": 267
@@ -1966,7 +1966,7 @@
       "blockNumber": "55912543",
       "quoteAmount": "64995045656316380",
       "tokenAmount": "42092801001438185123657520",
-      "athMarketCap": "1352797929000000000",
+      "athMarketCap": "1874820833000000000",
       "blockTimestamp": 1789410954,
       "progressBpsAfter": 2,
       "progressBpsBefore": 223
@@ -2136,7 +2136,7 @@
       "blockNumber": "55912563",
       "quoteAmount": "34300000000000001",
       "tokenAmount": "11970905395550754289366274",
-      "athMarketCap": "2860391683000000000",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789410974,
       "progressBpsAfter": 1002,
       "progressBpsBefore": 1119
@@ -2170,7 +2170,7 @@
       "blockNumber": "55912593",
       "quoteAmount": "1495952403097277",
       "tokenAmount": "534189951289014800802680",
-      "athMarketCap": "2854736589000000000",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789411004,
       "progressBpsAfter": 997,
       "progressBpsBefore": 1002
@@ -2204,7 +2204,7 @@
       "blockNumber": "55912667",
       "quoteAmount": "981643595209019",
       "tokenAmount": "531217008296003855716514",
-      "athMarketCap": "1882843362000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789411078,
       "progressBpsAfter": 272,
       "progressBpsBefore": 275
@@ -2380,7 +2380,7 @@
       "blockNumber": "55912782",
       "quoteAmount": "22553110893500362",
       "tokenAmount": "10686002679708902731145160",
-      "athMarketCap": "2097037694000000000",
+      "athMarketCap": "2210162894000000000",
       "blockTimestamp": 1789411193,
       "progressBpsAfter": 406,
       "progressBpsBefore": 483
@@ -2414,7 +2414,7 @@
       "blockNumber": "55912782",
       "quoteAmount": "2499999999999999",
       "tokenAmount": "1188591942310382951354710",
-      "athMarketCap": "2109620482000000000",
+      "athMarketCap": "2210162894000000000",
       "blockTimestamp": 1789411193,
       "progressBpsAfter": 414,
       "progressBpsBefore": 406
@@ -2516,7 +2516,7 @@
       "blockNumber": "55912789",
       "quoteAmount": "41967508586812773",
       "tokenAmount": "18135534990398253798388876",
-      "athMarketCap": "2265336227000000000",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411200,
       "progressBpsAfter": 522,
       "progressBpsBefore": 664
@@ -2550,7 +2550,7 @@
       "blockNumber": "55912806",
       "quoteAmount": "31532491413187228",
       "tokenAmount": "14709179477302853444439121",
-      "athMarketCap": "2109620482000000000",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411217,
       "progressBpsAfter": 414,
       "progressBpsBefore": 522
@@ -2584,7 +2584,7 @@
       "blockNumber": "55912811",
       "quoteAmount": "46634993399603130",
       "tokenAmount": "24002527633044109019210298",
-      "athMarketCap": "1855522590000000000",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411222,
       "progressBpsAfter": 256,
       "progressBpsBefore": 414
@@ -2618,7 +2618,7 @@
       "blockNumber": "55912828",
       "quoteAmount": "2154021667961202",
       "tokenAmount": "1188591942310382951354710",
-      "athMarketCap": "1842939803000000000",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411239,
       "progressBpsAfter": 249,
       "progressBpsBefore": 256
@@ -2760,7 +2760,7 @@
       "blockNumber": "55913036",
       "quoteAmount": "24751654711677641",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "1720798082000000000",
+      "athMarketCap": "1869732019000000000",
       "blockTimestamp": 1789411447,
       "progressBpsAfter": 180,
       "progressBpsBefore": 264
@@ -2794,7 +2794,7 @@
       "blockNumber": "55913047",
       "quoteAmount": "52555209477879961",
       "tokenAmount": "35296122772923379592242753",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1869732019000000000",
       "blockTimestamp": 1789411458,
       "progressBpsAfter": 0,
       "progressBpsBefore": 180
@@ -2828,7 +2828,7 @@
       "blockNumber": "55913067",
       "quoteAmount": "26034517484739430",
       "tokenAmount": "14718431356135796698829852",
-      "athMarketCap": "1727843694000000000",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789411478,
       "progressBpsAfter": 184,
       "progressBpsBefore": 272
@@ -2862,7 +2862,7 @@
       "blockNumber": "55913096",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "26858130950712264528494106",
-      "athMarketCap": "1631470993000000000",
+      "athMarketCap": "1869732019000000000",
       "blockTimestamp": 1789411507,
       "progressBpsAfter": 133,
       "progressBpsBefore": 0
@@ -3032,7 +3032,7 @@
       "blockNumber": "55913109",
       "quoteAmount": "68469292340626355",
       "tokenAmount": "28087631256524378575399739",
-      "athMarketCap": "2338779653000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411520,
       "progressBpsAfter": 575,
       "progressBpsBefore": 808
@@ -3066,7 +3066,7 @@
       "blockNumber": "55913111",
       "quoteAmount": "52636618620615158",
       "tokenAmount": "24301941461415773494876001",
-      "athMarketCap": "2081512078000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411522,
       "progressBpsAfter": 396,
       "progressBpsBefore": 575
@@ -3100,7 +3100,7 @@
       "blockNumber": "55913114",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "9384448869149972684631491",
-      "athMarketCap": "2180858643000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411525,
       "progressBpsAfter": 463,
       "progressBpsBefore": 396
@@ -3134,7 +3134,7 @@
       "blockNumber": "55913118",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "8975187750292908934771747",
-      "athMarketCap": "2275872648000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411529,
       "progressBpsAfter": 529,
       "progressBpsBefore": 463
@@ -3168,7 +3168,7 @@
       "blockNumber": "55913154",
       "quoteAmount": "83736582433490324",
       "tokenAmount": "41561486658758792010804429",
-      "athMarketCap": "1835890398000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411565,
       "progressBpsAfter": 244,
       "progressBpsBefore": 529
@@ -3202,7 +3202,7 @@
       "blockNumber": "55913202",
       "quoteAmount": "1704845579447826",
       "tokenAmount": "950175010485957562301261",
-      "athMarketCap": "1825831563000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411613,
       "progressBpsAfter": 239,
       "progressBpsBefore": 244
@@ -3344,7 +3344,7 @@
       "blockNumber": "55913245",
       "quoteAmount": "16334901187712807",
       "tokenAmount": "9384448869149972684631491",
-      "athMarketCap": "1726484998000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411656,
       "progressBpsAfter": 183,
       "progressBpsBefore": 239
@@ -3378,7 +3378,7 @@
       "blockNumber": "55913248",
       "quoteAmount": "30744315719195700",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1713925155000000000",
+      "athMarketCap": "1897830549000000000",
       "blockTimestamp": 1789411659,
       "progressBpsAfter": 176,
       "progressBpsBefore": 281
@@ -3412,7 +3412,7 @@
       "blockNumber": "55913253",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "5692758596180106996910739",
-      "athMarketCap": "1786750232000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411664,
       "progressBpsAfter": 216,
       "progressBpsBefore": 183
@@ -3446,7 +3446,7 @@
       "blockNumber": "55913269",
       "quoteAmount": "29999999999999999",
       "tokenAmount": "16029111462883967260349272",
-      "athMarketCap": "1956439170000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411680,
       "progressBpsAfter": 316,
       "progressBpsBefore": 216
@@ -3480,7 +3480,7 @@
       "blockNumber": "55913296",
       "quoteAmount": "51340249266126840",
       "tokenAmount": "34646894210480549783373649",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1897830549000000000",
       "blockTimestamp": 1789411707,
       "progressBpsAfter": 0,
       "progressBpsBefore": 176
@@ -3514,7 +3514,7 @@
       "blockNumber": "55913310",
       "quoteAmount": "47753477106914186",
       "tokenAmount": "26858130950712264528494106",
-      "athMarketCap": "1672111013000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411721,
       "progressBpsAfter": 154,
       "progressBpsBefore": 316
@@ -3548,7 +3548,7 @@
       "blockNumber": "55913318",
       "quoteAmount": "70251912284627873",
       "tokenAmount": "46833841610906554963479394",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411729,
       "progressBpsAfter": 0,
       "progressBpsBefore": 249
@@ -3582,7 +3582,7 @@
       "blockNumber": "55913320",
       "quoteAmount": "9160438869759310",
       "tokenAmount": "5692758596180106996910739",
-      "athMarketCap": "1611845779000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411731,
       "progressBpsAfter": 123,
       "progressBpsBefore": 154
@@ -3690,7 +3690,7 @@
       "blockNumber": "55913361",
       "quoteAmount": "30543718225953111",
       "tokenAmount": "25004299213176876195121019",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411772,
       "progressBpsAfter": 0,
       "progressBpsBefore": 123
@@ -3724,7 +3724,7 @@
       "blockNumber": "55913376",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789411787,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -3798,7 +3798,7 @@
       "blockNumber": "55913662",
       "quoteAmount": "115272239624036966",
       "tokenAmount": "44949640519030642043713727",
-      "athMarketCap": "2378886335000000000",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789412073,
       "progressBpsAfter": 605,
       "progressBpsBefore": 997
@@ -3832,7 +3832,7 @@
       "blockNumber": "55913662",
       "quoteAmount": "121012296730772239",
       "tokenAmount": "59887686141521445594546989",
-      "athMarketCap": "1744897490000000000",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789412073,
       "progressBpsAfter": 193,
       "progressBpsBefore": 605
@@ -3866,7 +3866,7 @@
       "blockNumber": "55913662",
       "quoteAmount": "50666848206217881",
       "tokenAmount": "37572594706124678990842293",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789412073,
       "progressBpsAfter": 0,
       "progressBpsBefore": 193
@@ -3974,7 +3974,7 @@
       "blockNumber": "55913779",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789412190,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -4156,7 +4156,7 @@
       "blockNumber": "55914072",
       "quoteAmount": "34393782571430427",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1928289703000000000",
+      "athMarketCap": "2112195098000000000",
       "blockTimestamp": 1789412483,
       "progressBpsAfter": 299,
       "progressBpsBefore": 416
@@ -4190,7 +4190,7 @@
       "blockNumber": "55914127",
       "quoteAmount": "87404303498540383",
       "tokenAmount": "54896141308178321721947582",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "2112195098000000000",
       "blockTimestamp": 1789412538,
       "progressBpsAfter": 0,
       "progressBpsBefore": 299
@@ -4298,7 +4298,7 @@
       "blockNumber": "55914294",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789412705,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -4406,7 +4406,7 @@
       "blockNumber": "55914402",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412813,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4514,7 +4514,7 @@
       "blockNumber": "55914531",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412942,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4622,7 +4622,7 @@
       "blockNumber": "55914624",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789413035,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4764,7 +4764,7 @@
       "blockNumber": "55914701",
       "quoteAmount": "23966894579234688",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "1663878557000000000",
+      "athMarketCap": "1812812494000000000",
       "blockTimestamp": 1789413112,
       "progressBpsAfter": 150,
       "progressBpsBefore": 231
@@ -4798,7 +4798,7 @@
       "blockNumber": "55914701",
       "quoteAmount": "43653985123229914",
       "tokenAmount": "29919405672840032731081862",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1812812494000000000",
       "blockTimestamp": 1789413112,
       "progressBpsAfter": 0,
       "progressBpsBefore": 150
@@ -4906,7 +4906,7 @@
       "blockNumber": "55914900",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789413311,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -5156,7 +5156,7 @@
       "blockNumber": "55915255",
       "quoteAmount": "29790071792744129",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1657874210000000000",
+      "athMarketCap": "1841779604000000000",
       "blockTimestamp": 1789413666,
       "progressBpsAfter": 147,
       "progressBpsBefore": 248
@@ -5190,7 +5190,7 @@
       "blockNumber": "55915256",
       "quoteAmount": "4999999999999999",
       "tokenAmount": "2987416326892230824845664",
-      "athMarketCap": "1689499887000000000",
+      "athMarketCap": "1841779604000000000",
       "blockTimestamp": 1789413667,
       "progressBpsAfter": 163,
       "progressBpsBefore": 147
@@ -5224,7 +5224,7 @@
       "blockNumber": "55915259",
       "quoteAmount": "989999999999999",
       "tokenAmount": "584900407160277113143672",
-      "athMarketCap": "1695691816000000000",
+      "athMarketCap": "1841779604000000000",
       "blockTimestamp": 1789413670,
       "progressBpsAfter": 166,
       "progressBpsBefore": 163
@@ -5326,7 +5326,7 @@
       "blockNumber": "55915272",
       "quoteAmount": "5600506142531409",
       "tokenAmount": "2987416326892230824845664",
-      "athMarketCap": "1897145241000000000",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413683,
       "progressBpsAfter": 280,
       "progressBpsBefore": 299
@@ -5360,7 +5360,7 @@
       "blockNumber": "55915283",
       "quoteAmount": "58933494180795753",
       "tokenAmount": "35144339713103650170799940",
-      "athMarketCap": "1525096816000000000",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413694,
       "progressBpsAfter": 80,
       "progressBpsBefore": 280
@@ -5394,7 +5394,7 @@
       "blockNumber": "55915308",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "6414170820635534837078235",
-      "athMarketCap": "1592999135000000000",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413719,
       "progressBpsAfter": 113,
       "progressBpsBefore": 80
@@ -5428,7 +5428,7 @@
       "blockNumber": "55915352",
       "quoteAmount": "31533146820335426",
       "tokenAmount": "23224012496531227710087934",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413763,
       "progressBpsAfter": 0,
       "progressBpsBefore": 113
@@ -5536,7 +5536,7 @@
       "blockNumber": "55915755",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1348006893000000000",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414166,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -5644,7 +5644,7 @@
       "blockNumber": "55916095",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1348006893000000000",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414506,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -5888,7 +5888,7 @@
       "blockNumber": "55916184",
       "quoteAmount": "37407919216856421",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "2106295319000000000",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789414595,
       "progressBpsAfter": 412,
       "progressBpsBefore": 539
@@ -5922,7 +5922,7 @@
       "blockNumber": "55916209",
       "quoteAmount": "29999999999999999",
       "tokenAmount": "13766742645766567173614153",
-      "athMarketCap": "2252739153000000000",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789414620,
       "progressBpsAfter": 513,
       "progressBpsBefore": 412
@@ -6030,7 +6030,7 @@
       "blockNumber": "55916520",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1348006893000000000",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414931,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6138,7 +6138,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6172,7 +6172,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "43500668994452880",
       "tokenAmount": "20712194814693541545000059",
-      "athMarketCap": "2034628810000000000",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 366,
       "progressBpsBefore": 513
@@ -6206,7 +6206,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "26466895925053796",
       "tokenAmount": "13766742645766567173614153",
-      "athMarketCap": "1889646634000000000",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 276,
       "progressBpsBefore": 366
@@ -6240,7 +6240,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "29476540124227106",
       "tokenAmount": "16698370954308794510823289",
-      "athMarketCap": "1713801943000000000",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 176,
       "progressBpsBefore": 276
@@ -6274,7 +6274,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "29122123875436216",
       "tokenAmount": "18383243831358665719954579",
-      "athMarketCap": "1520226485000000000",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 78,
       "progressBpsBefore": 176
@@ -6308,7 +6308,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "17818624350993461",
       "tokenAmount": "15406171437134245729899496",
-      "athMarketCap": "1357132175000000000",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 4,
       "progressBpsBefore": 78
@@ -6416,7 +6416,7 @@
       "blockNumber": "55916975",
       "quoteAmount": "9702000000000001",
       "tokenAmount": "7148123288545413654287032",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1422814994000000000",
       "blockTimestamp": 1789415386,
       "progressBpsAfter": 0,
       "progressBpsBefore": 32
@@ -6524,7 +6524,7 @@
       "blockNumber": "55917157",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415568,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6632,7 +6632,7 @@
       "blockNumber": "55917414",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415825,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6888,7 +6888,7 @@
       "blockNumber": "55917872",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789416283,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6996,7 +6996,7 @@
       "blockNumber": "55918024",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416435,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -7104,7 +7104,7 @@
       "blockNumber": "55918121",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416532,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -7212,7 +7212,7 @@
       "blockNumber": "55918455",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "1347142836000000000",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416866,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -7524,7 +7524,7 @@
       "blockNumber": "55919561",
       "quoteAmount": "42958474055297718",
       "tokenAmount": "14068558057524534306561674",
-      "athMarketCap": "3041358939000000000",
+      "athMarketCap": "3190292876000000000",
       "blockTimestamp": 1789417972,
       "progressBpsAfter": 1170,
       "progressBpsBefore": 1316
@@ -7558,7 +7558,7 @@
       "blockNumber": "55919562",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "12864011086781825435359508",
-      "athMarketCap": "3177541184000000000",
+      "athMarketCap": "3190292876000000000",
       "blockTimestamp": 1789417973,
       "progressBpsAfter": 1303,
       "progressBpsBefore": 1170
@@ -7762,7 +7762,7 @@
       "blockNumber": "55919574",
       "quoteAmount": "172635810558793206",
       "tokenAmount": "43451286233090923388062879",
-      "athMarketCap": "3824177944000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417985,
       "progressBpsAfter": 2016,
       "progressBpsBefore": 2603
@@ -7796,7 +7796,7 @@
       "blockNumber": "55919574",
       "quoteAmount": "124892872023335650",
       "tokenAmount": "35023044592009160760451050",
-      "athMarketCap": "3453413585000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417985,
       "progressBpsAfter": 1591,
       "progressBpsBefore": 2016
@@ -7830,7 +7830,7 @@
       "blockNumber": "55919574",
       "quoteAmount": "97362702540528506",
       "tokenAmount": "30163039574749705118794626",
-      "athMarketCap": "3134098683000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417985,
       "progressBpsAfter": 1260,
       "progressBpsBefore": 1591
@@ -7864,7 +7864,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "35715512321584922",
       "tokenAmount": "11866156587183716769894502",
-      "athMarketCap": "3008480023000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 1139,
       "progressBpsBefore": 1260
@@ -7898,7 +7898,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "37068691444139185",
       "tokenAmount": "12864011086781825435359508",
-      "athMarketCap": "2872297778000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 1013,
       "progressBpsBefore": 1139
@@ -7932,7 +7932,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "33931668211553951",
       "tokenAmount": "12334898801263917128716037",
-      "athMarketCap": "2741716873000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 897,
       "progressBpsBefore": 1013
@@ -7966,7 +7966,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "30077315037478839",
       "tokenAmount": "11447109223504555070933711",
-      "athMarketCap": "2620534373000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 795,
       "progressBpsBefore": 897
@@ -8000,7 +8000,7 @@
       "blockNumber": "55919577",
       "quoteAmount": "45094415786188566",
       "tokenAmount": "18230599735495181236228351",
-      "athMarketCap": "2427539826000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417988,
       "progressBpsAfter": 642,
       "progressBpsBefore": 795
@@ -8034,7 +8034,7 @@
       "blockNumber": "55919577",
       "quoteAmount": "36963222480457611",
       "tokenAmount": "16102755718646661664504875",
-      "athMarketCap": "2257071268000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417988,
       "progressBpsAfter": 516,
       "progressBpsBefore": 642
@@ -8068,7 +8068,7 @@
       "blockNumber": "55919577",
       "quoteAmount": "36241804156595303",
       "tokenAmount": "17067866440453200841556567",
-      "athMarketCap": "2076385761000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417988,
       "progressBpsAfter": 393,
       "progressBpsBefore": 516
@@ -8102,7 +8102,7 @@
       "blockNumber": "55919580",
       "quoteAmount": "101415827942904660",
       "tokenAmount": "63305906353995070654475957",
-      "athMarketCap": "1406210621000000000",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417991,
       "progressBpsAfter": 25,
       "progressBpsBefore": 393
@@ -8352,7 +8352,7 @@
       "blockNumber": "55920107",
       "quoteAmount": "9800000000000001",
       "tokenAmount": "3697095399173279863223603",
-      "athMarketCap": "2672210614000000000",
+      "athMarketCap": "2737441532000000000",
       "blockTimestamp": 1789418518,
       "progressBpsAfter": 118,
       "progressBpsBefore": 138
@@ -8488,7 +8488,7 @@
       "blockNumber": "55920412",
       "quoteAmount": "98000000000000001",
       "tokenAmount": "30730821267117365874292506",
-      "athMarketCap": "2982957410000000000",
+      "athMarketCap": "3525166756000000000",
       "blockTimestamp": 1789418823,
       "progressBpsAfter": 218,
       "progressBpsBefore": 418
@@ -8522,7 +8522,7 @@
       "blockNumber": "55920439",
       "quoteAmount": "29400000000000001",
       "tokenAmount": "10375504779970390765203247",
-      "athMarketCap": "2799893781000000000",
+      "athMarketCap": "3525166756000000000",
       "blockTimestamp": 1789418850,
       "progressBpsAfter": 158,
       "progressBpsBefore": 218
@@ -8556,7 +8556,7 @@
       "blockNumber": "55920556",
       "quoteAmount": "14849999999999999",
       "tokenAmount": "5217984581257427715706460",
-      "athMarketCap": "2891959007000000000",
+      "athMarketCap": "3525166756000000000",
       "blockTimestamp": 1789418967,
       "progressBpsAfter": 188,
       "progressBpsBefore": 158
@@ -8852,7 +8852,7 @@
       "blockNumber": "55926751",
       "quoteAmount": "98202329771086011",
       "tokenAmount": "40407206700494136608741990",
-      "athMarketCap": "2201175549000000000",
+      "athMarketCap": "2765090658000000000",
       "blockTimestamp": 1789425162,
       "progressBpsAfter": 143,
       "progressBpsBefore": 391
@@ -8886,7 +8886,7 @@
       "blockNumber": "55926760",
       "quoteAmount": "4926758494924889",
       "tokenAmount": "2300892320972330586173099",
-      "athMarketCap": "2169025489000000000",
+      "athMarketCap": "2765090658000000000",
       "blockTimestamp": 1789425171,
       "progressBpsAfter": 130,
       "progressBpsBefore": 143
@@ -8920,7 +8920,7 @@
       "blockNumber": "55926797",
       "quoteAmount": "69299999999999999",
       "tokenAmount": "29179435535404393168664266",
-      "athMarketCap": "2584682336000000000",
+      "athMarketCap": "2765090658000000000",
       "blockTimestamp": 1789425208,
       "progressBpsAfter": 305,
       "progressBpsBefore": 130
@@ -8988,7 +8988,7 @@
       "blockNumber": "55926865",
       "quoteAmount": "15259054134220831",
       "tokenAmount": "5128130903152264153308178",
-      "athMarketCap": "3000824853000000000",
+      "athMarketCap": "3072476262000000000",
       "blockTimestamp": 1789425276,
       "progressBpsAfter": 511,
       "progressBpsBefore": 550
@@ -9396,7 +9396,7 @@
       "blockNumber": "55927080",
       "quoteAmount": "68496581703722477",
       "tokenAmount": "15000168942548398291441573",
-      "athMarketCap": "4555880761000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789425491,
       "progressBpsAfter": 1552,
       "progressBpsBefore": 1725
@@ -9430,7 +9430,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "24316390843348939",
       "tokenAmount": "5493030809738397958837707",
-      "athMarketCap": "4479128274000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1490,
       "progressBpsBefore": 1552
@@ -9464,7 +9464,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "22159733837109076",
       "tokenAmount": "5089105494269211236276388",
-      "athMarketCap": "4408019354000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1435,
       "progressBpsBefore": 1490
@@ -9498,7 +9498,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "19122679423423902",
       "tokenAmount": "4458517285074545879147305",
-      "athMarketCap": "4345720936000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1386,
       "progressBpsBefore": 1435
@@ -9532,7 +9532,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "26349815610926442",
       "tokenAmount": "6250586251853895206264732",
-      "athMarketCap": "4258384840000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1320,
       "progressBpsBefore": 1386
@@ -9566,7 +9566,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "22204401429986610",
       "tokenAmount": "5368456283405380094509307",
-      "athMarketCap": "4183373297000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1264,
       "progressBpsBefore": 1320
@@ -9600,7 +9600,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "24795187571817350",
       "tokenAmount": "6111043043109745715643549",
-      "athMarketCap": "4097987104000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1201,
       "progressBpsBefore": 1264
@@ -9634,7 +9634,7 @@
       "blockNumber": "55927762",
       "quoteAmount": "34649999999999999",
       "tokenAmount": "8335705734864223055763844",
-      "athMarketCap": "4216806127000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426173,
       "progressBpsAfter": 1288,
       "progressBpsBefore": 1201
@@ -9668,7 +9668,7 @@
       "blockNumber": "55928481",
       "quoteAmount": "100979193061927329",
       "tokenAmount": "25526083701494408070509898",
-      "athMarketCap": "3860273339000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426892,
       "progressBpsAfter": 1033,
       "progressBpsBefore": 1288
@@ -9702,7 +9702,7 @@
       "blockNumber": "55928490",
       "quoteAmount": "112686189367488194",
       "tokenAmount": "31614246305051287316414410",
-      "athMarketCap": "3418786959000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426901,
       "progressBpsAfter": 749,
       "progressBpsBefore": 1033
@@ -9736,7 +9736,7 @@
       "blockNumber": "55928490",
       "quoteAmount": "86152235719929443",
       "tokenAmount": "27246426833396827100956144",
-      "athMarketCap": "3038288758000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426901,
       "progressBpsAfter": 531,
       "progressBpsBefore": 749
@@ -9770,7 +9770,7 @@
       "blockNumber": "55928490",
       "quoteAmount": "80993560175523153",
       "tokenAmount": "29179435535404393168664266",
-      "athMarketCap": "2630857077000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426901,
       "progressBpsAfter": 327,
       "progressBpsBefore": 531
@@ -9804,7 +9804,7 @@
       "blockNumber": "55928577",
       "quoteAmount": "69299999999999999",
       "tokenAmount": "24704061374583159615766646",
-      "athMarketCap": "2982837603000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426988,
       "progressBpsAfter": 502,
       "progressBpsBefore": 327
@@ -9838,7 +9838,7 @@
       "blockNumber": "55928586",
       "quoteAmount": "24749999999999999",
       "tokenAmount": "8140669117443622432755406",
-      "athMarketCap": "3098871204000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426997,
       "progressBpsAfter": 564,
       "progressBpsBefore": 502
@@ -9872,7 +9872,7 @@
       "blockNumber": "55928602",
       "quoteAmount": "98999999999999999",
       "tokenAmount": "29909726688344796004723936",
-      "athMarketCap": "3525015324000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427013,
       "progressBpsAfter": 814,
       "progressBpsBefore": 564
@@ -9906,7 +9906,7 @@
       "blockNumber": "55928686",
       "quoteAmount": "7905822999630785",
       "tokenAmount": "2299131134441874743396543",
-      "athMarketCap": "3492888960000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427097,
       "progressBpsAfter": 794,
       "progressBpsBefore": 814
@@ -9940,7 +9940,7 @@
       "blockNumber": "55929259",
       "quoteAmount": "98105322832674961",
       "tokenAmount": "30545599357584907305125509",
-      "athMarketCap": "3066347534000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427670,
       "progressBpsAfter": 546,
       "progressBpsBefore": 794
@@ -9974,7 +9974,7 @@
       "blockNumber": "55929379",
       "quoteAmount": "97019999999999999",
       "tokenAmount": "29620832421857973616638664",
-      "athMarketCap": "3488375394000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427790,
       "progressBpsAfter": 791,
       "progressBpsBefore": 546
@@ -10008,7 +10008,7 @@
       "blockNumber": "55929621",
       "quoteAmount": "70289999999999999",
       "tokenAmount": "19389193611597398886103925",
-      "athMarketCap": "3764691408000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789428032,
       "progressBpsAfter": 969,
       "progressBpsBefore": 791
@@ -10042,7 +10042,7 @@
       "blockNumber": "55929676",
       "quoteAmount": "118799999999999999",
       "tokenAmount": "29882377950607870650814056",
-      "athMarketCap": "4190486576000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789428087,
       "progressBpsAfter": 1269,
       "progressBpsBefore": 969
@@ -10076,7 +10076,7 @@
       "blockNumber": "55929715",
       "quoteAmount": "138599999999999999",
       "tokenAmount": "31413008350425688810767544",
-      "athMarketCap": "4638103077000000000",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789428126,
       "progressBpsAfter": 1619,
       "progressBpsBefore": 1269
@@ -10552,7 +10552,7 @@
       "blockNumber": "55935328",
       "quoteAmount": "21561497466379856",
       "tokenAmount": "3295998859199504755550227",
-      "athMarketCap": "6652428426000000000",
+      "athMarketCap": "6698484815000000000",
       "blockTimestamp": 1789433739,
       "progressBpsAfter": 3633,
       "progressBpsBefore": 3687
@@ -10660,7 +10660,7 @@
       "blockNumber": "55935938",
       "quoteAmount": "1781113305260700",
       "tokenAmount": "73828258807940003026951",
-      "athMarketCap": "24608964323000000000",
+      "athMarketCap": "24625996785000000000",
       "blockTimestamp": 1789434349,
       "progressBpsAfter": 0,
       "progressBpsBefore": 0

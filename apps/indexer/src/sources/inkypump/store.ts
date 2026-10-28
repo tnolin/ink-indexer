@@ -3,7 +3,7 @@ import type { AbiFamily, LaunchKey } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Tx } from "../source"
 import type { HookRow } from "./hooks"
-import type { Batch, CurveRow, KnownLaunch } from "./index"
+import type { AthRow, Batch, CurveRow, KnownLaunch } from "./index"
 
 // InkyPump's tables: reads for processing and rollback, and writes inside the loop's transaction.
 
@@ -111,7 +111,7 @@ export async function launchesToRefresh(sql: Sql, fork: bigint): Promise<KnownLa
   return rows.map(toKnownLaunch)
 }
 
-/** Hooks, tokens, bonds, curve state and trades. Events, block hashes and the cursor are the store's. */
+/** Hooks, tokens, bonds, pools, curve state, trades and ath. Events, block hashes and the cursor are the store's. */
 export async function writeRows(tx: Tx, batch: Batch) {
   for (const part of chunks(batch.hooks.map(hookRecord))) {
     await tx`insert into indexer.hooks ${tx(part)} on conflict (address) do nothing`
@@ -140,6 +140,20 @@ export async function writeRows(tx: Tx, batch: Batch) {
   for (const b of batch.bonds) {
     await tx`update indexer.tokens set phase = 'bonded', bonded_block = ${s(b.block)} where address = ${b.token}`
   }
+  {
+    const rows = batch.pools.map((p) => ({
+      pool_id: p.poolId,
+      pool_manager: p.poolManager,
+      token: p.token,
+      launchpad: p.launchpad,
+      quote_asset: p.quoteAsset,
+      token_is_currency0: p.tokenIsCurrency0,
+      created_block: s(p.createdBlock),
+    }))
+    for (const part of chunks(rows))
+      await tx`insert into indexer.pools ${tx(part)} on conflict do nothing`
+  }
+  await writeAth(tx, batch.ath)
   for (const part of chunks(batch.curve.map(curveRecord))) {
     await tx`
       insert into indexer.curve_state ${tx(part)}
@@ -165,10 +179,43 @@ export async function writeRows(tx: Tx, batch: Batch) {
   }
 }
 
-/** Deletes rows above `fork`, un-bonds, and restores curve state read at the fork block. */
+/** Raises each token's ath, moving `ath_block` only when the ath rises. */
+export async function writeAth(tx: Tx, ath: AthRow[]) {
+  for (const a of ath) {
+    await tx`
+      update indexer.tokens set
+        ath_block = case when ${s(a.marketCap)}::numeric > coalesce(ath_market_cap, 0)
+                         then ${s(a.block)}::bigint else ath_block end,
+        ath_market_cap = greatest(coalesce(ath_market_cap, 0), ${s(a.marketCap)}::numeric)
+      where address = ${a.token}`
+  }
+}
+
+/**
+ * Deletes rows above `fork` (curve and pool trades alike), un-bonds, removes pools bonded above it,
+ * recomputes ath from the trade and swap events that remain, and restores curve state read at the
+ * fork block. The store has already deleted the events above the fork in this transaction.
+ */
 export async function rollbackRows(tx: Tx, fork: bigint, refreshed: CurveRow[]) {
   const f = s(fork)
   await tx`delete from indexer.trades where block > ${f}`
+  await tx`delete from indexer.pools where created_block > ${f}`
+  await tx`
+    update indexer.tokens t set ath_market_cap = m.mc, ath_block = m.block
+    from (
+      select t2.address, best.mc, best.block
+      from indexer.tokens t2
+      left join lateral (
+        select (e.payload->>'marketCap')::numeric as mc, e.block
+        from indexer.events e
+        where e.entity = t2.address and e.type in ('launchpad.trade', 'launchpad.swap')
+          and e.block <= ${f}
+        order by (e.payload->>'marketCap')::numeric desc, e.block
+        limit 1
+      ) best on true
+      where t2.ath_block > ${f}
+    ) m
+    where m.address = t.address`
   await tx`delete from indexer.tokens where created_block > ${f}`
   await tx`delete from indexer.hooks where kind = 'xstocks' and discovered_block > ${f}`
   await tx`update indexer.tokens set phase = 'curve', bonded_block = null where bonded_block > ${f}`

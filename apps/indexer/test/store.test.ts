@@ -13,6 +13,7 @@ import {
   seedHooks,
   writeRows,
 } from "../src/sources/inkypump/store"
+import { PoolRegistry } from "../src/sources/pools"
 import type { EventRow, SourceBatch } from "../src/sources/source"
 import { type Cursor, createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
@@ -33,8 +34,10 @@ const emptyBatch = (): Batch => ({
   hooks: [],
   tokens: [],
   bonds: [],
+  pools: [],
   trades: [],
   curve: [],
+  ath: [],
   events: [],
   blocks: [],
 })
@@ -43,6 +46,7 @@ async function batchFrom(chain: FakeChain): Promise<Batch> {
   return processLogs(chain.logsIn(0n, chain.head), {
     chain,
     registry: new HookRegistry(await loadHooks(sql), () => {}),
+    pools: new PoolRegistry(),
     logger: () => {},
     loadLaunches: (keys) => loadLaunches(sql, keys),
   })

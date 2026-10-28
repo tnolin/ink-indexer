@@ -54,7 +54,7 @@ export function launch(chain: FakeChain, a: { n: number; block: bigint; hook?: A
   chain.states.set(`${hook}:${launchIdOf(a.n)}`, stateFor(tokenOf(a.n), 0n))
 }
 
-/** A trade with price 1000 and token and quote amounts of 1. */
+/** A trade with token and quote amounts of 1, at `price` (default 1000). */
 export function trade(
   chain: FakeChain,
   a: {
@@ -64,6 +64,7 @@ export function trade(
     side?: "buy" | "sell"
     logIndex?: number
     hook?: Address
+    price?: bigint
   },
 ) {
   chain.add(
@@ -72,7 +73,7 @@ export function trade(
         launchId: BigInt(launchIdOf(a.n)),
         trader: TRADER,
         side: a.side ?? "buy",
-        price: 1000n,
+        price: a.price ?? 1000n,
         sold: a.sold,
         timestamp: Number(a.block),
         tokenAmount: 1n,

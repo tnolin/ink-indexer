@@ -16,6 +16,7 @@ import type { Logger } from "../apps/indexer/src/log"
 import { Indexer } from "../apps/indexer/src/loop"
 import { connectRpc } from "../apps/indexer/src/rpc"
 import { inkypumpSource } from "../apps/indexer/src/sources/inkypump/index"
+import { PoolRegistry } from "../apps/indexer/src/sources/pools"
 import { createStore } from "../apps/indexer/src/store"
 
 function flag(name: string): bigint {
@@ -149,7 +150,7 @@ const indexer = new Indexer({
   chain: recording,
   store: createStore(sql),
   logger,
-  sources: [inkypumpSource({ sql, chain: recording, logger })],
+  sources: [inkypumpSource({ sql, chain: recording, pools: new PoolRegistry(), logger })],
 })
 await indexer.init()
 await indexer.backfill(from, to)

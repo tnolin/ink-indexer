@@ -22,6 +22,7 @@ import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
+import { PoolRegistry } from "../src/sources/pools"
 import { BACKFILL_SOURCES, type BackfillSource } from "../src/sources/source"
 import { createStore } from "../src/store"
 import { matchesFilter } from "./fake-chain"
@@ -132,7 +133,10 @@ const label = (s: BackfillSource[]) => (s.length ? s.join("+") : "(none)")
 
 const quiet = () => {}
 function sourcesFor(chain: Chain, sql: Sql) {
-  return [inkypumpSource({ sql, chain, logger: quiet }), nftSource({ sql, chain, logger: quiet })]
+  return [
+    inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: quiet }),
+    nftSource({ sql, chain, logger: quiet }),
+  ]
 }
 
 describe("merged eth_getLogs requests, per-filter path against merged path", () => {

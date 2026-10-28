@@ -8,6 +8,7 @@ import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
+import { PoolRegistry } from "../src/sources/pools"
 import type { Source, Tx } from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
@@ -27,7 +28,7 @@ function pumpIndexer(chain: Chain, s: Store, logger: Logger = () => {}) {
     chain,
     store: s,
     logger,
-    sources: [inkypumpSource({ sql, chain, logger })],
+    sources: [inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger })],
   })
 }
 
@@ -610,7 +611,11 @@ describe("Indexer over several sources", () => {
       chain,
       store,
       logger: () => {},
-      sources: [inkypumpSource({ sql, chain, logger: () => {} }), a.source, b.source],
+      sources: [
+        inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: () => {} }),
+        a.source,
+        b.source,
+      ],
     })
     await idx.init()
     await expect(idx.trigger()).rejects.toThrow("b write failed")

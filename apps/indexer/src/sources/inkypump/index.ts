@@ -16,6 +16,7 @@ import {
   marketCap,
   progressBps,
   tradeEvent,
+  UNISWAP_V4_POOL_MANAGER,
   XSTOCKS_HOOK_CREATED_TOPIC,
   type XStocksHookCreated,
 } from "@ink-indexer/sdk"
@@ -24,6 +25,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
 import { HookRegistry, type HookRow, nativeHookRows } from "./hooks"
 import {
@@ -78,18 +80,23 @@ export type CurveRow = {
   marketCap: bigint
   updatedBlock: bigint
 }
+export type AthRow = { token: Address; marketCap: bigint; block: bigint }
 export type Batch = {
   hooks: HookRow[]
   tokens: TokenRow[]
   bonds: { token: Address; block: bigint }[]
+  pools: PoolEntry[]
   trades: TradeRow[]
   curve: CurveRow[]
+  /** Tokens whose ath rose in this span, with the ath at the span's end. */
+  ath: AthRow[]
   events: EventRow[]
   blocks: { number: bigint; hash: Hash }[]
 }
 export type SourceDeps = {
   chain: Pick<Chain, "getBlock" | "readLaunchStates" | "readTotalSupplies" | "readErc20Meta">
   registry: HookRegistry
+  pools: PoolRegistry
   logger: Logger
   loadLaunches(keys: LaunchKey[]): Promise<KnownLaunch[]>
 }
@@ -101,14 +108,16 @@ const LOG_FILTER: LogFilter = { topics: [LOG_TOPICS] }
 
 /**
  * InkyPump as a loop source. It keeps the hook registry in memory; `reload` seeds the native hooks
- * (idempotent) and rebuilds the registry from the database.
+ * (idempotent) and rebuilds the registry from the database. It also owns the shared pool registry's
+ * lifecycle: it registers pools at bond, rolls back pool trades and ath, and reloads the registry.
  */
 export function inkypumpSource(deps: {
   sql: Sql
   chain: SourceDeps["chain"]
   logger: Logger
+  pools: PoolRegistry
 }): Source<Batch, CurveRow[]> {
-  const { sql, chain, logger } = deps
+  const { sql, chain, logger, pools } = deps
   let registry = new HookRegistry([], logger)
   return {
     name: "inkypump",
@@ -117,6 +126,7 @@ export function inkypumpSource(deps: {
       processLogs(logs ?? [], {
         chain,
         registry,
+        pools,
         logger,
         loadLaunches: (keys) => loadLaunches(sql, keys),
       }),
@@ -147,6 +157,7 @@ export function inkypumpSource(deps: {
     async reload() {
       await seedHooks(sql, nativeHookRows())
       registry = new HookRegistry(await loadHooks(sql), logger)
+      await pools.load(sql)
     },
   }
 }
@@ -169,11 +180,14 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
     hooks: [],
     tokens: [],
     bonds: [],
+    pools: [],
     trades: [],
     curve: [],
+    ath: [],
     events: [],
     blocks: [],
   }
+  const athBefore = new Map<Address, bigint>()
   const items = await trustAndDecode([...input].sort(byPosition), deps, batch)
 
   const createdHere = new Set(
@@ -289,6 +303,13 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
           throw new Error(
             `trade for unknown launch ${d.launchId} on ${log.address} in tx ${log.transactionHash}`,
           )
+        if (!athBefore.has(launch.token))
+          athBefore.set(launch.token, deps.pools.marks(launch.token)?.ath ?? 0n)
+        const athMarketCap = deps.pools.bumpAth(
+          launch.token,
+          marketCap(d.price, launch.totalSupply),
+          blockNumber,
+        )
         const event = tradeEvent(
           d,
           {
@@ -297,7 +318,7 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
             totalSupply: launch.totalSupply,
             quoteAsset: launch.quoteAsset,
             progressBpsBefore: launch.progressBps,
-            athMarketCap: marketCap(d.price, launch.totalSupply),
+            athMarketCap,
           },
           meta,
         )
@@ -339,6 +360,18 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
         }
         launch.progressBps = 10_000
         batch.bonds.push({ token: launch.token, block: blockNumber })
+        const pool: PoolEntry = {
+          poolId: d.poolId,
+          poolManager: UNISWAP_V4_POOL_MANAGER,
+          token: launch.token,
+          launchpad: "inkypump",
+          quoteAsset: launch.quoteAsset,
+          // v4 orders a pool's currencies by address.
+          tokenIsCurrency0: launch.token < launch.quoteAsset,
+          createdBlock: blockNumber,
+        }
+        deps.pools.add(pool, launch.totalSupply)
+        batch.pools.push(pool)
         batch.events.push({
           event: bondEvent(d, { token: launch.token, quoteAsset: launch.quoteAsset }, meta),
           block: blockNumber,
@@ -357,6 +390,11 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
     }
   }
   batch.curve = [...curve.values()]
+  for (const [token, before] of athBefore) {
+    const m = deps.pools.marks(token)!
+    if (m.ath > before && m.athBlock !== null)
+      batch.ath.push({ token, marketCap: m.ath, block: m.athBlock })
+  }
   return batch
 }
 

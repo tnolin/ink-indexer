@@ -10,6 +10,7 @@ import { createShutdown } from "./shutdown"
 import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { createCollectionsFromSales } from "./sources/nft/write"
+import { PoolRegistry } from "./sources/pools"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 import {
@@ -90,13 +91,17 @@ try {
     await sql.end()
     process.exit(0)
   }
+  const pools = new PoolRegistry()
   indexer = new Indexer({
     chain,
     store,
     logger: log,
     only: sources.groups,
     tickMinIntervalMs,
-    sources: [inkypumpSource({ sql, chain, logger: log }), nftSource({ sql, chain, logger: log })],
+    sources: [
+      inkypumpSource({ sql, chain, logger: log, pools }),
+      nftSource({ sql, chain, logger: log }),
+    ],
   })
   await indexer.init()
   if (cli.command === "start")

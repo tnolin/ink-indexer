@@ -25,6 +25,7 @@ import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { createCollectionsFromSales } from "../src/sources/nft/write"
+import { PoolRegistry } from "../src/sources/pools"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 
@@ -719,7 +720,7 @@ describe("NFT source", () => {
       return getLogs(from, to, filter)
     }
     const sources = [
-      inkypumpSource({ sql, chain, logger: () => {} }),
+      inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: () => {} }),
       nftSource({ sql, chain, logger: () => {} }),
     ]
     const idx = new Indexer({ chain, store, logger: () => {}, sources })

@@ -7,6 +7,7 @@ import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
+import { PoolRegistry } from "../src/sources/pools"
 import { createStore } from "../src/store"
 import { readSources, startSourceServices } from "../src/wiring"
 import { FakeChain } from "./fake-chain"
@@ -94,7 +95,7 @@ describe("the live tick with INDEXER_SOURCES", () => {
       logger: quiet,
       only: sources(env).groups,
       sources: [
-        inkypumpSource({ sql, chain, logger: quiet }),
+        inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: quiet }),
         nftSource({ sql, chain, logger: quiet }),
       ],
     })
