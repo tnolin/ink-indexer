@@ -194,7 +194,9 @@ export async function processLogs(
     if (log.address.toLowerCase() !== UNISWAP_V4_POOL_MANAGER) continue
     const swap = decodeSwap(log)
     const pool = swap && pools.byId(swap.poolId)
-    if (swap && pool) kept.push({ kind: "swap", log, swap, pool })
+    // A swap that moves no token is neither a buy nor a sell.
+    if (swap && pool && swapLegs(swap, pool.tokenIsCurrency0).tokenAmount > 0n)
+      kept.push({ kind: "swap", log, swap, pool })
   }
   for (const log of burnLogs) {
     const t = decodeTransfer(log)

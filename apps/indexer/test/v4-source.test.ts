@@ -176,6 +176,30 @@ describe("v4 source", () => {
     expect(chain.getBlockSendersCalls).toBe(0)
   })
 
+  it("ignores a swap that moves no token", async () => {
+    const { chain, pools, run } = setup()
+    pools.setDead(TOKEN, 0n, B - 50n)
+    const tx = nextTx()
+    chain.add(
+      swapLog(
+        {
+          poolId: POOL,
+          sender: ROUTER,
+          amount0: 10n ** 15n,
+          amount1: 0n,
+          sqrtPriceX96: Q96,
+          liquidity: 10n ** 21n,
+        },
+        { blockNumber: B, transactionHash: tx, logIndex: 0 },
+      ),
+    )
+    sender(chain, B, tx, BUYER)
+    const batch = await run(B)
+    expect(batch.events).toEqual([])
+    expect(batch.trades).toEqual([])
+    expect(chain.getBlockSendersCalls).toBe(0)
+  })
+
   it("ignores transfers that do not go to the dead address", async () => {
     const { chain, source, pools } = setup()
     chain.add(
