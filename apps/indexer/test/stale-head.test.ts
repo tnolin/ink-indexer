@@ -48,7 +48,8 @@ const staleWarnings = (lines: Line[]) => lines.filter((l) => l.msg.startsWith("s
 const recoveries = (lines: Line[]) => lines.filter((l) => l.msg === "head source recovered")
 const notServed = (lines: Line[]) =>
   lines.filter((l) => l.msg === "block not yet served; retrying on next head")
-const served = (lines: Line[]) => lines.filter((l) => l.msg === "block served after retrying")
+const summaries = (lines: Line[]) => lines.filter((l) => l.msg.endsWith("; stretch ended"))
+const MIN = 60_000
 const levels = (ls: Line[]) => ls.map((l) => l.level)
 
 describe("a head at or below the cursor", () => {
@@ -169,7 +170,7 @@ describe("stale head incidents", () => {
     }
     expect(levels(staleWarnings(lines))).toEqual(["warn", "debug", "debug"])
     expect(recoveries(lines)).toEqual([
-      { level: "info", msg: "head source recovered", fields: { durationMs: 3_000, ticks: 3 } },
+      { level: "debug", msg: "head source recovered", fields: { durationMs: 3_000, ticks: 3 } },
     ])
     expect(chain.transportHeadReads).toHaveLength(3)
   })
@@ -194,7 +195,7 @@ describe("stale head incidents", () => {
     expect(recoveries(lines)).toHaveLength(1)
   })
 
-  it("warns again when the head goes stale a second time", async () => {
+  it("logs a second incident within ten minutes at debug", async () => {
     const { chain, idx, lines } = await caughtUpTo(S + 200n)
     const stale = async (head: bigint) => {
       chain.head = S + head
@@ -211,7 +212,7 @@ describe("stale head incidents", () => {
     await idx.tick()
     await stale(320n)
 
-    expect(levels(staleWarnings(lines))).toEqual(["warn", "warn"])
+    expect(levels(staleWarnings(lines))).toEqual(["warn", "debug"])
     expect(recoveries(lines)).toHaveLength(1)
   })
 })
@@ -230,55 +231,122 @@ describe("a head above the cursor", () => {
   })
 })
 
-describe("a block the endpoint does not serve yet", () => {
+describe("conditions that come and go", () => {
   afterEach(() => vi.useRealTimers())
 
-  /** Fails the next `n` ticks at their first getBlock; each tick has a log to ingest. */
-  async function lagging() {
+  async function atClock() {
     vi.useFakeTimers({ toFake: ["Date"] })
-    const run = await caughtUpTo(S + 200n)
-    launch(run.chain, { n: 1, block: S + 210n })
-    run.chain.head = S + 220n
-    return run
+    vi.setSystemTime(new Date("2026-10-28T19:33:00Z"))
+    return caughtUpTo(S + 200n)
   }
-  const failTicks = async (chain: FakeChain, idx: Indexer, n: number, every = 1_000) => {
-    for (let i = 0; i < n; i++) {
-      chain.nullOnce.add(S + 220n)
-      await idx.tick()
-      vi.advanceTimersByTime(every)
-    }
+  /** One short episode: the block at the new head is withheld for one tick, then served. */
+  async function shortNotServed(chain: FakeChain, idx: Indexer) {
+    chain.head += 1n
+    chain.nullOnce.add(chain.head)
+    await idx.tick()
+    await idx.tick()
+  }
+  /** One short episode: the fallback head is stale for one tick, then moves. */
+  async function shortStale(chain: FakeChain, idx: Indexer) {
+    chain.head += 1n
+    chain.staleHead = S + 100n
+    chain.transportHeads = [
+      { name: A, head: S + 100n },
+      { name: B, head: chain.head },
+    ]
+    await idx.tick()
+    chain.staleHead = undefined
+    await idx.tick()
   }
 
-  it("logs one warning for a long episode, then one line when the block is served", async () => {
-    const { chain, idx, lines } = await lagging()
-    await failTicks(chain, idx, 40)
+  it("logs one warning and one summary for six minutes of back-to-back short episodes", async () => {
+    const { chain, idx, lines } = await atClock()
+    for (let i = 0; i < 36; i++) {
+      await shortNotServed(chain, idx)
+      vi.advanceTimersByTime(10_000)
+    }
+    expect(levels(notServed(lines)).filter((l) => l === "warn")).toHaveLength(1)
+    expect(summaries(lines)).toEqual([])
+
+    vi.advanceTimersByTime(10 * MIN)
+    await idx.tick()
+
+    expect(lines.filter((l) => l.level !== "debug").map((l) => l.level)).toEqual(["warn", "info"])
+    expect(summaries(lines)).toEqual([
+      {
+        level: "info",
+        msg: "block not yet served; stretch ended",
+        fields: {
+          condition: "block not yet served",
+          start: "2026-10-28T19:33:00.000Z",
+          end: "2026-10-28T19:38:50.000Z",
+          episodes: 36,
+        },
+      },
+    ])
+  })
+
+  it("names the hosts in the summary of a stale head stretch", async () => {
+    const { chain, idx, lines } = await atClock()
+    for (let i = 0; i < 18; i++) {
+      await shortStale(chain, idx)
+      vi.advanceTimersByTime(20_000)
+    }
+    vi.advanceTimersByTime(10 * MIN)
+    await idx.tick()
+
+    expect(lines.filter((l) => l.level !== "debug").map((l) => l.level)).toEqual(["warn", "info"])
+    expect(summaries(lines)[0]!.fields).toEqual({
+      condition: "stale head",
+      start: "2026-10-28T19:33:00.000Z",
+      end: "2026-10-28T19:38:40.000Z",
+      episodes: 18,
+      hosts: [A],
+    })
+  })
+
+  it("keeps the two conditions apart", async () => {
+    const { chain, idx, lines } = await atClock()
+    await shortNotServed(chain, idx)
+    await shortStale(chain, idx)
+    expect(levels(notServed(lines))).toEqual(["warn"])
+    expect(levels(staleWarnings(lines))).toEqual(["warn"])
+  })
+
+  it("warns again for an episode 11 minutes after the last warning", async () => {
+    const { chain, idx, lines } = await atClock()
+    await shortNotServed(chain, idx)
+    vi.advanceTimersByTime(11 * MIN)
+    await shortNotServed(chain, idx)
+
+    expect(levels(notServed(lines))).toEqual(["warn", "warn"])
+    expect(summaries(lines)).toEqual([])
+  })
+
+  it("warns again ten minutes after the last warning while the stretch goes on", async () => {
+    const { chain, idx, lines } = await atClock()
+    for (let i = 0; i < 12; i++) {
+      await shortNotServed(chain, idx)
+      vi.advanceTimersByTime(MIN)
+    }
+    expect(levels(notServed(lines)).filter((l) => l === "warn")).toHaveLength(2)
+  })
+
+  it("logs one warning for a single long episode and ends it at debug", async () => {
+    const { chain, idx, lines } = await atClock()
+    chain.head = S + 220n
+    for (let i = 0; i < 40; i++) {
+      chain.nullOnce.add(S + 220n)
+      await idx.tick()
+      vi.advanceTimersByTime(1_000)
+    }
+    await idx.tick()
+    vi.advanceTimersByTime(20 * MIN)
     await idx.tick()
 
     expect(levels(notServed(lines))).toEqual(["warn", ...Array(39).fill("debug")])
     expect(notServed(lines)[0]!.fields).toEqual({ block: S + 220n })
-    expect(served(lines)).toEqual([
-      {
-        level: "info",
-        msg: "block served after retrying",
-        fields: { block: S + 220n, retries: 40, durationMs: 40_000 },
-      },
-    ])
+    expect(lines.filter((l) => l.level === "info")).toEqual([])
     expect(await cursorBlock()).toBe(S + 220n)
-  })
-
-  it("logs a second warning for an episode that starts after the first ended", async () => {
-    const { chain, idx, lines } = await lagging()
-    await failTicks(chain, idx, 3)
-    await idx.tick()
-    chain.head = S + 230n
-    chain.nullOnce.delete(S + 230n)
-    for (let i = 0; i < 2; i++) {
-      chain.nullOnce.add(S + 230n)
-      await idx.tick()
-    }
-    await idx.tick()
-
-    expect(levels(notServed(lines))).toEqual(["warn", "debug", "debug", "warn", "debug"])
-    expect(served(lines)).toHaveLength(2)
   })
 })

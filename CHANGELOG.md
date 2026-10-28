@@ -6,7 +6,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Changed
 
-- Indexer: "block not yet served; retrying on next head" and "stale head from <host>" are logged once at warn when an episode starts and at debug while it lasts. "block served after retrying" (info) closes the first with its retry count and duration; "head source recovered" now carries the duration and tick count. A lagging endpoint no longer produces a warning per retry. See ADR 0032.
+- Indexer: "block not yet served; retrying on next head" and "stale head from <host>" warn at most once per condition in 10 minutes; all other occurrences, including the end of each episode, are logged at debug. When a stretch of short, repeated episodes ends after 10 quiet minutes, one info line "<condition>; stretch ended" gives its start and end time, its episode count and, for stale heads, the hosts. A lagging endpoint no longer produces a warning per retry or per episode. See ADR 0032.
 
 ### Fixed
 

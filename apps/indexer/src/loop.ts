@@ -2,33 +2,88 @@ import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import type { Chain } from "./chain"
 import { BlockNotServedError } from "./errors"
-import type { Logger } from "./log"
+import type { Level, Logger } from "./log"
 import { readLogs } from "./log-plan"
 import type { BackfillSource, Source, SourceBatch } from "./sources/source"
 import type { Cursor, Store } from "./store"
 
+/** A condition warns at most once in this long, and its stretch ends after this long without it. */
+const QUIET_MS = 10 * 60_000
+
 /**
- * A run of consecutive occurrences of one condition. `hit` says whether it starts a new run, so the
- * caller can log the first occurrence loudly and the rest quietly; `end` closes the run and returns
- * how long it lasted and how many occurrences it had, or null when none was open.
+ * A condition that comes and goes (a lagging endpoint). Each occurrence of it in a row is one episode.
+ * An episode that starts when no warning for this condition was logged in the last QUIET_MS logs at
+ * warn; every other line, including an episode's end, logs at debug. A stretch is the run of episodes
+ * with no QUIET_MS gap between them; when one ends and some of its episodes were not warned about,
+ * a single info line sums it up.
  */
-class Episode {
+class Condition {
   private since: number | null = null
   private hits = 0
+  private lastWarn: number | null = null
+  private stretch: {
+    start: number
+    last: number
+    episodes: number
+    suppressed: number
+    hosts: Set<string>
+  } | null = null
 
-  hit(): boolean {
+  constructor(
+    private readonly name: string,
+    private readonly logger: Logger,
+  ) {}
+
+  /** The level for this occurrence's line: warn only for the first one of an episode that is due. */
+  hit(host?: string): Level {
+    const now = Date.now()
+    this.flush(now)
     this.hits++
-    if (this.since !== null) return false
-    this.since = Date.now()
-    return true
+    const stretch = this.stretch ?? {
+      start: now,
+      last: now,
+      episodes: 0,
+      suppressed: 0,
+      hosts: new Set<string>(),
+    }
+    this.stretch = stretch
+    stretch.last = now
+    if (host) stretch.hosts.add(host)
+    if (this.since !== null) return "debug"
+    this.since = now
+    stretch.episodes++
+    if (this.lastWarn === null || now - this.lastWarn >= QUIET_MS) {
+      this.lastWarn = now
+      return "warn"
+    }
+    stretch.suppressed++
+    return "debug"
   }
 
+  /** Closes the open episode, if any, and returns how long it lasted and how many occurrences it had. */
   end(): { durationMs: number; hits: number } | null {
     if (this.since === null) return null
-    const ended = { durationMs: Date.now() - this.since, hits: this.hits }
+    const now = Date.now()
+    const ended = { durationMs: now - this.since, hits: this.hits }
     this.since = null
     this.hits = 0
+    if (this.stretch) this.stretch.last = now
     return ended
+  }
+
+  /** Closes a stretch that has had no episode for QUIET_MS. Called on every tick, so it needs no timer. */
+  flush(now = Date.now()) {
+    const s = this.stretch
+    if (!s || this.since !== null || now - s.last < QUIET_MS) return
+    this.stretch = null
+    if (s.suppressed === 0) return
+    this.logger("info", `${this.name}; stretch ended`, {
+      condition: this.name,
+      start: new Date(s.start).toISOString(),
+      end: new Date(s.last).toISOString(),
+      episodes: s.episodes,
+      ...(s.hosts.size > 0 && { hosts: [...s.hosts].sort() }),
+    })
   }
 }
 
@@ -47,9 +102,9 @@ export class Indexer {
   /** How many ticks have completed without error, for the stall watchdog. */
   tickSuccesses = 0
   /** From the tick that found the fallback head stale until one finds it caught up. */
-  private readonly staleHead = new Episode()
+  private readonly staleHead: Condition
   /** From the first tick that could not read a block until a tick that served it. */
-  private readonly notServed = new Episode()
+  private readonly notServed: Condition
   /** The stored cursor block, kept in memory so liveness checks never wait on the database. */
   cursorBlock: bigint | null | undefined
 
@@ -66,7 +121,10 @@ export class Indexer {
       /** The least time between the starts of two live ticks; 0 or unset starts one on every trigger. */
       tickMinIntervalMs?: number
     },
-  ) {}
+  ) {
+    this.staleHead = new Condition("stale head", deps.logger)
+    this.notServed = new Condition("block not yet served", deps.logger)
+  }
 
   async init() {
     await this.reloadSources()
@@ -123,6 +181,8 @@ export class Indexer {
 
   async tick() {
     const { chain, store } = this.deps
+    this.staleHead.flush()
+    this.notServed.flush()
     let head = await chain.getBlockNumber()
     this.lastHead = head
     this.headFetches++
@@ -139,18 +199,16 @@ export class Indexer {
       this.tickSuccesses++
       const ended = this.notServed.end()
       if (ended)
-        this.deps.logger("info", "block served after retrying", {
+        this.deps.logger("debug", "block served after retrying", {
           block: head,
           retries: ended.hits,
           durationMs: ended.durationMs,
         })
     } catch (err) {
       if (!(err instanceof BlockNotServedError)) throw err
-      this.deps.logger(
-        this.notServed.hit() ? "warn" : "debug",
-        "block not yet served; retrying on next head",
-        { block: err.block },
-      )
+      this.deps.logger(this.notServed.hit(), "block not yet served; retrying on next head", {
+        block: err.block,
+      })
     }
   }
 
@@ -172,7 +230,7 @@ export class Indexer {
       return head
     }
     const lowest = heads.reduce((a, h) => (h.head < a.head ? h : a))
-    this.deps.logger(this.staleHead.hit() ? "warn" : "debug", `stale head from ${lowest.name}`, {
+    this.deps.logger(this.staleHead.hit(lowest.name), `stale head from ${lowest.name}`, {
       host: lowest.name,
       staleHead: head,
       highestHead: highest,
@@ -183,7 +241,7 @@ export class Indexer {
   private headRecovered() {
     const ended = this.staleHead.end()
     if (ended)
-      this.deps.logger("info", "head source recovered", {
+      this.deps.logger("debug", "head source recovered", {
         durationMs: ended.durationMs,
         ticks: ended.hits,
       })
