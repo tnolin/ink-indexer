@@ -4,6 +4,14 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Changed
+
+- Indexer: "block not yet served; retrying on next head" and "stale head from <host>" warn at most once per condition in 10 minutes; all other occurrences, including the end of each episode, are logged at debug. When a stretch of short, repeated episodes ends after 10 quiet minutes, one info line "<condition>; stretch ended" gives its start and end time, its episode count and, for stale heads, the hosts. A lagging endpoint no longer produces a warning per retry or per episode. See ADR 0032.
+
+### Fixed
+
+- Indexer: an `eth_getLogs` refusal at the chain tip is recognised for spans that start fewer than 32 blocks below the endpoint's head, up from 5. Refusals on a span starting exactly 5 blocks below the head, and on a 20-block span, were halved and logged as warnings. See ADR 0032.
+
 ## [indexer-v0.3.7] - 2026-10-27
 
 ### Fixed
