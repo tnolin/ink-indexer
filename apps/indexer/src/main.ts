@@ -11,6 +11,7 @@ import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { createCollectionsFromSales } from "./sources/nft/write"
 import { PoolRegistry } from "./sources/pools"
+import { v4Source } from "./sources/v4/index"
 import { startStallWatch } from "./stall"
 import { createStore } from "./store"
 import {
@@ -100,6 +101,8 @@ try {
     tickMinIntervalMs,
     sources: [
       inkypumpSource({ sql, chain, logger: log, pools }),
+      // After InkyPump: a pool it registers at bond is known when this span's swaps are processed.
+      v4Source({ sql, chain, logger: log, pools }),
       nftSource({ sql, chain, logger: log }),
     ],
   })

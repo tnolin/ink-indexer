@@ -64,14 +64,14 @@ describe("parseCli", () => {
         "--from",
         "1",
         "--sources",
-        "inkypump,nft-mints,nft-sales,nft-launches",
+        "inkypump,v4-swaps,nft-mints,nft-sales,nft-launches",
       ]),
     ).toEqual({
       ok: true,
       command: "backfill",
       from: 1n,
       to: undefined,
-      sources: ["inkypump", "nft-mints", "nft-sales", "nft-launches"],
+      sources: ["inkypump", "v4-swaps", "nft-mints", "nft-sales", "nft-launches"],
     })
     expect(parseCli(["backfill", "--from", "1", "--sources", " nft-sales , nft-sales"])).toEqual({
       ok: true,
@@ -86,7 +86,7 @@ describe("parseCli", () => {
     }
     const r = parseCli(["backfill", "--from", "1", "--sources", "nft-mints,opensea"])
     expect(r.ok === false && r.reason).toBe(
-      "unknown source: opensea (expected inkypump, nft-mints, nft-sales, nft-launches)",
+      "unknown source: opensea (expected inkypump, v4-swaps, nft-mints, nft-sales, nft-launches)",
     )
     expect(parseCli(["start", "--sources", "nft-sales"]).ok).toBe(false)
   })

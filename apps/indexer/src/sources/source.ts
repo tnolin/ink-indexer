@@ -35,11 +35,18 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
 }
 
 /**
- * The names `backfill --sources` takes. `inkypump` is the InkyPump source; the NFT source's filters
- * come in three groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and
- * `nft-launches` (the Chimera factory).
+ * The names `backfill --sources` takes. `inkypump` is the InkyPump source and `v4-swaps` the swaps
+ * and burns of tokens with a registered Uniswap v4 pool. The NFT source's filters come in three
+ * groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and `nft-launches`
+ * (the Chimera factory).
  */
-export const BACKFILL_SOURCES = ["inkypump", "nft-mints", "nft-sales", "nft-launches"] as const
+export const BACKFILL_SOURCES = [
+  "inkypump",
+  "v4-swaps",
+  "nft-mints",
+  "nft-sales",
+  "nft-launches",
+] as const
 export type BackfillSource = (typeof BACKFILL_SOURCES)[number]
 
 /** `filter` when `only` is absent or names `group`, else null (see `Source.filters`). */

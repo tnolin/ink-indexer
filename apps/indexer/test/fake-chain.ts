@@ -46,6 +46,8 @@ export class FakeChain implements Chain {
   balances = new Map<string, bigint>()
   getBlockSendersCalls = 0
   readBalancesCalls = 0
+  /** The block of every readBalances call. */
+  balanceReads: bigint[] = []
   stateReads: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
   getBlockNumberCalls = 0
@@ -108,8 +110,9 @@ export class FakeChain implements Chain {
     return s ? { hash: s.hash, timestamp: Number(n), senders: s.senders } : null
   }
 
-  async readBalances(pairs: { token: Address; holder: Address }[], _block: bigint) {
+  async readBalances(pairs: { token: Address; holder: Address }[], block: bigint) {
     this.readBalancesCalls++
+    this.balanceReads.push(block)
     return pairs.map((p) => this.balances.get(`${p.token}:${p.holder}`) ?? 0n)
   }
 

@@ -11,7 +11,7 @@ const LAUNCHPAD = "inkypump"
 const s = (x: bigint) => x.toString()
 /** Rows per multi-row insert: Postgres allows 65,534 parameters per statement, so 1,000 rows leaves room for 65 columns. */
 const CHUNK = 1_000
-function* chunks<T>(rows: T[]): Generator<T[]> {
+export function* chunks<T>(rows: T[]): Generator<T[]> {
   for (let i = 0; i < rows.length; i += CHUNK) yield rows.slice(i, i + CHUNK)
 }
 

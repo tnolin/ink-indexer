@@ -6,6 +6,8 @@ export type PoolEntry = {
   poolId: Hash
   poolManager: Address
   token: Address
+  /** The launch's id on its launchpad, carried on every swap event. */
+  launchId: Hash
   launchpad: LaunchpadKey
   quoteAsset: Address
   tokenIsCurrency0: boolean
@@ -25,6 +27,7 @@ type PoolRow = {
   pool_id: Hash
   pool_manager: Address
   token: Address
+  launch_id: Hash
   launchpad: LaunchpadKey
   quote_asset: Address
   token_is_currency0: boolean
@@ -101,8 +104,9 @@ export class PoolRegistry {
 
   async load(sql: Sql): Promise<void> {
     const pools = await sql<PoolRow[]>`
-      select pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0, created_block
-      from indexer.pools`
+      select p.pool_id, p.pool_manager, p.token, t.launch_id, p.launchpad, p.quote_asset,
+             p.token_is_currency0, p.created_block
+      from indexer.pools p join indexer.tokens t on t.address = p.token`
     const marks = await sql<MarkRow[]>`
       select t.address, t.total_supply::text, t.ath_market_cap::text as ath_market_cap, t.ath_block,
              t.dead_balance::text as dead_balance, t.dead_balance_block
@@ -116,6 +120,7 @@ export class PoolRegistry {
           poolId: r.pool_id,
           poolManager: r.pool_manager,
           token: r.token,
+          launchId: r.launch_id,
           launchpad: r.launchpad,
           quoteAsset: r.quote_asset,
           tokenIsCurrency0: r.token_is_currency0,

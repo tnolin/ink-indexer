@@ -364,6 +364,7 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
           poolId: d.poolId,
           poolManager: UNISWAP_V4_POOL_MANAGER,
           token: launch.token,
+          launchId: launch.launchId,
           launchpad: "inkypump",
           quoteAsset: launch.quoteAsset,
           // v4 orders a pool's currencies by address.

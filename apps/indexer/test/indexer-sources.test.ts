@@ -1,6 +1,12 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import { CHIMERA_FACTORY, SEADROP_V1 } from "@ink-indexer/sdk"
+import {
+  CHIMERA_FACTORY,
+  NATIVE_QUOTE_ASSET,
+  SEADROP_V1,
+  UNISWAP_V4_POOL_MANAGER,
+} from "@ink-indexer/sdk"
+import type { Address, Hash } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
@@ -8,6 +14,7 @@ import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { PoolRegistry } from "../src/sources/pools"
+import { v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
 import { readSources, startSourceServices } from "../src/wiring"
 import { FakeChain } from "./fake-chain"
@@ -28,13 +35,13 @@ describe("readSources", () => {
       const s = sources({ INDEXER_SOURCES: v })
       expect(s.names).toEqual(["inkypump", "opensea", "chimera"])
       expect(s.openSea).toBe(true)
-      expect(s.groups).toEqual(["inkypump", "nft-mints", "nft-sales", "nft-launches"])
+      expect(s.groups).toEqual(["inkypump", "v4-swaps", "nft-mints", "nft-sales", "nft-launches"])
     }
   })
 
   it("maps each platform to its backfill groups", () => {
     expect(sources({ INDEXER_SOURCES: "inkypump" })).toMatchObject({
-      groups: ["inkypump"],
+      groups: ["inkypump", "v4-swaps"],
       openSea: false,
     })
     expect(sources({ INDEXER_SOURCES: "opensea" })).toMatchObject({
@@ -75,7 +82,10 @@ describe("readSources", () => {
 })
 
 describe("the live tick with INDEXER_SOURCES", () => {
-  /** The filters the live tick asks for, over both sources. */
+  const TOKEN: Address = "0x00000000000000000000000000000000000000d1"
+  const POOL: Hash = `0x${"d1".repeat(32)}`
+
+  /** The filters the live tick asks for, over every source, with one registered pool. */
   async function liveFilters(env: Record<string, string | undefined>) {
     const chain = new FakeChain(1000n)
     const asked: LogFilter[] = []
@@ -85,6 +95,7 @@ describe("the live tick with INDEXER_SOURCES", () => {
       return getLogs(from, to, filter)
     }
     const store = createStore(sql)
+    const pools = new PoolRegistry()
     await store.writeBatch([], [], {
       cursor: { block: 990n, hash: chain.hashOf(990n) },
       head: 990n,
@@ -95,27 +106,47 @@ describe("the live tick with INDEXER_SOURCES", () => {
       logger: quiet,
       only: sources(env).groups,
       sources: [
-        inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: quiet }),
+        inkypumpSource({ sql, chain, pools, logger: quiet }),
+        v4Source({ sql, chain, pools, logger: quiet }),
         nftSource({ sql, chain, logger: quiet }),
       ],
     })
     await idx.init()
+    // init loads the registry from the empty database; a pool registered afterwards keeps both v4 filters on.
+    pools.add(
+      {
+        poolId: POOL,
+        poolManager: UNISWAP_V4_POOL_MANAGER,
+        token: TOKEN,
+        launchId: POOL,
+        launchpad: "inkypump",
+        quoteAsset: NATIVE_QUOTE_ASSET,
+        tokenIsCurrency0: false,
+        createdBlock: 1n,
+      },
+      10n ** 27n,
+    )
     await idx.tick()
     return asked
   }
 
-  it("reads every filter by default, in 5 requests", async () => {
-    expect(await liveFilters({})).toHaveLength(5)
+  it("reads every filter by default, in 7 requests", async () => {
+    expect(await liveFilters({})).toHaveLength(7)
   })
 
-  it("inkypump alone reads no NFT filter", async () => {
-    expect(await liveFilters({ INDEXER_SOURCES: "inkypump" })).toHaveLength(1)
+  it("inkypump alone reads its own and the two v4 filters and no NFT filter, in 3 requests", async () => {
+    const asked = await liveFilters({ INDEXER_SOURCES: "inkypump" })
+    expect(asked).toHaveLength(3)
+    expect(asked.filter((f) => f.address === UNISWAP_V4_POOL_MANAGER)).toHaveLength(1)
+    expect(asked.filter((f) => JSON.stringify(f.address) === JSON.stringify([TOKEN]))).toHaveLength(
+      1,
+    )
   })
 
-  it("inkypump,chimera reads only the Chimera filter of the NFT source", async () => {
+  it("inkypump,chimera reads only the Chimera filter of the NFT source, in 4 requests", async () => {
     const asked = await liveFilters({ INDEXER_SOURCES: "inkypump,chimera" })
-    expect(asked).toHaveLength(2)
-    expect(asked.at(-1)?.address).toBe(CHIMERA_FACTORY)
+    expect(asked).toHaveLength(4)
+    expect(asked.filter((f) => f.address === CHIMERA_FACTORY)).toHaveLength(1)
     expect(asked.some((f) => f.address === SEADROP_V1)).toBe(false)
   })
 

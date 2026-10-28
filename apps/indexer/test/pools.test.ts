@@ -9,11 +9,13 @@ const NATIVE: Address = "0x0000000000000000000000000000000000000000"
 const T1: Address = "0x0000000000000000000000000000000000000011"
 const T2: Address = "0x0000000000000000000000000000000000000022"
 const POOL: Hash = `0x${"ab".repeat(32)}`
+const launchIdOf = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash
 
 const entry = (token: Address): PoolEntry => ({
   poolId: POOL,
   poolManager: "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
   token,
+  launchId: launchIdOf(Number.parseInt(token.slice(-1), 16)),
   launchpad: "inkypump",
   quoteAsset: NATIVE,
   tokenIsCurrency0: false,
@@ -72,7 +74,7 @@ describe("PoolRegistry.load", () => {
     ] as const) {
       await sql`insert into indexer.tokens (address, launchpad, hook, launch_id, creator, created_block, created_at,
           quote_asset, total_supply, target_raise, sale_supply, gain_bps)
-        values (${t}, 'inkypump', ${HOOK}, ${String(n)}, ${HOOK}, 1, now(), ${NATIVE}, 1000, 1, 1, 0)`
+        values (${t}, 'inkypump', ${HOOK}, ${launchIdOf(n)}, ${HOOK}, 1, now(), ${NATIVE}, 1000, 1, 1, 0)`
     }
   })
   afterEach(() => sql.end())

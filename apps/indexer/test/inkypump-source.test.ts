@@ -240,6 +240,7 @@ describe("pools and ath", () => {
       poolId: launchIdOf(3),
       poolManager: UNISWAP_V4_POOL_MANAGER,
       token: tokenOf(3),
+      launchId: launchIdOf(3),
       launchpad: "inkypump",
       quoteAsset: NATIVE_QUOTE_ASSET,
       tokenIsCurrency0: false,
