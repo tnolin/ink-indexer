@@ -93,6 +93,7 @@ A swap in the Uniswap v4 pool of a token that has bonded.
 
 - `trader` is the sender of the transaction. `router` is the address that called the pool manager, which is a router or aggregator contract for most swaps.
 - `quoteAmount` is the quote paid on a buy and received on a sell. `price` is quote base units per 1e18 token base units after the swap.
+- `tokenAmount` and `quoteAmount` are the amounts of the pool manager's `Swap` event. They exclude any fee a hook takes, so `quoteAmount` is not necessarily what the wallet paid or received.
 - `supply` is the token's total supply minus the balance of the dead address (`0x…dEaD`), and `marketCap` is `price × supply / 10^18`.
 - `quoteLiquidity` is the pool's quote side after the swap, computed from the pool's in-range liquidity and price. It is exact for a full-range position and approximate when other positions exist.
 - `athMarketCap` covers the token's whole history, curve and pool.
