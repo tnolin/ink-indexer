@@ -105,7 +105,7 @@ describe("decodeTransfer", () => {
 
 describe("pool math", () => {
   // Same cases as the bot's pool market cap, so both read a pool the same way.
-  it("poolMarketCap matches mako's poolMcap for both currency orders", () => {
+  it("market cap is the same whichever currency the token is", () => {
     // A live reading of KRAK's pool: 5.3289 ETH market cap at 1B supply, token is currency1.
     expect(poolMarketCap(1085330431310623941983443206493297n, false, 10n ** 27n)).toBe(
       5328870998753306917n,
