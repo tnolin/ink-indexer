@@ -16,7 +16,7 @@ import { type Address, type Hash, pad } from "viem"
 import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
-import type { LogFilter } from "../../rpc"
+import { isTipRefusal, type LogFilter } from "../../rpc"
 import type { AthRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
@@ -90,9 +90,13 @@ export function v4Source(deps: {
           : null,
       ]
     },
-    async process([swapLogs = [], burnLogs = []], { toBlock }) {
+    async process([swapLogs = [], burnLogs = []], { toBlock, live }) {
       const late = await swapsOfNewPools(toBlock)
-      return processLogs([...swapLogs, ...late], burnLogs, { chain, pools })
+      return processLogs([...swapLogs, ...late], burnLogs, {
+        chain,
+        pools,
+        readDeadAt: live ? toBlock : null,
+      })
     },
     write: writeRows,
     async prepareRollback(fork) {
@@ -136,8 +140,22 @@ export function v4Source(deps: {
 }
 
 /**
+ * A read at `block` that the endpoint answered with an RPC error, such as "header not found" from a
+ * load-balanced node that does not have the block yet, fails the span as not served so the tick
+ * retries it. Transport errors pass through unchanged.
+ */
+async function servedAt<T>(block: bigint, read: () => Promise<T>): Promise<T> {
+  try {
+    return await read()
+  } catch (err) {
+    if (isTipRefusal(err)) throw new BlockNotServedError(block)
+    throw err
+  }
+}
+
+/**
  * Turns one span of swap and burn logs into rows. Reads the dead balance of tokens that have none,
- * and the senders of each block holding a kept swap.
+ * at `readDeadAt` or else at the head, and the senders of each block holding a kept swap.
  */
 export async function processLogs(
   swapLogs: ChainLog[],
@@ -145,23 +163,27 @@ export async function processLogs(
   deps: {
     chain: Pick<V4Chain, "getBlockNumber" | "getBlockSenders" | "readBalances">
     pools: PoolRegistry
+    /** The live tick passes the span's end, a block the endpoints already serve. */
+    readDeadAt: bigint | null
   },
 ): Promise<V4Batch> {
   const { chain, pools } = deps
   const batch: V4Batch = { trades: [], events: [], ath: [], dead: [], blocks: [] }
   const dead = new Map<Address, DeadRow>()
 
-  // shortcut: the dead balance is read at head for pools seeded before swaps were indexed, so backfilled swaps use today's burned amount. Read it at each pool's bond block on an archive node if a token turns out to have burned before the backfill.
+  // shortcut: outside the live tick the dead balance is read at head. That covers pools seeded before swaps were indexed and every pool bonded during a backfill, so their backfilled swaps use today's burned amount. Read it at each pool's bond block on an archive node if a token turns out to have burned before the backfill.
   const unread = pools.tokens().filter((t) => pools.marks(t)?.deadBalance === null)
   if (unread.length > 0) {
-    const head = await chain.getBlockNumber()
-    const balances = await chain.readBalances(
-      unread.map((token) => ({ token, holder: DEAD_ADDRESS })),
-      head,
+    const at = deps.readDeadAt ?? (await chain.getBlockNumber())
+    const balances = await servedAt(at, () =>
+      chain.readBalances(
+        unread.map((token) => ({ token, holder: DEAD_ADDRESS })),
+        at,
+      ),
     )
     unread.forEach((token, i) => {
-      pools.setDead(token, balances[i]!, head)
-      dead.set(token, { token, balance: balances[i]!, block: head })
+      pools.setDead(token, balances[i]!, at)
+      dead.set(token, { token, balance: balances[i]!, block: at })
     })
   }
   // A burn at or below the block its balance was read at is already in that balance.
@@ -187,7 +209,7 @@ export async function processLogs(
     const blockHash = items[0]!.log.blockHash
     batch.blocks.push({ number: blockNumber, hash: blockHash })
     const block = items.some((i) => i.kind === "swap")
-      ? await chain.getBlockSenders(blockNumber)
+      ? await servedAt(blockNumber, () => chain.getBlockSenders(blockNumber))
       : null
     // The logs and the block can come from different endpoints on either side of a reorg.
     if (block && block.hash !== blockHash) throw new BlockNotServedError(blockNumber)

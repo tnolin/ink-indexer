@@ -24,8 +24,11 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
    * passes an empty array in its place.
    */
   filters(only?: readonly BackfillSource[]): (LogFilter | null)[]
-  /** One log array per filter, same order. Network reads allowed; no DB writes. */
-  process(logs: ChainLog[][], ctx: { toBlock: bigint }): Promise<B>
+  /**
+   * One log array per filter, same order. Network reads allowed; no DB writes. `live` is true for
+   * the live tick's spans and false for a backfill's.
+   */
+  process(logs: ChainLog[][], ctx: { toBlock: bigint; live: boolean }): Promise<B>
   write(tx: Tx, batch: B): Promise<void>
   /** Network reads before the rollback transaction. */
   prepareRollback(fork: bigint): Promise<R>

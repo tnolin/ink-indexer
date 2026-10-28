@@ -7,7 +7,7 @@ import {
   NATIVE_QUOTE_ASSET,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
-import { type Address, type Hash, pad, toHex } from "viem"
+import { type Address, type Hash, HttpRequestError, pad, toHex } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import { swapLog, transferLog } from "../../../packages/sdk/test/builders"
 import { loadV4Fixture } from "../../../packages/sdk/test/fixtures"
@@ -105,10 +105,11 @@ function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)]) {
   const pools = new PoolRegistry()
   for (const p of registered) pools.add(p, SUPPLY)
   const source = v4Source({ sql: {} as Sql, chain, logger: () => {}, pools })
-  const run = (to: bigint, from = B - 100n) =>
+  /** Processes [from, to] as a backfill span, or as the live tick's with `live`. */
+  const run = (to: bigint, from = B - 100n, live = false) =>
     source.process(
       source.filters().map((f) => (f ? chain.logsIn(from, to, f) : [])),
-      { toBlock: to },
+      { toBlock: to, live },
     )
   return { chain, pools, source, run }
 }
@@ -168,7 +169,7 @@ describe("v4 source", () => {
   it("ignores swaps in unregistered pools and makes no sender read", async () => {
     const { chain, source } = setup()
     swap(chain, { block: B, poolId: launchIdOf(2) })
-    const batch = await source.process([chain.logsIn(0n, B), []], { toBlock: B })
+    const batch = await source.process([chain.logsIn(0n, B), []], { toBlock: B, live: false })
     expect(batch.events).toEqual([])
     expect(batch.trades).toEqual([])
     expect(batch.blocks).toEqual([])
@@ -183,7 +184,7 @@ describe("v4 source", () => {
         { address: TOKEN, blockNumber: B, transactionHash: nextTx() },
       ),
     )
-    const batch = await source.process([[], chain.logsIn(0n, B)], { toBlock: B })
+    const batch = await source.process([[], chain.logsIn(0n, B)], { toBlock: B, live: false })
     expect(batch.blocks).toEqual([])
     expect(pools.marks(TOKEN)?.deadBalance).toBe(0n)
   })
@@ -243,7 +244,7 @@ describe("v4 source", () => {
     })
   })
 
-  it("the first dead balance is read at the head and stamped there", async () => {
+  it("in a backfill, the first dead balance is read at the head and stamped there", async () => {
     const { chain, pools, run } = setup(B + 120n)
     chain.balances.set(DEAD_KEY, 100n)
     burn(chain, { block: B + 110n, value: 7n })
@@ -257,6 +258,52 @@ describe("v4 source", () => {
     expect(second.dead).toEqual([])
     expect(pools.marks(TOKEN)).toMatchObject({ deadBalance: 100n, deadBalanceBlock: B + 120n })
     expect(chain.balanceReads).toEqual([B + 120n])
+  })
+
+  it("in the live tick, the first dead balance is read at the span's end and stamped there", async () => {
+    const { chain, pools, run } = setup(B + 120n)
+    chain.balances.set(DEAD_KEY, 100n)
+    burn(chain, { block: B + 90n, value: 7n })
+    burn(chain, { block: B + 110n, value: 5n })
+    const first = await run(B + 100n, B - 100n, true)
+    expect(first.dead).toEqual([{ token: TOKEN, balance: 100n, block: B + 100n }])
+    expect(pools.marks(TOKEN)).toMatchObject({ deadBalance: 100n, deadBalanceBlock: B + 100n })
+    expect(chain.getBlockNumberCalls).toBe(0)
+    expect(chain.balanceReads).toEqual([B + 100n])
+
+    // A burn after the read block raises the balance.
+    const second = await run(B + 120n, B + 101n, true)
+    expect(second.dead).toEqual([{ token: TOKEN, balance: 105n, block: B + 110n }])
+    expect(chain.balanceReads).toEqual([B + 100n])
+  })
+
+  it("a dead balance read the endpoint refuses fails the span as not served", async () => {
+    const { chain, run } = setup()
+    chain.readBalances = async () => {
+      throw Object.assign(new Error("header not found"), { code: -32000 })
+    }
+    swap(chain, { block: B })
+    await expect(run(B, B - 100n, true)).rejects.toEqual(new BlockNotServedError(B))
+  })
+
+  it("a block read the endpoint refuses fails the span as not served", async () => {
+    const { chain, pools, run } = setup()
+    pools.setDead(TOKEN, 0n, B - 50n)
+    chain.getBlockSenders = async () => {
+      throw Object.assign(new Error("header not found"), { code: -32000 })
+    }
+    swap(chain, { block: B })
+    await expect(run(B, B - 100n, true)).rejects.toEqual(new BlockNotServedError(B))
+  })
+
+  it("a refused read stays a transport error when every endpoint is down", async () => {
+    const { chain, run } = setup()
+    const down = new HttpRequestError({ url: "http://rpc.test", details: "fetch failed" })
+    chain.readBalances = async () => {
+      throw down
+    }
+    swap(chain, { block: B })
+    await expect(run(B, B - 100n, true)).rejects.toBe(down)
   })
 
   it("a transfer to the dead address lowers the next swap's market cap", async () => {
@@ -318,7 +365,7 @@ describe("v4 source", () => {
     expect(filters).toEqual([null, null])
     swap(chain, { block: B + 3n })
     pools.add({ ...entry(1), createdBlock: B + 2n }, SUPPLY)
-    const batch = await source.process([[], []], { toBlock: B + 5n })
+    const batch = await source.process([[], []], { toBlock: B + 5n, live: false })
     expect(batch.events.map((e) => e.event.type)).toEqual(["launchpad.swap"])
     expect(chain.getLogsCalls).toEqual([[B + 2n, B + 5n]])
   })
@@ -340,8 +387,8 @@ describe("v4 source through the database", () => {
     const ingest = async (from: bigint, to: bigint) => {
       const inkFilters = ink.filters()
       const v4Filters = v4.filters()
-      const a = await ink.process(logs(inkFilters, from, to), { toBlock: to })
-      const b = await v4.process(logs(v4Filters, from, to), { toBlock: to })
+      const a = await ink.process(logs(inkFilters, from, to), { toBlock: to, live: false })
+      const b = await v4.process(logs(v4Filters, from, to), { toBlock: to, live: false })
       await store.writeBatch([a, b], [(tx) => ink.write(tx, a), (tx) => v4.write(tx, b)], {
         cursor: { block: to, hash: chain.hashOf(to) },
         head: to,

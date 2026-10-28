@@ -291,7 +291,7 @@ describe("pools and ath through the database", () => {
     const store = createStore(sql)
     await source.reload()
     const ingest = async (to: bigint) => {
-      const batch = await source.process([chain.logsIn(0n, to)], { toBlock: to })
+      const batch = await source.process([chain.logsIn(0n, to)], { toBlock: to, live: false })
       await store.writeBatch([batch], [(tx) => source.write(tx, batch)], {
         cursor: { block: to, hash: chain.hashOf(to) },
         head: to,
