@@ -8,6 +8,7 @@ import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
+import { PoolRegistry } from "../src/sources/pools"
 import type { Source, Tx } from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
@@ -27,7 +28,7 @@ function pumpIndexer(chain: Chain, s: Store, logger: Logger = () => {}) {
     chain,
     store: s,
     logger,
-    sources: [inkypumpSource({ sql, chain, logger })],
+    sources: [inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger })],
   })
 }
 
@@ -476,12 +477,14 @@ describe("Indexer over several sources", () => {
   /** A source that records every call in `calls` and writes its log blocks to fake_writes. */
   function fakeSource(name: string, filters: LogFilter[], calls: string[], failWrite = false) {
     const seen: { logs: ChainLog[][]; toBlock: bigint }[] = []
+    const live: boolean[] = []
     const rollbackTxs: Tx[] = []
     const source: Source<{ events: []; blocks: { number: bigint; hash: Hash }[] }, string> = {
       name,
       filters: () => filters,
       async process(logs, ctx) {
         seen.push({ logs, toBlock: ctx.toBlock })
+        live.push(ctx.live)
         const blocks = new Map(logs.flat().map((l) => [l.blockNumber, l.blockHash]))
         return { events: [], blocks: [...blocks].map(([number, hash]) => ({ number, hash })) }
       },
@@ -504,7 +507,7 @@ describe("Indexer over several sources", () => {
         calls.push(`${name}.reload`)
       },
     }
-    return { source, seen, rollbackTxs }
+    return { source, seen, live, rollbackTxs }
   }
 
   /** Records [from - S, to - S, filter] for every getLogs call. */
@@ -550,6 +553,17 @@ describe("Indexer over several sources", () => {
     ])
     expect((await store.recentBlocks()).map((r) => r.number - S)).toEqual([20n, 15n, 7n, 5n])
     expect(idx.cursorBlock).toBe(S + 20n)
+  })
+
+  it("tells sources whether a span is the live tick or a backfill", async () => {
+    const chain = new FakeChain(S + 20n)
+    chain.add(log(A, T1, S + 5n))
+    const a = fakeSource("a", [filterA], [])
+    const idx = new Indexer({ chain, store, logger: () => {}, sources: [a.source] })
+    await idx.init()
+    await idx.trigger()
+    await idx.backfill(S, S + 20n)
+    expect(a.live).toEqual([true, false])
   })
 
   it("clamps the range to the smallest toBlock any filter returned and drops logs above it", async () => {
@@ -610,7 +624,11 @@ describe("Indexer over several sources", () => {
       chain,
       store,
       logger: () => {},
-      sources: [inkypumpSource({ sql, chain, logger: () => {} }), a.source, b.source],
+      sources: [
+        inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: () => {} }),
+        a.source,
+        b.source,
+      ],
     })
     await idx.init()
     await expect(idx.trigger()).rejects.toThrow("b write failed")

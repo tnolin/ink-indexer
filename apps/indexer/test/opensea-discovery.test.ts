@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import type { NftCollectionEvent, NftDropEvent } from "@ink-indexer/events"
@@ -11,7 +12,7 @@ import { createDiscoveryJob, createMetadataJob } from "../src/sources/opensea/di
 import { createDropsJob } from "../src/sources/opensea/drops"
 import { createOpenSeaRest } from "../src/sources/opensea/rest"
 import { createScheduler, type Job, startScheduler } from "../src/sources/opensea/scheduler"
-import { createSnapshots, snapshotHash } from "../src/sources/opensea/snapshot"
+import { canonicalJson, createSnapshots, snapshotHash } from "../src/sources/opensea/snapshot"
 import { createStore, type Store } from "../src/store"
 import { type FakeResponse, fakeFetch, recorded } from "./opensea/fake-fetch"
 
@@ -894,6 +895,19 @@ describe("snapshot", () => {
     // Key order is irrelevant.
     expect(snapshotHash(reverseKeys(e!) as NftCollectionEvent)).toBe(snapshotHash(e!))
     expect((await rowOf(HORNET)).snapshot_hash).toBe(snapshotHash(e!))
+  })
+
+  it("the hash does not change with the schema version, so hashes stored under v1 still match", async () => {
+    const snapshots = createSnapshots({ sql, store, now })
+    await addCollection(HORNET, fields)
+    await snapshots.emitSnapshotIfChanged(HORNET)
+    const [e] = await eventsOf<NftCollectionEvent>("nft.collection")
+    expect(e!.v).toBe(2)
+    const { txHash, logIndex, blockNumber, blockTimestamp, ...body } = e!
+    const storedUnderV1 = createHash("sha256")
+      .update(canonicalJson({ ...body, v: 1 }))
+      .digest("hex")
+    expect(snapshotHash(e!)).toBe(storedUnderV1)
   })
 
   it("carries the launchpad and token of a Chimera collection, and marks gates that do not apply", async () => {

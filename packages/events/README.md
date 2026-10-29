@@ -2,13 +2,13 @@
 
 Typed, versioned event schema for ink-indexer. These are the payloads in the indexer's `indexer.events` table and the contract for anything that reads it. MIT licensed.
 
-Every event has `v` (schema version, currently `1`), `type`, `chainId` (57073), `txHash`, `logIndex`, `blockNumber` (decimal string) and `blockTimestamp` (unix seconds). `launchpad.*` events also have `launchpad`, `token` and `launchId`. `nft.*` events have `contract` and `source` (`chain` or `opensea`; `txHash` is a synthetic id for OpenSea events) and are typed as `NftEvent`. Addresses and hashes are lowercase. Amounts are decimal strings in base units.
+Every event has `v` (schema version, currently `2`), `type`, `chainId` (57073), `txHash`, `logIndex`, `blockNumber` (decimal string) and `blockTimestamp` (unix seconds). `launchpad.*` events also have `launchpad`, `token` and `launchId`. `nft.*` events have `contract` and `source` (`chain` or `opensea`; `txHash` is a synthetic id for OpenSea events) and are typed as `NftEvent`. Addresses and hashes are lowercase. Amounts are decimal strings in base units.
 
 ## `launchpad.launch`
 
 ```json
 {
-  "v": 1, "type": "launchpad.launch", "chainId": 57073, "launchpad": "inkypump",
+  "v": 2, "type": "launchpad.launch", "chainId": 57073, "launchpad": "inkypump",
   "token": "0x00000000000000000000000000000000000000d1",
   "launchId": "0x1111111111111111111111111111111111111111111111111111111111111111",
   "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -18,17 +18,19 @@ Every event has `v` (schema version, currently `1`), `type`, `chainId` (57073), 
   "name": "Shark", "ticker": "FIN", "description": null, "imageUrl": "https://img/x.png",
   "links": { "telegram": null, "twitter": "https://x.com/fin", "website": null },
   "quoteAsset": "0x0000000000000000000000000000000000000000",
-  "targetRaise": "1000000000000000000", "totalSupply": "1000000000000000000000000000"
+  "targetRaise": "1000000000000000000", "totalSupply": "1000000000000000000000000000",
+  "startsInPool": false, "poolId": null, "poolManager": null,
+  "customHook": null, "hookModules": null
 }
 ```
 
-`quoteAsset` is the zero address for ETH-quoted launches, or the xStocks wrapper token for stock-quoted launches.
+`quoteAsset` is the zero address for ETH-quoted launches, or the xStocks wrapper token for stock-quoted launches. `startsInPool` is true for a token that trades in a Uniswap v4 pool from its first block; its `poolId`, `poolManager` and `hook` then describe that pool, and `targetRaise` is `null` because there is no bonding curve. `customHook` and `hookModules` are `null` where they do not apply.
 
 ## `launchpad.trade`
 
 ```json
 {
-  "v": 1, "type": "launchpad.trade", "chainId": 57073, "launchpad": "inkypump",
+  "v": 2, "type": "launchpad.trade", "chainId": 57073, "launchpad": "inkypump",
   "token": "0x00000000000000000000000000000000000000d1",
   "launchId": "0x1111111111111111111111111111111111111111111111111111111111111111",
   "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -37,13 +39,14 @@ Every event has `v` (schema version, currently `1`), `type`, `chainId` (57073), 
   "tokenAmount": "7", "quoteAmount": "9", "price": "1000",
   "curveValue": "500000000000000000", "target": "1000000000000000000",
   "progressBpsBefore": 1234, "progressBpsAfter": 5000, "soldBps": 5000,
-  "marketCap": "1000000000000",
+  "marketCap": "1000000000000", "athMarketCap": "3000000000000",
   "quoteAsset": "0x0000000000000000000000000000000000000000"
 }
 ```
 
 - `quoteAmount` is the gross amount paid on a buy and the net payout on a sell.
 - `price` is the price the contract reports with the trade, in quote base units per whole token. `marketCap` is `price × totalSupply / 10^18`.
+- `athMarketCap` is the highest market cap the token has reached on the curve or in its pool, in quote base units.
 - `curveValue` is the bonding curve's own value at the new tokens-sold figure. A launch bonds when it reaches `target`, so `progressBps = curveValue × 10000 / target`, from 0 to 10,000. It can differ from the contract's `raised` field, which on newer InkyPump hooks also counts buy fees.
 - `soldBps` is tokens sold over sale supply in basis points (capped at 10,000) and is the figure inkypump.com displays for curve tokens.
 - `progressBpsAfter` tracks value raised on the curve, and both `soldBps` and `progressBpsAfter` reach 10,000 at bond.
@@ -52,16 +55,60 @@ Every event has `v` (schema version, currently `1`), `type`, `chainId` (57073), 
 
 ```json
 {
-  "v": 1, "type": "launchpad.bond", "chainId": 57073, "launchpad": "inkypump",
+  "v": 2, "type": "launchpad.bond", "chainId": 57073, "launchpad": "inkypump",
   "token": "0x00000000000000000000000000000000000000d1",
   "launchId": "0x1111111111111111111111111111111111111111111111111111111111111111",
   "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "logIndex": 3, "blockNumber": "45300000", "blockTimestamp": 1790000000,
   "poolId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "poolManager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
   "liquidityQuote": "2", "liquidityTokens": "3",
   "quoteAsset": "0x0000000000000000000000000000000000000000"
 }
 ```
+
+## `launchpad.swap`
+
+A swap in the Uniswap v4 pool of a token that has bonded.
+
+```json
+{
+  "v": 2, "type": "launchpad.swap", "chainId": 57073, "launchpad": "inkypump",
+  "token": "0x00000000000000000000000000000000000000d1",
+  "launchId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "logIndex": 3, "blockNumber": "45300000", "blockTimestamp": 1790000000,
+  "poolId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "poolManager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+  "side": "buy", "trader": "0x00000000000000000000000000000000000000e1",
+  "router": "0x00000000000000000000000000000000000000f1",
+  "tokenAmount": "7000000000000000000", "quoteAmount": "50000000000000000",
+  "quoteAsset": "0x0000000000000000000000000000000000000000",
+  "price": "7142857142857142", "marketCap": "7135714285714284858000000",
+  "athMarketCap": "9000000000000000000000000",
+  "quoteLiquidity": "4000000000000000000",
+  "supply": "999000000000000000000000000"
+}
+```
+
+- `trader` is the sender of the transaction. `router` is the address that called the pool manager, which is a router or aggregator contract for most swaps.
+- `quoteAmount` is the quote paid on a buy and received on a sell. `price` is quote base units per 1e18 token base units after the swap.
+- `tokenAmount` and `quoteAmount` are the amounts of the pool manager's `Swap` event. They exclude any fee a hook takes, so `quoteAmount` is not necessarily what the wallet paid or received.
+- `supply` is the token's total supply minus the balance of the dead address (`0x…dEaD`), and `marketCap` is `price × supply / 10^18`.
+- `quoteLiquidity` is the pool's quote side after the swap, computed from the pool's in-range liquidity and price. It is exact for a full-range position and approximate when other positions exist.
+- `athMarketCap` covers the token's whole history, curve and pool.
+
+## Version 1 rows
+
+Rows written before schema version 2 keep their original payloads with `"v": 1`. Version 2 added:
+
+- `launchpad` is one of `inkypump`, `inkfun`, `tsunami`, `hookit` or `chimera` (`LaunchpadKey`); version 1 rows are all `inkypump`.
+- `launchpad.launch`: `startsInPool`, `poolId`, `poolManager`, `customHook` and `hookModules`; `targetRaise` can be `null`.
+- `launchpad.trade`: `athMarketCap`.
+- `launchpad.bond`: `poolManager`.
+- `launchpad.swap`: a new event type.
+
+`nft.*` payloads did not change. The package exports `LaunchEventV1`, `TradeEventV1` and `BondEventV1` for the old shapes, and `StoredEvent` for any payload that can be in the table. A reader branches on `v`.
 
 ## NFT events
 
@@ -77,7 +124,7 @@ A snapshot, written at discovery and whenever a field changes.
 
 ```json
 {
-  "v": 1, "type": "nft.collection", "chainId": 57073,
+  "v": 2, "type": "nft.collection", "chainId": 57073,
   "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
   "txHash": "os:col:0x00000000000000000000000000000000000000a1:3", "logIndex": 0,
   "blockNumber": "58966378", "blockTimestamp": 1790000000,
@@ -101,7 +148,7 @@ A snapshot, written at discovery and whenever a field changes.
 
 ```json
 {
-  "v": 1, "type": "nft.drop", "chainId": 57073,
+  "v": 2, "type": "nft.drop", "chainId": 57073,
   "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
   "txHash": "os:drop:0x00000000000000000000000000000000000000a1:1", "logIndex": 0,
   "blockNumber": "58966378", "blockTimestamp": 1790000000,
@@ -121,7 +168,7 @@ A mint milestone: `stage_start`, `progress` or `sold_out`. A contract that had i
 
 ```json
 {
-  "v": 1, "type": "nft.mint", "chainId": 57073,
+  "v": 2, "type": "nft.mint", "chainId": 57073,
   "contract": "0x00000000000000000000000000000000000000a1", "source": "chain",
   "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "logIndex": 7,
   "blockNumber": "58966378", "blockTimestamp": 1790000000,
@@ -139,7 +186,7 @@ A listing that passed the indexer's filter: public, paid in ETH or WETH, open fo
 
 ```json
 {
-  "v": 1, "type": "nft.listing", "chainId": 57073,
+  "v": 2, "type": "nft.listing", "chainId": 57073,
   "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
   "txHash": "os:list:0x1111111111111111111111111111111111111111111111111111111111111111", "logIndex": 0,
   "blockNumber": "58966378", "blockTimestamp": 1790000000,
@@ -160,7 +207,7 @@ One event per NFT item in a Seaport fill.
 
 ```json
 {
-  "v": 1, "type": "nft.sale", "chainId": 57073,
+  "v": 2, "type": "nft.sale", "chainId": 57073,
   "contract": "0x00000000000000000000000000000000000000a1", "source": "chain",
   "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "logIndex": 12,
   "blockNumber": "58966378", "blockTimestamp": 1790000000,
@@ -180,7 +227,7 @@ One event per NFT item in a Seaport fill.
 
 ```json
 {
-  "v": 1, "type": "nft.stats", "chainId": 57073,
+  "v": 2, "type": "nft.stats", "chainId": 57073,
   "contract": "0x00000000000000000000000000000000000000a1", "source": "opensea",
   "txHash": "os:stats:0x00000000000000000000000000000000000000a1:18", "logIndex": 0,
   "blockNumber": "58966378", "blockTimestamp": 1790000000,
@@ -198,7 +245,7 @@ A Chimera campaign was created. `contract` is the collection.
 
 ```json
 {
-  "v": 1, "type": "nft.launch", "chainId": 57073,
+  "v": 2, "type": "nft.launch", "chainId": 57073,
   "contract": "0x00000000000000000000000000000000000000a1", "source": "chain",
   "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "logIndex": 4,
   "blockNumber": "58966378", "blockTimestamp": 1790000000,
@@ -215,7 +262,7 @@ A Chimera campaign was created. `contract` is the collection.
 
 | Event | Identity from the payload |
 | --- | --- |
-| `launchpad.*` | `txHash`, `logIndex` |
+| `launchpad.*` (including `launchpad.swap`) | `txHash`, `logIndex` |
 | `nft.sale` | `txHash`, `logIndex`, `contract`, `tokenId` |
 | `nft.mint` | `txHash`, `logIndex`, `kind`, and `markBps` (for `progress`) or `stageIndex` (for `stage_start`) |
 | `nft.launch` | `txHash`, `logIndex` |

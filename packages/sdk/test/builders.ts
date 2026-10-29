@@ -9,6 +9,7 @@ import {
 } from "viem"
 import { hookEventsAbi, XSTOCKS_HOOK_CREATED_TOPIC } from "../src/inkypump/abi"
 import type { ChainLog } from "../src/types"
+import { SWAP_TOPIC, TRANSFER_TOPIC } from "../src/v4/constants"
 
 export type Meta = Partial<Omit<ChainLog, "topics" | "data">>
 
@@ -128,5 +129,48 @@ export function xstocksHookCreatedLog(
     { address: "0x92f303ae539052ebb7d551bb2ec1a6f1affbaf85", ...m },
     topics,
     `0x${"00".repeat(128)}`,
+  )
+}
+
+const SWAP_ABI = parseAbiParameters("int128, int128, uint160, uint128, int24, uint24")
+
+/** A Uniswap v4 PoolManager `Swap`. */
+export function swapLog(
+  a: {
+    poolId: Hash
+    sender: Address
+    amount0: bigint
+    amount1: bigint
+    sqrtPriceX96: bigint
+    liquidity: bigint
+    tick?: number
+    fee?: number
+  },
+  m: Meta = {},
+): ChainLog {
+  const data = encodeAbiParameters(SWAP_ABI, [
+    a.amount0,
+    a.amount1,
+    a.sqrtPriceX96,
+    a.liquidity,
+    a.tick ?? 0,
+    a.fee ?? 0,
+  ])
+  return withMeta(
+    { address: "0x360e68faccca8ca495c1b759fd9eee466db9fb32", ...m },
+    [SWAP_TOPIC, a.poolId, pad(a.sender)],
+    data,
+  )
+}
+
+/** An ERC-20 `Transfer` emitted by `m.address`. */
+export function transferLog(
+  a: { from: Address; to: Address; value: bigint },
+  m: Meta = {},
+): ChainLog {
+  return withMeta(
+    m,
+    [TRANSFER_TOPIC, pad(a.from), pad(a.to)],
+    encodeAbiParameters(parseAbiParameters("uint256"), [a.value]),
   )
 }

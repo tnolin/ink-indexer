@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { NftLaunchEvent } from "@ink-indexer/events"
+import { type NftLaunchEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import {
   CHIMERA_FACTORY,
   type ChainLog,
@@ -25,6 +25,7 @@ import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { createCollectionsFromSales } from "../src/sources/nft/write"
+import { PoolRegistry } from "../src/sources/pools"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 
@@ -171,7 +172,7 @@ describe("NFT source", () => {
     const w = rows.find((r) => r.entity === WIRED)!
     expect(w.sub).toBe("")
     expect(w.payload).toEqual({
-      v: 1,
+      v: SCHEMA_VERSION,
       chainId: 57073,
       type: "nft.launch",
       source: "chain",
@@ -301,7 +302,7 @@ describe("NFT source", () => {
     }
     const expected = logs.flatMap(decodeOrderFulfilled)
     expect(rows[0]!.payload).toMatchObject({
-      v: 1,
+      v: SCHEMA_VERSION,
       chainId: 57073,
       type: "nft.sale",
       source: "chain",
@@ -719,7 +720,7 @@ describe("NFT source", () => {
       return getLogs(from, to, filter)
     }
     const sources = [
-      inkypumpSource({ sql, chain, logger: () => {} }),
+      inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: () => {} }),
       nftSource({ sql, chain, logger: () => {} }),
     ]
     const idx = new Indexer({ chain, store, logger: () => {}, sources })

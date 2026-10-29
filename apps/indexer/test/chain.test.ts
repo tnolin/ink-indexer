@@ -326,3 +326,85 @@ describe("viemChain repeated failures", () => {
     expect(levels).toEqual(Array(6).fill("warn"))
   })
 })
+
+describe("viemChain block senders and balances", () => {
+  const A = "0xAbCdEf0000000000000000000000000000000001"
+  const B = "0xAbCdEf0000000000000000000000000000000002"
+  const TX = `0x${"CD".repeat(32)}`
+  const HASH = `0x${"AB".repeat(32)}`
+
+  it("getBlockSenders maps hashes to lowercase senders and returns the block hash and timestamp", async () => {
+    const args: unknown[] = []
+    const { chain } = fullChain(
+      async () => [],
+      async (...a: unknown[]) => {
+        args.push(a[0])
+        return {
+          hash: HASH,
+          timestamp: 7n,
+          transactions: [{ hash: TX, from: A }, `0x${"11".repeat(32)}`],
+        }
+      },
+    )
+    const r = await chain.getBlockSenders(9n)
+    expect(args).toEqual([{ blockNumber: 9n, includeTransactions: true }])
+    expect(r?.hash).toBe(HASH.toLowerCase())
+    expect(r?.timestamp).toBe(7)
+    expect([...(r?.senders ?? [])]).toEqual([[TX.toLowerCase(), A.toLowerCase()]])
+  })
+
+  it("getBlockSenders returns null for a missing block", async () => {
+    const missing = fullChain(
+      async () => [],
+      async () => {
+        throw new BlockNotFoundError({ blockNumber: 5n })
+      },
+    )
+    expect(await missing.chain.getBlockSenders(5n)).toBeNull()
+    const noHash = fullChain(
+      async () => [],
+      async () => ({ hash: null, timestamp: 1n }),
+    )
+    expect(await noHash.chain.getBlockSenders(5n)).toBeNull()
+  })
+
+  it("getBlockSenders retries a transport error", async () => {
+    for (const mk of [socketError, timeoutError]) {
+      let n = 0
+      const { chain, sleeps } = fullChain(
+        async () => [],
+        async () => {
+          if (++n === 1) throw mk()
+          return { hash: HASH, timestamp: 1n, transactions: [] }
+        },
+      )
+      expect((await chain.getBlockSenders(1n))?.senders.size).toBe(0)
+      expect(n).toBe(2)
+      expect(sleeps).toEqual([1_000])
+    }
+  })
+
+  it("readBalances reads at the given block and retries a transport error", async () => {
+    let n = 0
+    const seen: unknown[] = []
+    const { chain, sleeps } = fullChain(
+      async (...a: unknown[]) => {
+        if (++n === 1) throw socketError()
+        seen.push((a[0] as { blockNumber: bigint }).blockNumber)
+        return [5n, 6n]
+      },
+      async () => ({}),
+    )
+    expect(
+      await chain.readBalances(
+        [
+          { token: TOKEN, holder: A as never },
+          { token: TOKEN, holder: B as never },
+        ],
+        12n,
+      ),
+    ).toEqual([5n, 6n])
+    expect(seen).toEqual([12n])
+    expect(sleeps).toEqual([1_000])
+  })
+})

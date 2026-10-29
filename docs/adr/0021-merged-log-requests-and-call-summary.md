@@ -1,7 +1,7 @@
 # 0021. Merged log requests and a call summary
 
 Date: 2026-10-23
-Status: Accepted
+Status: Accepted. Request counts amended by ADR 0033.
 
 ## Context
 
@@ -28,3 +28,7 @@ A replay test (`apps/indexer/test/merged-requests.test.ts`) runs the per-filter 
 - A merged response is larger than any single filter's, and an endpoint's response-size cap applies to it. The range halving in ADR 0010 handles that as it does any failed request.
 - A new filter joins an existing request when it fits one of the two merges, and gets its own otherwise; sources need no change.
 - Tick frequency is unchanged.
+
+## Amendment 2026-10-29: the v4-swaps group
+
+The `v4-swaps` group (ADR 0033) adds two requests, a PoolManager swap filter and a `Transfer` filter on the dead address, once a pool is registered. With every group on a tick makes 7 requests, up from 5. `inkypump` alone makes 3, up from 1, and `inkypump` with `nft-launches` makes 4. `nft-sales` and `nft-launches` alone are unchanged. The two new filters match no other filter's topic positions, so they never merge. Without a registered pool the group makes no request. A span containing a bond makes one more request for that pool's swaps.

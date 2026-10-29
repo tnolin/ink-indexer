@@ -3,7 +3,7 @@
     "type": "launchpad.launch",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Payward Penguin",
       "type": "launchpad.launch",
@@ -13,6 +13,7 @@
         "telegram": null
       },
       "token": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
+      "poolId": null,
       "ticker": "PAYWARD",
       "txHash": "0x9f9f2efe95e40cc0d131a7cdb7441bf428a44d7f418d9b73871dfb21751595a1",
       "chainId": 57073,
@@ -21,11 +22,15 @@
       "launchId": "0xa1ec9bc2a331e1b1f82109db260298cd8864981bf18520aea6b100fad7c8b9b1",
       "logIndex": 6,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55905175",
       "description": "Kraken’s original name was Payward",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789403586
     },
     "block": "55905175",
@@ -38,7 +43,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1605305959",
@@ -57,6 +62,7 @@
       "blockNumber": "55905175",
       "quoteAmount": "35999999999999999",
       "tokenAmount": "24386536477752518918375309",
+      "athMarketCap": "1605305959000000000",
       "blockTimestamp": 1789403586,
       "progressBpsAfter": 119,
       "progressBpsBefore": 0
@@ -71,7 +77,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2879862449",
@@ -90,6 +96,7 @@
       "blockNumber": "55905176",
       "quoteAmount": "269999999999999999",
       "tokenAmount": "120396817242036377810562446",
+      "athMarketCap": "2879862449000000000",
       "blockTimestamp": 1789403587,
       "progressBpsAfter": 1019,
       "progressBpsBefore": 119
@@ -104,7 +111,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3058142811",
@@ -123,6 +130,7 @@
       "blockNumber": "55905176",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "16840672209609434206854253",
+      "athMarketCap": "3058142811000000000",
       "blockTimestamp": 1789403587,
       "progressBpsAfter": 1186,
       "progressBpsBefore": 1019
@@ -137,7 +145,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4221525225",
@@ -156,6 +164,7 @@
       "blockNumber": "55905176",
       "quoteAmount": "399999999999999999",
       "tokenAmount": "109895121192360805845193909",
+      "athMarketCap": "4221525225000000000",
       "blockTimestamp": 1789403587,
       "progressBpsAfter": 2519,
       "progressBpsBefore": 1186
@@ -170,7 +179,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5249825585",
@@ -189,6 +198,7 @@
       "blockNumber": "55905176",
       "quoteAmount": "459999999999999999",
       "tokenAmount": "97135035895396873079223671",
+      "athMarketCap": "5249825585000000000",
       "blockTimestamp": 1789403587,
       "progressBpsAfter": 4053,
       "progressBpsBefore": 2519
@@ -203,7 +213,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "6244507160",
@@ -222,6 +232,7 @@
       "blockNumber": "55905176",
       "quoteAmount": "539999999999999999",
       "tokenAmount": "93959347176173265575847472",
+      "athMarketCap": "6244507160000000000",
       "blockTimestamp": 1789403587,
       "progressBpsAfter": 5853,
       "progressBpsBefore": 4053
@@ -236,7 +247,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "7178303809",
@@ -255,6 +266,7 @@
       "blockNumber": "55905176",
       "quoteAmount": "591999999999999999",
       "tokenAmount": "88208051474587934291923913",
+      "athMarketCap": "7178303809000000000",
       "blockTimestamp": 1789403587,
       "progressBpsAfter": 7826,
       "progressBpsBefore": 5853
@@ -269,7 +281,7 @@
     "type": "launchpad.trade",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "8082856991",
@@ -288,6 +300,7 @@
       "blockNumber": "55905176",
       "quoteAmount": "652000000000000000",
       "tokenAmount": "85445662875374716655991194",
+      "athMarketCap": "8082856991000000000",
       "blockTimestamp": 1789403587,
       "progressBpsAfter": 10000,
       "progressBpsBefore": 7826
@@ -302,7 +315,7 @@
     "type": "launchpad.bond",
     "entity": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "type": "launchpad.bond",
       "token": "0x0934ed152d60215defd2ca4760038a91b3c4fe83",
       "poolId": "0xa1ec9bc2a331e1b1f82109db260298cd8864981bf18520aea6b100fad7c8b9b1",
@@ -313,6 +326,7 @@
       "launchpad": "inkypump",
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55905176",
+      "poolManager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
       "blockTimestamp": 1789403587,
       "liquidityQuote": "2940000000000000007",
       "liquidityTokens": "363732755456708073616027833"
@@ -327,7 +341,7 @@
     "type": "launchpad.launch",
     "entity": "0xc5a787fcddc5540f324dfa43c13dd3e48444aab2",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "你紫腚行",
       "type": "launchpad.launch",
@@ -337,6 +351,7 @@
         "telegram": null
       },
       "token": "0xc5a787fcddc5540f324dfa43c13dd3e48444aab2",
+      "poolId": null,
       "ticker": "你紫腚行",
       "txHash": "0x8a754713fda9e21e3fe3af844b605262a039f1cd899b0b42ee06dd73f0cee7b4",
       "chainId": 57073,
@@ -345,11 +360,15 @@
       "launchId": "0x32bdf84fcb591b657c124d9d1d75df779273d4a938116460b845fc3ccff2e7b1",
       "logIndex": 50,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55906224",
       "description": "无论遇到什么困难，穿上它你紫腚行",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789404635
     },
     "block": "55906224",
@@ -362,7 +381,7 @@
     "type": "launchpad.launch",
     "entity": "0xb4dbf54d86f05d955b697070f86bca3c89b970bc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "你紫腚行",
       "type": "launchpad.launch",
@@ -372,6 +391,7 @@
         "telegram": null
       },
       "token": "0xb4dbf54d86f05d955b697070f86bca3c89b970bc",
+      "poolId": null,
       "ticker": "你紫腚行",
       "txHash": "0x22d1eb728d2a27da01f6cbbfb1b1694db64ec26341268ebdc5297f11b72f619d",
       "chainId": 57073,
@@ -380,11 +400,15 @@
       "launchId": "0x81ad5c98b7601329d5dbe11be531fdf7a6971e009bf0610751d418e55e1f505a",
       "logIndex": 12,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55906641",
       "description": "无论遇到什么困难，穿上它你紫腚行",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789405052
     },
     "block": "55906641",
@@ -397,7 +421,7 @@
     "type": "launchpad.launch",
     "entity": "0x51a536dec3cc81cb55b95e6a94dafda5e6ff4817",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Tsunami",
       "type": "launchpad.launch",
@@ -407,6 +431,7 @@
         "telegram": null
       },
       "token": "0x51a536dec3cc81cb55b95e6a94dafda5e6ff4817",
+      "poolId": null,
       "ticker": "TSUNAMI",
       "txHash": "0x40ecd3dc51fb51d252f9a8fb4f10ab75d2a87f6090169b7b3f0dfd33949b1e80",
       "chainId": 57073,
@@ -415,11 +440,15 @@
       "launchId": "0x08cdf17da9020758331a109d7f1c984ebb9fc09c3f05f5eab1c1bcec08664fb7",
       "logIndex": 79,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55908448",
       "description": "$TSUNAMI: The unstoppable purple wave washing away boring crypto. Ride the tide or get swept. 🌊🟣",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "1000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789406859
     },
     "block": "55908448",
@@ -432,7 +461,7 @@
     "type": "launchpad.trade",
     "entity": "0x51a536dec3cc81cb55b95e6a94dafda5e6ff4817",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "954424351",
@@ -451,6 +480,7 @@
       "blockNumber": "55908498",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "142691867682226119120606169",
+      "athMarketCap": "954424351000000000",
       "blockTimestamp": 1789406909,
       "progressBpsAfter": 1004,
       "progressBpsBefore": 0
@@ -465,7 +495,7 @@
     "type": "launchpad.trade",
     "entity": "0x51a536dec3cc81cb55b95e6a94dafda5e6ff4817",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "450898083",
@@ -484,6 +514,7 @@
       "blockNumber": "55908506",
       "quoteAmount": "98000000000000001",
       "tokenAmount": "142691867682226119120606169",
+      "athMarketCap": "954424351000000000",
       "blockTimestamp": 1789406917,
       "progressBpsAfter": 2,
       "progressBpsBefore": 1004
@@ -498,7 +529,7 @@
     "type": "launchpad.launch",
     "entity": "0x26cd61919c8754ed2d39f981304b9f204328c3f5",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "MOCK BERT",
       "type": "launchpad.launch",
@@ -508,6 +539,7 @@
         "telegram": null
       },
       "token": "0x26cd61919c8754ed2d39f981304b9f204328c3f5",
+      "poolId": null,
       "ticker": "MOCK",
       "txHash": "0x62ea88c645ab2751ab5e3545ce7323b64cf5800f48cfd54523aff2d334b5ac7f",
       "chainId": 57073,
@@ -516,11 +548,15 @@
       "launchId": "0x2e9ee1e95193b30c5c31ebf16422251041819bce405b3a81b95f786c1fb51dfc",
       "logIndex": 31,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55909341",
       "description": "Forged in bokbok cum",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789407752
     },
     "block": "55909341",
@@ -533,7 +569,7 @@
     "type": "launchpad.trade",
     "entity": "0x26cd61919c8754ed2d39f981304b9f204328c3f5",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1397288690",
@@ -552,6 +588,7 @@
       "blockNumber": "55909341",
       "quoteAmount": "6499999999999999",
       "tokenAmount": "4736864418244358982292153",
+      "athMarketCap": "1397288690000000000",
       "blockTimestamp": 1789407752,
       "progressBpsAfter": 21,
       "progressBpsBefore": 0
@@ -566,7 +603,7 @@
     "type": "launchpad.launch",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Stinkcoin",
       "type": "launchpad.launch",
@@ -576,6 +613,7 @@
         "telegram": null
       },
       "token": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
+      "poolId": null,
       "ticker": "STINK",
       "txHash": "0xd8c0bfb20840abad25bdc895b4dbe29f74760958a80af01b82cb941dc22d4add",
       "chainId": 57073,
@@ -584,11 +622,15 @@
       "launchId": "0x3afb51ad8788e56f671f2d739e25ee84ae409456ae4347f96fded85bf6140cca",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55910200",
       "description": "inkchain fartcoin",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789408611
     },
     "block": "55910200",
@@ -601,7 +643,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1696678135",
@@ -620,6 +662,7 @@
       "blockNumber": "55910200",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "32870296187600961319636035",
+      "athMarketCap": "1696678135000000000",
       "blockTimestamp": 1789408611,
       "progressBpsAfter": 167,
       "progressBpsBefore": 0
@@ -634,7 +677,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2001181517",
@@ -653,6 +696,7 @@
       "blockNumber": "55910204",
       "quoteAmount": "52917875999999999",
       "tokenAmount": "28631654937038524393573431",
+      "athMarketCap": "2001181517000000000",
       "blockTimestamp": 1789408615,
       "progressBpsAfter": 344,
       "progressBpsBefore": 167
@@ -667,7 +711,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2289669962",
@@ -686,6 +730,7 @@
       "blockNumber": "55910204",
       "quoteAmount": "58174379999999999",
       "tokenAmount": "27124045014250352689934065",
+      "athMarketCap": "2289669962000000000",
       "blockTimestamp": 1789408615,
       "progressBpsAfter": 539,
       "progressBpsBefore": 344
@@ -700,7 +745,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2490724766",
@@ -719,6 +764,7 @@
       "blockNumber": "55910204",
       "quoteAmount": "45168749999999999",
       "tokenAmount": "18901294180745332528245675",
+      "athMarketCap": "2490724766000000000",
       "blockTimestamp": 1789408615,
       "progressBpsAfter": 690,
       "progressBpsBefore": 539
@@ -733,7 +779,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2677027447",
@@ -752,6 +798,7 @@
       "blockNumber": "55910204",
       "quoteAmount": "45246047406119999",
       "tokenAmount": "17513952357266110472530882",
+      "athMarketCap": "2677027447000000000",
       "blockTimestamp": 1789408615,
       "progressBpsAfter": 842,
       "progressBpsBefore": 690
@@ -766,7 +813,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2853968274",
@@ -785,6 +832,7 @@
       "blockNumber": "55910204",
       "quoteAmount": "45992946593879999",
       "tokenAmount": "16633548235941860097251808",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408615,
       "progressBpsAfter": 996,
       "progressBpsBefore": 842
@@ -799,7 +847,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2678789820",
@@ -818,6 +866,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "45086994617837629",
       "tokenAmount": "16633548235941860097251808",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 844,
       "progressBpsBefore": 996
@@ -832,7 +881,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2494343237",
@@ -851,6 +900,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "44386732898622607",
       "tokenAmount": "17513952357266110472530882",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 693,
       "progressBpsBefore": 844
@@ -865,7 +915,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2192859762",
@@ -884,6 +934,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "65736441433961445",
       "tokenAmount": "28631654937038524393573431",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 471,
       "progressBpsBefore": 693
@@ -898,7 +949,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1907259814",
@@ -917,6 +968,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "54473284511627978",
       "tokenAmount": "27124045014250352689934065",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 286,
       "progressBpsBefore": 471
@@ -931,7 +983,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1708223874",
@@ -950,6 +1002,7 @@
       "blockNumber": "55910210",
       "quoteAmount": "33475481088660577",
       "tokenAmount": "18901294180745332528245675",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408621,
       "progressBpsAfter": 173,
       "progressBpsBefore": 286
@@ -964,7 +1017,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2084151015",
@@ -983,6 +1036,7 @@
       "blockNumber": "55910226",
       "quoteAmount": "66999999999999999",
       "tokenAmount": "35349927317639747916405421",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408637,
       "progressBpsAfter": 398,
       "progressBpsBefore": 173
@@ -997,7 +1051,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2401945482",
@@ -1016,6 +1070,7 @@
       "blockNumber": "55910226",
       "quoteAmount": "66999999999999999",
       "tokenAmount": "29879903574304141879850703",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408637,
       "progressBpsAfter": 622,
       "progressBpsBefore": 398
@@ -1030,7 +1085,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2682349483",
@@ -1049,6 +1104,7 @@
       "blockNumber": "55910226",
       "quoteAmount": "66999999999999999",
       "tokenAmount": "26362527038116114838999312",
+      "athMarketCap": "2853968274000000000",
       "blockTimestamp": 1789408637,
       "progressBpsAfter": 847,
       "progressBpsBefore": 622
@@ -1063,7 +1119,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2936095263",
@@ -1082,6 +1138,7 @@
       "blockNumber": "55910226",
       "quoteAmount": "66999999999999999",
       "tokenAmount": "23855146047574918595597264",
+      "athMarketCap": "2936095263000000000",
       "blockTimestamp": 1789408637,
       "progressBpsAfter": 1071,
       "progressBpsBefore": 847
@@ -1096,7 +1153,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3060294333",
@@ -1115,6 +1172,7 @@
       "blockNumber": "55910231",
       "quoteAmount": "34999999999999999",
       "tokenAmount": "11674869897937914738856092",
+      "athMarketCap": "3060294333000000000",
       "blockTimestamp": 1789408642,
       "progressBpsAfter": 1188,
       "progressBpsBefore": 1071
@@ -1129,7 +1187,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3199659069",
@@ -1148,6 +1206,7 @@
       "blockNumber": "55910239",
       "quoteAmount": "40999999999999999",
       "tokenAmount": "13100558637003713517776780",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789408650,
       "progressBpsAfter": 1326,
       "progressBpsBefore": 1188
@@ -1162,7 +1221,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3061681721",
@@ -1181,6 +1240,7 @@
       "blockNumber": "55910260",
       "quoteAmount": "40188708756893840",
       "tokenAmount": "13100558637003713517776780",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789408671,
       "progressBpsAfter": 1190,
       "progressBpsBefore": 1326
@@ -1195,7 +1255,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2938718976",
@@ -1214,6 +1274,7 @@
       "blockNumber": "55910263",
       "quoteAmount": "34322800537470342",
       "tokenAmount": "11674869897937914738856092",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789408674,
       "progressBpsAfter": 1073,
       "progressBpsBefore": 1190
@@ -1228,7 +1289,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3095292027",
@@ -1247,6 +1308,7 @@
       "blockNumber": "55910376",
       "quoteAmount": "44399999999999999",
       "tokenAmount": "14718431356135796698829852",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789408787,
       "progressBpsAfter": 1222,
       "progressBpsBefore": 1073
@@ -1261,7 +1323,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2780645585",
@@ -1280,6 +1342,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "86006033193784167",
       "tokenAmount": "29879903574304141879850703",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 931,
       "progressBpsBefore": 1222
@@ -1294,7 +1357,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2529433326",
@@ -1313,6 +1376,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "62054134062435151",
       "tokenAmount": "23855146047574918595597264",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 721,
       "progressBpsBefore": 931
@@ -1327,7 +1391,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2157241103",
@@ -1346,6 +1410,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "81144856184360221",
       "tokenAmount": "35349927317639747916405421",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 446,
       "progressBpsBefore": 721
@@ -1360,7 +1425,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1879658041",
@@ -1379,6 +1444,7 @@
       "blockNumber": "55910977",
       "quoteAmount": "52127845787517641",
       "tokenAmount": "26362527038116114838999312",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409388,
       "progressBpsAfter": 270,
       "progressBpsBefore": 446
@@ -1393,7 +1459,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1885309738",
@@ -1412,6 +1478,7 @@
       "blockNumber": "55911019",
       "quoteAmount": "999999999999999",
       "tokenAmount": "531217008296003855716514",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409430,
       "progressBpsAfter": 273,
       "progressBpsBefore": 270
@@ -1426,7 +1493,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2197976400",
@@ -1445,6 +1512,7 @@
       "blockNumber": "55911038",
       "quoteAmount": "59999999999999999",
       "tokenAmount": "29398501244239550957019040",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409449,
       "progressBpsAfter": 474,
       "progressBpsBefore": 273
@@ -1459,7 +1527,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1888438823",
@@ -1478,6 +1546,7 @@
       "blockNumber": "55911137",
       "quoteAmount": "58841642462082105",
       "tokenAmount": "29398501244239550957019040",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789409548,
       "progressBpsAfter": 275,
       "progressBpsBefore": 474
@@ -1492,7 +1561,7 @@
     "type": "launchpad.launch",
     "entity": "0xccedbb7a0b33692e5684878c000ba176c462ced8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "inkjak",
       "type": "launchpad.launch",
@@ -1502,6 +1571,7 @@
         "telegram": null
       },
       "token": "0xccedbb7a0b33692e5684878c000ba176c462ced8",
+      "poolId": null,
       "ticker": "INKJAK",
       "txHash": "0x05b6ef9980b3d84f760493c1080d97bcb796ff32bbfe9b870af06375205e8b19",
       "chainId": 57073,
@@ -1510,11 +1580,15 @@
       "launchId": "0x892f0c7a3ee38ca9b83ea2a6c362955f672bbb4b15584476247edaf657cfdbdb",
       "logIndex": 8,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55912222",
       "description": "the wojak of inkchain",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789410633
     },
     "block": "55912222",
@@ -1527,7 +1601,7 @@
     "type": "launchpad.trade",
     "entity": "0xccedbb7a0b33692e5684878c000ba176c462ced8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1423558838",
@@ -1546,6 +1620,7 @@
       "blockNumber": "55912222",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "7218388128132302788515064",
+      "athMarketCap": "1423558838000000000",
       "blockTimestamp": 1789410633,
       "progressBpsAfter": 33,
       "progressBpsBefore": 0
@@ -1560,7 +1635,7 @@
     "type": "launchpad.trade",
     "entity": "0xccedbb7a0b33692e5684878c000ba176c462ced8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1430976016",
@@ -1579,6 +1654,7 @@
       "blockNumber": "55912239",
       "quoteAmount": "999999999999999",
       "tokenAmount": "700639546792177063374523",
+      "athMarketCap": "1430976016000000000",
       "blockTimestamp": 1789410650,
       "progressBpsAfter": 36,
       "progressBpsBefore": 33
@@ -1593,7 +1669,7 @@
     "type": "launchpad.trade",
     "entity": "0xccedbb7a0b33692e5684878c000ba176c462ced8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1373664015",
@@ -1612,6 +1688,7 @@
       "blockNumber": "55912260",
       "quoteAmount": "7440030237002776",
       "tokenAmount": "5413791096099227091386298",
+      "athMarketCap": "1430976016000000000",
       "blockTimestamp": 1789410671,
       "progressBpsAfter": 11,
       "progressBpsBefore": 36
@@ -1626,7 +1703,7 @@
     "type": "launchpad.trade",
     "entity": "0xccedbb7a0b33692e5684878c000ba176c462ced8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1354560014",
@@ -1645,6 +1722,7 @@
       "blockNumber": "55912272",
       "quoteAmount": "2412439034613528",
       "tokenAmount": "1804597032033075697128766",
+      "athMarketCap": "1430976016000000000",
       "blockTimestamp": 1789410683,
       "progressBpsAfter": 3,
       "progressBpsBefore": 11
@@ -1659,7 +1737,7 @@
     "type": "launchpad.trade",
     "entity": "0xccedbb7a0b33692e5684878c000ba176c462ced8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -1678,6 +1756,7 @@
       "blockNumber": "55912460",
       "quoteAmount": "726459926922142",
       "tokenAmount": "700639546792177063374523",
+      "athMarketCap": "1430976016000000000",
       "blockTimestamp": 1789410871,
       "progressBpsAfter": 0,
       "progressBpsBefore": 3
@@ -1692,7 +1771,7 @@
     "type": "launchpad.launch",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "🫟",
       "type": "launchpad.launch",
@@ -1702,6 +1781,7 @@
         "telegram": null
       },
       "token": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
+      "poolId": null,
       "ticker": "🫟",
       "txHash": "0xf28012d996125b60507447ea6b687481ed5eeedab793a43855e7324885fcea7c",
       "chainId": 57073,
@@ -1710,11 +1790,15 @@
       "launchId": "0x6fd47f27266c04c68d3c4ee9c031310ad4c9b97a42785fc10c6a6e22840665e1",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55912525",
       "description": "the only emoji to represent ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789410936
     },
     "block": "55912525",
@@ -1727,7 +1811,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1423558838",
@@ -1746,6 +1830,7 @@
       "blockNumber": "55912525",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "7218388128132302788515064",
+      "athMarketCap": "1423558838000000000",
       "blockTimestamp": 1789410936,
       "progressBpsAfter": 33,
       "progressBpsBefore": 0
@@ -1760,7 +1845,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1869165740",
@@ -1779,6 +1864,7 @@
       "blockNumber": "55912530",
       "quoteAmount": "69299999999999999",
       "tokenAmount": "42092801001438185123657520",
+      "athMarketCap": "1869165740000000000",
       "blockTimestamp": 1789410941,
       "progressBpsAfter": 264,
       "progressBpsBefore": 33
@@ -1793,7 +1879,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1874820833",
@@ -1812,6 +1898,7 @@
       "blockNumber": "55912531",
       "quoteAmount": "999999999999999",
       "tokenAmount": "534189951289014800802680",
+      "athMarketCap": "1874820833000000000",
       "blockTimestamp": 1789410942,
       "progressBpsAfter": 267,
       "progressBpsBefore": 264
@@ -1826,7 +1913,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1798404831",
@@ -1845,6 +1932,7 @@
       "blockNumber": "55912535",
       "quoteAmount": "12992236545488359",
       "tokenAmount": "7218388128132302788515064",
+      "athMarketCap": "1874820833000000000",
       "blockTimestamp": 1789410946,
       "progressBpsAfter": 223,
       "progressBpsBefore": 267
@@ -1859,7 +1947,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1352797929",
@@ -1878,6 +1966,7 @@
       "blockNumber": "55912543",
       "quoteAmount": "64995045656316380",
       "tokenAmount": "42092801001438185123657520",
+      "athMarketCap": "1874820833000000000",
       "blockTimestamp": 1789410954,
       "progressBpsAfter": 2,
       "progressBpsBefore": 223
@@ -1892,7 +1981,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1986786774",
@@ -1911,6 +2000,7 @@
       "blockNumber": "55912544",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "59887686141521445594546989",
+      "athMarketCap": "1986786774000000000",
       "blockTimestamp": 1789410955,
       "progressBpsAfter": 335,
       "progressBpsBefore": 2
@@ -1925,7 +2015,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2462637028",
@@ -1944,6 +2034,7 @@
       "blockNumber": "55912544",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "44949640519030642043713727",
+      "athMarketCap": "2462637028000000000",
       "blockTimestamp": 1789410955,
       "progressBpsAfter": 669,
       "progressBpsBefore": 335
@@ -1958,7 +2049,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2860391683",
@@ -1977,6 +2068,7 @@
       "blockNumber": "55912544",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "37572594706124678990842293",
+      "athMarketCap": "2860391683000000000",
       "blockTimestamp": 1789410955,
       "progressBpsAfter": 1002,
       "progressBpsBefore": 669
@@ -1991,7 +2083,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2987119245",
@@ -2010,6 +2102,7 @@
       "blockNumber": "55912548",
       "quoteAmount": "34999999999999999",
       "tokenAmount": "11970905395550754289366274",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789410959,
       "progressBpsAfter": 1119,
       "progressBpsBefore": 1002
@@ -2024,7 +2117,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2860391683",
@@ -2043,6 +2136,7 @@
       "blockNumber": "55912563",
       "quoteAmount": "34300000000000001",
       "tokenAmount": "11970905395550754289366274",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789410974,
       "progressBpsAfter": 1002,
       "progressBpsBefore": 1119
@@ -2057,7 +2151,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2854736589",
@@ -2076,6 +2170,7 @@
       "blockNumber": "55912593",
       "quoteAmount": "1495952403097277",
       "tokenAmount": "534189951289014800802680",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789411004,
       "progressBpsAfter": 997,
       "progressBpsBefore": 1002
@@ -2090,7 +2185,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1882843362",
@@ -2109,6 +2204,7 @@
       "blockNumber": "55912667",
       "quoteAmount": "981643595209019",
       "tokenAmount": "531217008296003855716514",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789411078,
       "progressBpsAfter": 272,
       "progressBpsBefore": 275
@@ -2123,7 +2219,7 @@
     "type": "launchpad.launch",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "In Case You Missed Ink",
       "type": "launchpad.launch",
@@ -2133,6 +2229,7 @@
         "telegram": null
       },
       "token": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
+      "poolId": null,
       "ticker": "ICYMI",
       "txHash": "0x704c84fd189ea849663933fff050f887f79da784c6eb66489265e62301cad660",
       "chainId": 57073,
@@ -2141,11 +2238,15 @@
       "launchId": "0x4bbf481fe6d545f76613dda65f2503dacb39bd92e021adc04fb6f621a8e204f7",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55912755",
       "description": "the motto of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789411166
     },
     "block": "55912755",
@@ -2158,7 +2259,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1460268036",
@@ -2177,6 +2278,7 @@
       "blockNumber": "55912755",
       "quoteAmount": "14999999999999999",
       "tokenAmount": "10686002679708902731145160",
+      "athMarketCap": "1460268036000000000",
       "blockTimestamp": 1789411166,
       "progressBpsAfter": 49,
       "progressBpsBefore": 0
@@ -2191,7 +2293,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1956065003",
@@ -2210,6 +2312,7 @@
       "blockNumber": "55912779",
       "quoteAmount": "79999999999999999",
       "tokenAmount": "46833841610906554963479394",
+      "athMarketCap": "1956065003000000000",
       "blockTimestamp": 1789411190,
       "progressBpsAfter": 316,
       "progressBpsBefore": 49
@@ -2224,7 +2327,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2210162894",
@@ -2243,6 +2346,7 @@
       "blockNumber": "55912780",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "24002527633044109019210298",
+      "athMarketCap": "2210162894000000000",
       "blockTimestamp": 1789411191,
       "progressBpsAfter": 483,
       "progressBpsBefore": 316
@@ -2257,7 +2361,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2097037694",
@@ -2276,6 +2380,7 @@
       "blockNumber": "55912782",
       "quoteAmount": "22553110893500362",
       "tokenAmount": "10686002679708902731145160",
+      "athMarketCap": "2210162894000000000",
       "blockTimestamp": 1789411193,
       "progressBpsAfter": 406,
       "progressBpsBefore": 483
@@ -2290,7 +2395,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2109620482",
@@ -2309,6 +2414,7 @@
       "blockNumber": "55912782",
       "quoteAmount": "2499999999999999",
       "tokenAmount": "1188591942310382951354710",
+      "athMarketCap": "2210162894000000000",
       "blockTimestamp": 1789411193,
       "progressBpsAfter": 414,
       "progressBpsBefore": 406
@@ -2323,7 +2429,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2301608645",
@@ -2342,6 +2448,7 @@
       "blockNumber": "55912783",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "18135534990398253798388876",
+      "athMarketCap": "2301608645000000000",
       "blockTimestamp": 1789411194,
       "progressBpsAfter": 548,
       "progressBpsBefore": 414
@@ -2356,7 +2463,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2457324391",
@@ -2375,6 +2482,7 @@
       "blockNumber": "55912785",
       "quoteAmount": "34999999999999999",
       "tokenAmount": "14709179477302853444439121",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411196,
       "progressBpsAfter": 664,
       "progressBpsBefore": 548
@@ -2389,7 +2497,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2265336227",
@@ -2408,6 +2516,7 @@
       "blockNumber": "55912789",
       "quoteAmount": "41967508586812773",
       "tokenAmount": "18135534990398253798388876",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411200,
       "progressBpsAfter": 522,
       "progressBpsBefore": 664
@@ -2422,7 +2531,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2109620482",
@@ -2441,6 +2550,7 @@
       "blockNumber": "55912806",
       "quoteAmount": "31532491413187228",
       "tokenAmount": "14709179477302853444439121",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411217,
       "progressBpsAfter": 414,
       "progressBpsBefore": 522
@@ -2455,7 +2565,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1855522590",
@@ -2474,6 +2584,7 @@
       "blockNumber": "55912811",
       "quoteAmount": "46634993399603130",
       "tokenAmount": "24002527633044109019210298",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411222,
       "progressBpsAfter": 256,
       "progressBpsBefore": 414
@@ -2488,7 +2599,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1842939803",
@@ -2507,6 +2618,7 @@
       "blockNumber": "55912828",
       "quoteAmount": "2154021667961202",
       "tokenAmount": "1188591942310382951354710",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411239,
       "progressBpsAfter": 249,
       "progressBpsBefore": 256
@@ -2521,7 +2633,7 @@
     "type": "launchpad.launch",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "inkodl",
       "type": "launchpad.launch",
@@ -2531,6 +2643,7 @@
         "telegram": null
       },
       "token": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
+      "poolId": null,
       "ticker": "INKODL",
       "txHash": "0x23312218f3d69a4801a880fc1c2def65f1bbab1a9b1b533d2959d8da8d49522e",
       "chainId": 57073,
@@ -2539,11 +2652,15 @@
       "launchId": "0xb7933882abbabe024524468b2305dfe79ae26ce978787f02208e2c398cefe596",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55913029",
       "description": "ink tweeted their own version of \"hodl\"",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789411440
     },
     "block": "55913029",
@@ -2556,7 +2673,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -2575,6 +2692,7 @@
       "blockNumber": "55913029",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789411440,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -2589,7 +2707,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1869732019",
@@ -2608,6 +2726,7 @@
       "blockNumber": "55913033",
       "quoteAmount": "59399999999999999",
       "tokenAmount": "35296122772923379592242753",
+      "athMarketCap": "1869732019000000000",
       "blockTimestamp": 1789411444,
       "progressBpsAfter": 264,
       "progressBpsBefore": 66
@@ -2622,7 +2741,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1720798082",
@@ -2641,6 +2760,7 @@
       "blockNumber": "55913036",
       "quoteAmount": "24751654711677641",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1869732019000000000",
       "blockTimestamp": 1789411447,
       "progressBpsAfter": 180,
       "progressBpsBefore": 264
@@ -2655,7 +2775,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -2674,6 +2794,7 @@
       "blockNumber": "55913047",
       "quoteAmount": "52555209477879961",
       "tokenAmount": "35296122772923379592242753",
+      "athMarketCap": "1869732019000000000",
       "blockTimestamp": 1789411458,
       "progressBpsAfter": 0,
       "progressBpsBefore": 180
@@ -2688,7 +2809,7 @@
     "type": "launchpad.trade",
     "entity": "0x98be79be7cc2dbdae6269e50eb9600e2f8dc1814",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1727843694",
@@ -2707,6 +2828,7 @@
       "blockNumber": "55913067",
       "quoteAmount": "26034517484739430",
       "tokenAmount": "14718431356135796698829852",
+      "athMarketCap": "3199659069000000000",
       "blockTimestamp": 1789411478,
       "progressBpsAfter": 184,
       "progressBpsBefore": 272
@@ -2721,7 +2843,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1631470993",
@@ -2740,6 +2862,7 @@
       "blockNumber": "55913096",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "26858130950712264528494106",
+      "athMarketCap": "1869732019000000000",
       "blockTimestamp": 1789411507,
       "progressBpsAfter": 133,
       "progressBpsBefore": 0
@@ -2754,7 +2877,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1928815005",
@@ -2773,6 +2896,7 @@
       "blockNumber": "55913097",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "28087631256524378575399739",
+      "athMarketCap": "1928815005000000000",
       "blockTimestamp": 1789411508,
       "progressBpsAfter": 299,
       "progressBpsBefore": 133
@@ -2787,7 +2911,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2186082580",
@@ -2806,6 +2930,7 @@
       "blockNumber": "55913100",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "24301941461415773494876001",
+      "athMarketCap": "2186082580000000000",
       "blockTimestamp": 1789411511,
       "progressBpsAfter": 466,
       "progressBpsBefore": 299
@@ -2820,7 +2945,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2626064830",
@@ -2839,6 +2964,7 @@
       "blockNumber": "55913101",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "41561486658758792010804429",
+      "athMarketCap": "2626064830000000000",
       "blockTimestamp": 1789411512,
       "progressBpsAfter": 799,
       "progressBpsBefore": 466
@@ -2853,7 +2979,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2636123665",
@@ -2872,6 +2998,7 @@
       "blockNumber": "55913109",
       "quoteAmount": "2499999999999999",
       "tokenAmount": "950175010485957562301261",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411520,
       "progressBpsAfter": 808,
       "progressBpsBefore": 799
@@ -2886,7 +3013,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2338779653",
@@ -2905,6 +3032,7 @@
       "blockNumber": "55913109",
       "quoteAmount": "68469292340626355",
       "tokenAmount": "28087631256524378575399739",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411520,
       "progressBpsAfter": 575,
       "progressBpsBefore": 808
@@ -2919,7 +3047,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2081512078",
@@ -2938,6 +3066,7 @@
       "blockNumber": "55913111",
       "quoteAmount": "52636618620615158",
       "tokenAmount": "24301941461415773494876001",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411522,
       "progressBpsAfter": 396,
       "progressBpsBefore": 575
@@ -2952,7 +3081,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2180858643",
@@ -2971,6 +3100,7 @@
       "blockNumber": "55913114",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "9384448869149972684631491",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411525,
       "progressBpsAfter": 463,
       "progressBpsBefore": 396
@@ -2985,7 +3115,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2275872648",
@@ -3004,6 +3134,7 @@
       "blockNumber": "55913118",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "8975187750292908934771747",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411529,
       "progressBpsAfter": 529,
       "progressBpsBefore": 463
@@ -3018,7 +3149,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1835890398",
@@ -3037,6 +3168,7 @@
       "blockNumber": "55913154",
       "quoteAmount": "83736582433490324",
       "tokenAmount": "41561486658758792010804429",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411565,
       "progressBpsAfter": 244,
       "progressBpsBefore": 529
@@ -3051,7 +3183,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1825831563",
@@ -3070,6 +3202,7 @@
       "blockNumber": "55913202",
       "quoteAmount": "1704845579447826",
       "tokenAmount": "950175010485957562301261",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411613,
       "progressBpsAfter": 239,
       "progressBpsBefore": 244
@@ -3084,7 +3217,7 @@
     "type": "launchpad.launch",
     "entity": "0x374133c2958b98ffd88409fa699a309d34aae759",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "inkmaxxing",
       "type": "launchpad.launch",
@@ -3094,6 +3227,7 @@
         "telegram": null
       },
       "token": "0x374133c2958b98ffd88409fa699a309d34aae759",
+      "poolId": null,
       "ticker": "INKMAXXI",
       "txHash": "0xe2f67e04f15d4be2c16dc481114b92b359fde81e4a759a73cf6facd396a20251",
       "chainId": 57073,
@@ -3102,11 +3236,15 @@
       "launchId": "0x746c2409592d37370da0229a9e25aa35e2e0949feff094ad577e2d9c4234da4b",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55913233",
       "description": "we're all inkmaxxing",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789411644
     },
     "block": "55913233",
@@ -3119,7 +3257,7 @@
     "type": "launchpad.trade",
     "entity": "0x374133c2958b98ffd88409fa699a309d34aae759",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -3138,6 +3276,7 @@
       "blockNumber": "55913233",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789411644,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -3152,7 +3291,7 @@
     "type": "launchpad.trade",
     "entity": "0x374133c2958b98ffd88409fa699a309d34aae759",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1897830549",
@@ -3171,6 +3310,7 @@
       "blockNumber": "55913241",
       "quoteAmount": "59399999999999999",
       "tokenAmount": "34646894210480549783373649",
+      "athMarketCap": "1897830549000000000",
       "blockTimestamp": 1789411652,
       "progressBpsAfter": 281,
       "progressBpsBefore": 83
@@ -3185,7 +3325,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1726484998",
@@ -3204,6 +3344,7 @@
       "blockNumber": "55913245",
       "quoteAmount": "16334901187712807",
       "tokenAmount": "9384448869149972684631491",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411656,
       "progressBpsAfter": 183,
       "progressBpsBefore": 239
@@ -3218,7 +3359,7 @@
     "type": "launchpad.trade",
     "entity": "0x374133c2958b98ffd88409fa699a309d34aae759",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1713925155",
@@ -3237,6 +3378,7 @@
       "blockNumber": "55913248",
       "quoteAmount": "30744315719195700",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1897830549000000000",
       "blockTimestamp": 1789411659,
       "progressBpsAfter": 176,
       "progressBpsBefore": 281
@@ -3251,7 +3393,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1786750232",
@@ -3270,6 +3412,7 @@
       "blockNumber": "55913253",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "5692758596180106996910739",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411664,
       "progressBpsAfter": 216,
       "progressBpsBefore": 183
@@ -3284,7 +3427,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1956439170",
@@ -3303,6 +3446,7 @@
       "blockNumber": "55913269",
       "quoteAmount": "29999999999999999",
       "tokenAmount": "16029111462883967260349272",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411680,
       "progressBpsAfter": 316,
       "progressBpsBefore": 216
@@ -3317,7 +3461,7 @@
     "type": "launchpad.trade",
     "entity": "0x374133c2958b98ffd88409fa699a309d34aae759",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -3336,6 +3480,7 @@
       "blockNumber": "55913296",
       "quoteAmount": "51340249266126840",
       "tokenAmount": "34646894210480549783373649",
+      "athMarketCap": "1897830549000000000",
       "blockTimestamp": 1789411707,
       "progressBpsAfter": 0,
       "progressBpsBefore": 176
@@ -3350,7 +3495,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1672111013",
@@ -3369,6 +3514,7 @@
       "blockNumber": "55913310",
       "quoteAmount": "47753477106914186",
       "tokenAmount": "26858130950712264528494106",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411721,
       "progressBpsAfter": 154,
       "progressBpsBefore": 316
@@ -3383,7 +3529,7 @@
     "type": "launchpad.trade",
     "entity": "0xb061181f1627e03a50562416dd0d9eabc8cd5b18",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -3402,6 +3548,7 @@
       "blockNumber": "55913318",
       "quoteAmount": "70251912284627873",
       "tokenAmount": "46833841610906554963479394",
+      "athMarketCap": "2457324391000000000",
       "blockTimestamp": 1789411729,
       "progressBpsAfter": 0,
       "progressBpsBefore": 249
@@ -3416,7 +3563,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1611845779",
@@ -3435,6 +3582,7 @@
       "blockNumber": "55913320",
       "quoteAmount": "9160438869759310",
       "tokenAmount": "5692758596180106996910739",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411731,
       "progressBpsAfter": 123,
       "progressBpsBefore": 154
@@ -3449,7 +3597,7 @@
     "type": "launchpad.launch",
     "entity": "0x92ea685ecdbfe6e83aed4150f330f3b20119d64f",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "inkmaxxing",
       "type": "launchpad.launch",
@@ -3459,6 +3607,7 @@
         "telegram": null
       },
       "token": "0x92ea685ecdbfe6e83aed4150f330f3b20119d64f",
+      "poolId": null,
       "ticker": "INKMAXX",
       "txHash": "0x2bd6fc6b43afb21a04edf80ebf2d631de6ff830693ff3151eaebafc6b2365554",
       "chainId": 57073,
@@ -3467,11 +3616,15 @@
       "launchId": "0x6728e7577ad208d9fa7a097b554ce4f7a4e57900d7e50da6c8f6017ce14e9b90",
       "logIndex": 33,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55913327",
       "description": "we're all inkmaxxing",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789411738
     },
     "block": "55913327",
@@ -3484,7 +3637,7 @@
     "type": "launchpad.trade",
     "entity": "0x92ea685ecdbfe6e83aed4150f330f3b20119d64f",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -3503,6 +3656,7 @@
       "blockNumber": "55913327",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789411738,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -3517,7 +3671,7 @@
     "type": "launchpad.trade",
     "entity": "0xe054f8ba3a0a78a3361c3ce7e52dae3056dcf3a9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -3536,6 +3690,7 @@
       "blockNumber": "55913361",
       "quoteAmount": "30543718225953111",
       "tokenAmount": "25004299213176876195121019",
+      "athMarketCap": "2636123665000000000",
       "blockTimestamp": 1789411772,
       "progressBpsAfter": 0,
       "progressBpsBefore": 123
@@ -3550,7 +3705,7 @@
     "type": "launchpad.trade",
     "entity": "0x92ea685ecdbfe6e83aed4150f330f3b20119d64f",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -3569,6 +3724,7 @@
       "blockNumber": "55913376",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789411787,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -3583,7 +3739,7 @@
     "type": "launchpad.launch",
     "entity": "0x65632b03ee26e5ddf95b7ccd324a12c22819af69",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Wave",
       "type": "launchpad.launch",
@@ -3593,6 +3749,7 @@
         "telegram": null
       },
       "token": "0x65632b03ee26e5ddf95b7ccd324a12c22819af69",
+      "poolId": null,
       "ticker": "WAVE",
       "txHash": "0xd3001f598140530227de60736f4b531c441535ed80df0d81cd58dac5349da524",
       "chainId": 57073,
@@ -3601,11 +3758,15 @@
       "launchId": "0xccbe572172d7b3be7fad44796b5b3f8e57add2fe426a8f10805bf2c4229f0389",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55913630",
       "description": "Catch the wave 🌊.",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412041
     },
     "block": "55913630",
@@ -3618,7 +3779,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2378886335",
@@ -3637,6 +3798,7 @@
       "blockNumber": "55913662",
       "quoteAmount": "115272239624036966",
       "tokenAmount": "44949640519030642043713727",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789412073,
       "progressBpsAfter": 605,
       "progressBpsBefore": 997
@@ -3651,7 +3813,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1744897490",
@@ -3670,6 +3832,7 @@
       "blockNumber": "55913662",
       "quoteAmount": "121012296730772239",
       "tokenAmount": "59887686141521445594546989",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789412073,
       "progressBpsAfter": 193,
       "progressBpsBefore": 605
@@ -3684,7 +3847,7 @@
     "type": "launchpad.trade",
     "entity": "0xb44384eb9e3be710badc36dfd6f78c2c185a36ef",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -3703,6 +3866,7 @@
       "blockNumber": "55913662",
       "quoteAmount": "50666848206217881",
       "tokenAmount": "37572594706124678990842293",
+      "athMarketCap": "2987119245000000000",
       "blockTimestamp": 1789412073,
       "progressBpsAfter": 0,
       "progressBpsBefore": 193
@@ -3717,7 +3881,7 @@
     "type": "launchpad.launch",
     "entity": "0xcc66bbbfb6c34702f0ec44bf757ff316f2ab3f5e",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "inkgoose",
       "type": "launchpad.launch",
@@ -3727,6 +3891,7 @@
         "telegram": null
       },
       "token": "0xcc66bbbfb6c34702f0ec44bf757ff316f2ab3f5e",
+      "poolId": null,
       "ticker": "INKGOOSE",
       "txHash": "0xf90fb6969c91c337eae20ed021678608bf37158d768d8d9472c7322fe1e8be6b",
       "chainId": 57073,
@@ -3735,11 +3900,15 @@
       "launchId": "0x8fcd98bf1d3c785bc134dd430e67735171d27bfdbb69ec0ef0a13c03c3cf7ce5",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55913719",
       "description": "the golden goose of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412130
     },
     "block": "55913719",
@@ -3752,7 +3921,7 @@
     "type": "launchpad.trade",
     "entity": "0xcc66bbbfb6c34702f0ec44bf757ff316f2ab3f5e",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -3771,6 +3940,7 @@
       "blockNumber": "55913719",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789412130,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -3785,7 +3955,7 @@
     "type": "launchpad.trade",
     "entity": "0xcc66bbbfb6c34702f0ec44bf757ff316f2ab3f5e",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -3804,6 +3974,7 @@
       "blockNumber": "55913779",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789412190,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -3818,7 +3989,7 @@
     "type": "launchpad.launch",
     "entity": "0x68b68450b8b7a9fe6624173006336e228b764075",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "No cryINK in the casino",
       "type": "launchpad.launch",
@@ -3828,6 +3999,7 @@
         "telegram": null
       },
       "token": "0x68b68450b8b7a9fe6624173006336e228b764075",
+      "poolId": null,
       "ticker": "CRYINK",
       "txHash": "0x959ead9ef173ef37ed71d2a58fce7e008e3398d3e3fcf588b6540efd1e833ad6",
       "chainId": 57073,
@@ -3836,11 +4008,15 @@
       "launchId": "0xd83d5abf1154dcc06918f616a7afb051cd5a622f555a036580add8bcafa717bd",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55913999",
       "description": "The house always wins unless you're an octopus with diamond tentacles. Leave your tears at the door—No cryINK in the casino! 🐙🚀",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "5000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412410
     },
     "block": "55913999",
@@ -3853,7 +4029,7 @@
     "type": "launchpad.launch",
     "entity": "0xbdb75ba5e6a8911ee377098c10ce11bed2412ab5",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "bridget oink",
       "type": "launchpad.launch",
@@ -3863,6 +4039,7 @@
         "telegram": null
       },
       "token": "0xbdb75ba5e6a8911ee377098c10ce11bed2412ab5",
+      "poolId": null,
       "ticker": "BRIDGET",
       "txHash": "0x8c50f1f794a3abb9620c0526f0111b48c8a923cf25eafb2d045a113de0e178e7",
       "chainId": 57073,
@@ -3871,11 +4048,15 @@
       "launchId": "0x97e034e0027ffccffc5a26f924e51acf76da69b979edecc7e1d0d2b078c994f4",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914059",
       "description": "the animal mascot of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412470
     },
     "block": "55914059",
@@ -3888,7 +4069,7 @@
     "type": "launchpad.trade",
     "entity": "0xbdb75ba5e6a8911ee377098c10ce11bed2412ab5",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -3907,6 +4088,7 @@
       "blockNumber": "55914059",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412470,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -3921,7 +4103,7 @@
     "type": "launchpad.trade",
     "entity": "0xbdb75ba5e6a8911ee377098c10ce11bed2412ab5",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2112195098",
@@ -3940,6 +4122,7 @@
       "blockNumber": "55914069",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "54896141308178321721947582",
+      "athMarketCap": "2112195098000000000",
       "blockTimestamp": 1789412480,
       "progressBpsAfter": 416,
       "progressBpsBefore": 83
@@ -3954,7 +4137,7 @@
     "type": "launchpad.trade",
     "entity": "0xbdb75ba5e6a8911ee377098c10ce11bed2412ab5",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1928289703",
@@ -3973,6 +4156,7 @@
       "blockNumber": "55914072",
       "quoteAmount": "34393782571430427",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "2112195098000000000",
       "blockTimestamp": 1789412483,
       "progressBpsAfter": 299,
       "progressBpsBefore": 416
@@ -3987,7 +4171,7 @@
     "type": "launchpad.trade",
     "entity": "0xbdb75ba5e6a8911ee377098c10ce11bed2412ab5",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -4006,6 +4190,7 @@
       "blockNumber": "55914127",
       "quoteAmount": "87404303498540383",
       "tokenAmount": "54896141308178321721947582",
+      "athMarketCap": "2112195098000000000",
       "blockTimestamp": 1789412538,
       "progressBpsAfter": 0,
       "progressBpsBefore": 299
@@ -4020,7 +4205,7 @@
     "type": "launchpad.launch",
     "entity": "0x1acc03f2948345d5809bbbab20d16837cd356ed4",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "inkjak",
       "type": "launchpad.launch",
@@ -4030,6 +4215,7 @@
         "telegram": null
       },
       "token": "0x1acc03f2948345d5809bbbab20d16837cd356ed4",
+      "poolId": null,
       "ticker": "INKJAK",
       "txHash": "0x5b8e7f4d8a1cb9f91be815ef15b685aaaf8644da3a3f6d988664c918b6568ebc",
       "chainId": 57073,
@@ -4038,11 +4224,15 @@
       "launchId": "0x571072adae8090844259d7c9568f26ea7aa1c17b5221fde05ef4f83099c6e42a",
       "logIndex": 11,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914207",
       "description": "the wojak of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412618
     },
     "block": "55914207",
@@ -4055,7 +4245,7 @@
     "type": "launchpad.trade",
     "entity": "0x1acc03f2948345d5809bbbab20d16837cd356ed4",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -4074,6 +4264,7 @@
       "blockNumber": "55914207",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789412618,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -4088,7 +4279,7 @@
     "type": "launchpad.trade",
     "entity": "0x1acc03f2948345d5809bbbab20d16837cd356ed4",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -4107,6 +4298,7 @@
       "blockNumber": "55914294",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789412705,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -4121,7 +4313,7 @@
     "type": "launchpad.launch",
     "entity": "0xbe548cd4b75b1bf156a9ad910e33865bcaa1f28a",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Train Win Ascend",
       "type": "launchpad.launch",
@@ -4131,6 +4323,7 @@
         "telegram": null
       },
       "token": "0xbe548cd4b75b1bf156a9ad910e33865bcaa1f28a",
+      "poolId": null,
       "ticker": "TWA",
       "txHash": "0x67b006de1a725af840d5549f2609e76ece8b497dc840b15e0067865f028164ef",
       "chainId": 57073,
@@ -4139,11 +4332,15 @@
       "launchId": "0x3d1b91b4fc1f1dc48eadbe684b23fe9b5ff18284bca016d7b2655ee075861eb4",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914334",
       "description": "the motto of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412745
     },
     "block": "55914334",
@@ -4156,7 +4353,7 @@
     "type": "launchpad.trade",
     "entity": "0xbe548cd4b75b1bf156a9ad910e33865bcaa1f28a",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -4175,6 +4372,7 @@
       "blockNumber": "55914334",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412745,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -4189,7 +4387,7 @@
     "type": "launchpad.trade",
     "entity": "0xbe548cd4b75b1bf156a9ad910e33865bcaa1f28a",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -4208,6 +4406,7 @@
       "blockNumber": "55914402",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412813,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4222,7 +4421,7 @@
     "type": "launchpad.launch",
     "entity": "0x4ddbd27fec75566d7a61358f4707776acc35faee",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "🐾",
       "type": "launchpad.launch",
@@ -4232,6 +4431,7 @@
         "telegram": null
       },
       "token": "0x4ddbd27fec75566d7a61358f4707776acc35faee",
+      "poolId": null,
       "ticker": "🐾",
       "txHash": "0xa92f4c5c0bd8f1da64195e89bb1b0caed00de7a7adec890ec3ef1550e4363ee0",
       "chainId": 57073,
@@ -4240,11 +4440,15 @@
       "launchId": "0x00ed9b4ad9a6877718ad66a309b57ccb6c4399715b51972188ebb4585ad983d6",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914449",
       "description": "the EMOJI of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412860
     },
     "block": "55914449",
@@ -4257,7 +4461,7 @@
     "type": "launchpad.trade",
     "entity": "0x4ddbd27fec75566d7a61358f4707776acc35faee",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -4276,6 +4480,7 @@
       "blockNumber": "55914449",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412860,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -4290,7 +4495,7 @@
     "type": "launchpad.trade",
     "entity": "0x4ddbd27fec75566d7a61358f4707776acc35faee",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -4309,6 +4514,7 @@
       "blockNumber": "55914531",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412942,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4323,7 +4529,7 @@
     "type": "launchpad.launch",
     "entity": "0x2f227d8144fc5c47d2b22bcbffc5dc18617ccf14",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "inkepe",
       "type": "launchpad.launch",
@@ -4333,6 +4539,7 @@
         "telegram": null
       },
       "token": "0x2f227d8144fc5c47d2b22bcbffc5dc18617ccf14",
+      "poolId": null,
       "ticker": "INKEPE",
       "txHash": "0xa04d7e0774d4f8887585af712a97debab5325a26e58e37243ccaa9ede0eb03b8",
       "chainId": 57073,
@@ -4341,11 +4548,15 @@
       "launchId": "0x1d5a61293e95e091fd4c83c49fa7d3c9a7afeba8d81d0da2627114b1ed222882",
       "logIndex": 74,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914559",
       "description": "the EMOJI of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789412970
     },
     "block": "55914559",
@@ -4358,7 +4569,7 @@
     "type": "launchpad.trade",
     "entity": "0x2f227d8144fc5c47d2b22bcbffc5dc18617ccf14",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -4377,6 +4588,7 @@
       "blockNumber": "55914559",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789412970,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -4391,7 +4603,7 @@
     "type": "launchpad.trade",
     "entity": "0x2f227d8144fc5c47d2b22bcbffc5dc18617ccf14",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -4410,6 +4622,7 @@
       "blockNumber": "55914624",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789413035,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4424,7 +4637,7 @@
     "type": "launchpad.launch",
     "entity": "0x01705bd2e29cafad0ec86b1fd106af328e12d85b",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "gold ink",
       "type": "launchpad.launch",
@@ -4434,6 +4647,7 @@
         "telegram": null
       },
       "token": "0x01705bd2e29cafad0ec86b1fd106af328e12d85b",
+      "poolId": null,
       "ticker": "GINK",
       "txHash": "0xd85c2203731989533cb175764c8b95ddf6a3255c9b12b2ef820bb154c1fd414e",
       "chainId": 57073,
@@ -4442,11 +4656,15 @@
       "launchId": "0x6cee6f31a93726f9f35b6bf50afcb614af834be400b12066c4dbc85ee35e6e6d",
       "logIndex": 13,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914691",
       "description": "the golden version of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789413102
     },
     "block": "55914691",
@@ -4459,7 +4677,7 @@
     "type": "launchpad.trade",
     "entity": "0x01705bd2e29cafad0ec86b1fd106af328e12d85b",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -4478,6 +4696,7 @@
       "blockNumber": "55914691",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789413102,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -4492,7 +4711,7 @@
     "type": "launchpad.trade",
     "entity": "0x01705bd2e29cafad0ec86b1fd106af328e12d85b",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1812812494",
@@ -4511,6 +4730,7 @@
       "blockNumber": "55914696",
       "quoteAmount": "49499999999999999",
       "tokenAmount": "29919405672840032731081862",
+      "athMarketCap": "1812812494000000000",
       "blockTimestamp": 1789413107,
       "progressBpsAfter": 231,
       "progressBpsBefore": 66
@@ -4525,7 +4745,7 @@
     "type": "launchpad.trade",
     "entity": "0x01705bd2e29cafad0ec86b1fd106af328e12d85b",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1663878557",
@@ -4544,6 +4764,7 @@
       "blockNumber": "55914701",
       "quoteAmount": "23966894579234688",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1812812494000000000",
       "blockTimestamp": 1789413112,
       "progressBpsAfter": 150,
       "progressBpsBefore": 231
@@ -4558,7 +4779,7 @@
     "type": "launchpad.trade",
     "entity": "0x01705bd2e29cafad0ec86b1fd106af328e12d85b",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -4577,6 +4798,7 @@
       "blockNumber": "55914701",
       "quoteAmount": "43653985123229914",
       "tokenAmount": "29919405672840032731081862",
+      "athMarketCap": "1812812494000000000",
       "blockTimestamp": 1789413112,
       "progressBpsAfter": 0,
       "progressBpsBefore": 150
@@ -4591,7 +4813,7 @@
     "type": "launchpad.launch",
     "entity": "0x4028a39601ed5ce935146f49579ecba4f2998c60",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Goldification",
       "type": "launchpad.launch",
@@ -4601,6 +4823,7 @@
         "telegram": null
       },
       "token": "0x4028a39601ed5ce935146f49579ecba4f2998c60",
+      "poolId": null,
       "ticker": "GOLDIFY",
       "txHash": "0x2bed02a95dfafe46954c34e6dcb5ae343c0448f9ae694837bfc7d62d4968fa17",
       "chainId": 57073,
@@ -4609,11 +4832,15 @@
       "launchId": "0x7ff860f685dc4887960b4be7522ea2377e4094ce051e43c0608402723effebff",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914785",
       "description": "the golden version of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789413196
     },
     "block": "55914785",
@@ -4626,7 +4853,7 @@
     "type": "launchpad.trade",
     "entity": "0x4028a39601ed5ce935146f49579ecba4f2998c60",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -4645,6 +4872,7 @@
       "blockNumber": "55914785",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789413196,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -4659,7 +4887,7 @@
     "type": "launchpad.trade",
     "entity": "0x4028a39601ed5ce935146f49579ecba4f2998c60",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -4678,6 +4906,7 @@
       "blockNumber": "55914900",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789413311,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4692,7 +4921,7 @@
     "type": "launchpad.launch",
     "entity": "0x89042c6a136cdf668889259cf450d43aa18b9887",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "🫟",
       "type": "launchpad.launch",
@@ -4702,6 +4931,7 @@
         "telegram": null
       },
       "token": "0x89042c6a136cdf668889259cf450d43aa18b9887",
+      "poolId": null,
       "ticker": "🫟",
       "txHash": "0x47218aa63320c0c7e71cd3cb0efd5ed75a65c6421f2a34909d4f00cdb24e8ab4",
       "chainId": 57073,
@@ -4710,11 +4940,15 @@
       "launchId": "0xede843c2061f50fca1380f31146f78e51f148651d8a2234387dd2af698807f89",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55914990",
       "description": "the official emoji of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789413401
     },
     "block": "55914990",
@@ -4727,7 +4961,7 @@
     "type": "launchpad.trade",
     "entity": "0x89042c6a136cdf668889259cf450d43aa18b9887",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5939999589",
@@ -4746,6 +4980,7 @@
       "blockNumber": "55914990",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "4208754499669140577316284",
+      "athMarketCap": "5939999589000000000",
       "blockTimestamp": 1789413401,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -4760,7 +4995,7 @@
     "type": "launchpad.trade",
     "entity": "0x89042c6a136cdf668889259cf450d43aa18b9887",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "5939999589",
@@ -4779,6 +5014,7 @@
       "blockNumber": "55915014",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "4208754499669140577316284",
+      "athMarketCap": "5939999589000000000",
       "blockTimestamp": 1789413425,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -4793,7 +5029,7 @@
     "type": "launchpad.launch",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Magic Ink Money",
       "type": "launchpad.launch",
@@ -4803,6 +5039,7 @@
         "telegram": null
       },
       "token": "0xa847c8c4bf1457803e53629c3830931048744af8",
+      "poolId": null,
       "ticker": "MIM",
       "txHash": "0x258be047a75b5615ba280299a1091f67575c1feb4cdcec4d90041c525f385991",
       "chainId": 57073,
@@ -4811,11 +5048,15 @@
       "launchId": "0x3c26b34f054f27dc0411faf06a1280f6778f4fb780ca6c0e3b5c0bffe0837465",
       "logIndex": 4,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55915236",
       "description": "the official emoji of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789413647
     },
     "block": "55915236",
@@ -4828,7 +5069,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -4847,6 +5088,7 @@
       "blockNumber": "55915236",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789413647,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -4861,7 +5103,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1841779604",
@@ -4880,6 +5122,7 @@
       "blockNumber": "55915253",
       "quoteAmount": "49499999999999999",
       "tokenAmount": "29352224648990209626220906",
+      "athMarketCap": "1841779604000000000",
       "blockTimestamp": 1789413664,
       "progressBpsAfter": 248,
       "progressBpsBefore": 83
@@ -4894,7 +5137,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1657874210",
@@ -4913,6 +5156,7 @@
       "blockNumber": "55915255",
       "quoteAmount": "29790071792744129",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1841779604000000000",
       "blockTimestamp": 1789413666,
       "progressBpsAfter": 147,
       "progressBpsBefore": 248
@@ -4927,7 +5171,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1689499887",
@@ -4946,6 +5190,7 @@
       "blockNumber": "55915256",
       "quoteAmount": "4999999999999999",
       "tokenAmount": "2987416326892230824845664",
+      "athMarketCap": "1841779604000000000",
       "blockTimestamp": 1789413667,
       "progressBpsAfter": 163,
       "progressBpsBefore": 147
@@ -4960,7 +5205,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1695691816",
@@ -4979,6 +5224,7 @@
       "blockNumber": "55915259",
       "quoteAmount": "989999999999999",
       "tokenAmount": "584900407160277113143672",
+      "athMarketCap": "1841779604000000000",
       "blockTimestamp": 1789413670,
       "progressBpsAfter": 166,
       "progressBpsBefore": 163
@@ -4993,7 +5239,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1873645796",
@@ -5012,6 +5258,7 @@
       "blockNumber": "55915263",
       "quoteAmount": "29999999999999999",
       "tokenAmount": "16809841675895692873009699",
+      "athMarketCap": "1873645796000000000",
       "blockTimestamp": 1789413674,
       "progressBpsAfter": 266,
       "progressBpsBefore": 166
@@ -5026,7 +5273,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1928770918",
@@ -5045,6 +5292,7 @@
       "blockNumber": "55915267",
       "quoteAmount": "9899999999999999",
       "tokenAmount": "5207214656953163431435362",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413678,
       "progressBpsAfter": 299,
       "progressBpsBefore": 266
@@ -5059,7 +5307,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1897145241",
@@ -5078,6 +5326,7 @@
       "blockNumber": "55915272",
       "quoteAmount": "5600506142531409",
       "tokenAmount": "2987416326892230824845664",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413683,
       "progressBpsAfter": 280,
       "progressBpsBefore": 299
@@ -5092,7 +5341,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1525096816",
@@ -5111,6 +5360,7 @@
       "blockNumber": "55915283",
       "quoteAmount": "58933494180795753",
       "tokenAmount": "35144339713103650170799940",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413694,
       "progressBpsAfter": 80,
       "progressBpsBefore": 280
@@ -5125,7 +5375,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1592999135",
@@ -5144,6 +5394,7 @@
       "blockNumber": "55915308",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "6414170820635534837078235",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413719,
       "progressBpsAfter": 113,
       "progressBpsBefore": 80
@@ -5158,7 +5409,7 @@
     "type": "launchpad.trade",
     "entity": "0xa847c8c4bf1457803e53629c3830931048744af8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -5177,6 +5428,7 @@
       "blockNumber": "55915352",
       "quoteAmount": "31533146820335426",
       "tokenAmount": "23224012496531227710087934",
+      "athMarketCap": "1928770918000000000",
       "blockTimestamp": 1789413763,
       "progressBpsAfter": 0,
       "progressBpsBefore": 113
@@ -5191,7 +5443,7 @@
     "type": "launchpad.launch",
     "entity": "0x6661565376c83b39c03976f1657e4b295344f81f",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Inky",
       "type": "launchpad.launch",
@@ -5201,6 +5453,7 @@
         "telegram": null
       },
       "token": "0x6661565376c83b39c03976f1657e4b295344f81f",
+      "poolId": null,
       "ticker": "INKY",
       "txHash": "0xfde1ba2c38b56f251869722b7dd899cd3a20e1f372c69d43173a63720aa361a9",
       "chainId": 57073,
@@ -5209,11 +5462,15 @@
       "launchId": "0x4d2fb52094913ecd1f0b200d14e0a6b330d6d2df2fc20d22f54808656b025f02",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55915568",
       "description": "the ghost of pacman",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789413979
     },
     "block": "55915568",
@@ -5226,7 +5483,7 @@
     "type": "launchpad.trade",
     "entity": "0x6661565376c83b39c03976f1657e4b295344f81f",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531912288",
@@ -5245,6 +5502,7 @@
       "blockNumber": "55915568",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789413979,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -5259,7 +5517,7 @@
     "type": "launchpad.trade",
     "entity": "0x6661565376c83b39c03976f1657e4b295344f81f",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1348006893",
@@ -5278,6 +5536,7 @@
       "blockNumber": "55915755",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414166,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -5292,7 +5551,7 @@
     "type": "launchpad.launch",
     "entity": "0x79f3858c5c923d074af8b895f84e79a3e8a7382a",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Ink the Dog ",
       "type": "launchpad.launch",
@@ -5302,6 +5561,7 @@
         "telegram": null
       },
       "token": "0x79f3858c5c923d074af8b895f84e79a3e8a7382a",
+      "poolId": null,
       "ticker": "INK",
       "txHash": "0x1cba38847089fac392f51e75ea578b4d9439b686a842214f5e0103729ef746f0",
       "chainId": 57073,
@@ -5310,11 +5570,15 @@
       "launchId": "0xfd531b01626a6dee318cd5ea3cede17be4bd22cf5174beff4be3350b7175fb31",
       "logIndex": 4,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55915884",
       "description": "the dog mascot of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789414295
     },
     "block": "55915884",
@@ -5327,7 +5591,7 @@
     "type": "launchpad.trade",
     "entity": "0x79f3858c5c923d074af8b895f84e79a3e8a7382a",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531912288",
@@ -5346,6 +5610,7 @@
       "blockNumber": "55915884",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414295,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -5360,7 +5625,7 @@
     "type": "launchpad.trade",
     "entity": "0x79f3858c5c923d074af8b895f84e79a3e8a7382a",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1348006893",
@@ -5379,6 +5644,7 @@
       "blockNumber": "55916095",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414506,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -5393,7 +5659,7 @@
     "type": "launchpad.launch",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Nikon NXG XII 600",
       "type": "launchpad.launch",
@@ -5403,6 +5669,7 @@
         "telegram": null
       },
       "token": "0xf22ff201b2623f694da38081578406e82af7e471",
+      "poolId": null,
       "ticker": "NIKON600",
       "txHash": "0x940962483c36e78ba636f67e7f559b0160826e6023354f0b4dcb6005d6beb81b",
       "chainId": 57073,
@@ -5411,11 +5678,15 @@
       "launchId": "0x3fd2adca3e435ef1e1e722744150d774410dc37e7ab6e30d8efc1160135bbbef",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55916149",
       "description": "the world's most expensive printer",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789414560
     },
     "block": "55916149",
@@ -5428,7 +5699,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531912288",
@@ -5447,6 +5718,7 @@
       "blockNumber": "55916149",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414560,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -5461,7 +5733,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1752205128",
@@ -5480,6 +5752,7 @@
       "blockNumber": "55916175",
       "quoteAmount": "33999999999999999",
       "tokenAmount": "20712194814693541545000059",
+      "athMarketCap": "1752205128000000000",
       "blockTimestamp": 1789414586,
       "progressBpsAfter": 197,
       "progressBpsBefore": 83
@@ -5494,7 +5767,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1947739809",
@@ -5513,6 +5786,7 @@
       "blockNumber": "55916175",
       "quoteAmount": "33999999999999999",
       "tokenAmount": "18383243831358665719954579",
+      "athMarketCap": "1947739809000000000",
       "blockTimestamp": 1789414586,
       "progressBpsAfter": 311,
       "progressBpsBefore": 197
@@ -5527,7 +5801,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2125360656",
@@ -5546,6 +5820,7 @@
       "blockNumber": "55916175",
       "quoteAmount": "33999999999999999",
       "tokenAmount": "16698370954308794510823289",
+      "athMarketCap": "2125360656000000000",
       "blockTimestamp": 1789414586,
       "progressBpsAfter": 425,
       "progressBpsBefore": 311
@@ -5560,7 +5835,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2289241243",
@@ -5579,6 +5854,7 @@
       "blockNumber": "55916175",
       "quoteAmount": "33999999999999999",
       "tokenAmount": "15406171437134245729899496",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789414586,
       "progressBpsAfter": 539,
       "progressBpsBefore": 425
@@ -5593,7 +5869,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2106295319",
@@ -5612,6 +5888,7 @@
       "blockNumber": "55916184",
       "quoteAmount": "37407919216856421",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789414595,
       "progressBpsAfter": 412,
       "progressBpsBefore": 539
@@ -5626,7 +5903,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2252739153",
@@ -5645,6 +5922,7 @@
       "blockNumber": "55916209",
       "quoteAmount": "29999999999999999",
       "tokenAmount": "13766742645766567173614153",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789414620,
       "progressBpsAfter": 513,
       "progressBpsBefore": 412
@@ -5659,7 +5937,7 @@
     "type": "launchpad.launch",
     "entity": "0x92f8c08b85a01b55797c4c70790f02c1f7236b98",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "bridget oink",
       "type": "launchpad.launch",
@@ -5669,6 +5947,7 @@
         "telegram": null
       },
       "token": "0x92f8c08b85a01b55797c4c70790f02c1f7236b98",
+      "poolId": null,
       "ticker": "BRIDGET",
       "txHash": "0x13cd4798f2634d14c75048b2a3b895536f6f5c8080dd5ab7306e83ee96e94951",
       "chainId": 57073,
@@ -5677,11 +5956,15 @@
       "launchId": "0xebfa6c2c78cb31322a8d68b6652bf6593a06146524b26c7699de1971ed5a9add",
       "logIndex": 27,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55916337",
       "description": "the animal mascot of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789414748
     },
     "block": "55916337",
@@ -5694,7 +5977,7 @@
     "type": "launchpad.trade",
     "entity": "0x92f8c08b85a01b55797c4c70790f02c1f7236b98",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531912288",
@@ -5713,6 +5996,7 @@
       "blockNumber": "55916337",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414748,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -5727,7 +6011,7 @@
     "type": "launchpad.trade",
     "entity": "0x92f8c08b85a01b55797c4c70790f02c1f7236b98",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1348006893",
@@ -5746,6 +6030,7 @@
       "blockNumber": "55916520",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531912288000000000",
       "blockTimestamp": 1789414931,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -5760,7 +6045,7 @@
     "type": "launchpad.launch",
     "entity": "0xbcbc7050dc814fb3aae152d0697f83870ffa0433",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "In Case You Missed Ink",
       "type": "launchpad.launch",
@@ -5770,6 +6055,7 @@
         "telegram": null
       },
       "token": "0xbcbc7050dc814fb3aae152d0697f83870ffa0433",
+      "poolId": null,
       "ticker": "ICYMI",
       "txHash": "0xd4138190ee31948abef9354d93ae3ea676306e360a0cceab91e756cfadffc05d",
       "chainId": 57073,
@@ -5778,11 +6064,15 @@
       "launchId": "0x64453856c634eddba792904c107fdea08f351a1aa00b75ad176ba3186e856ea1",
       "logIndex": 12,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55916596",
       "description": "the motto of inkchain",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789415007
     },
     "block": "55916596",
@@ -5795,7 +6085,7 @@
     "type": "launchpad.trade",
     "entity": "0xbcbc7050dc814fb3aae152d0697f83870ffa0433",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -5814,6 +6104,7 @@
       "blockNumber": "55916596",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415007,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -5828,7 +6119,7 @@
     "type": "launchpad.trade",
     "entity": "0xbcbc7050dc814fb3aae152d0697f83870ffa0433",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -5847,6 +6138,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -5861,7 +6153,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2034628810",
@@ -5880,6 +6172,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "43500668994452880",
       "tokenAmount": "20712194814693541545000059",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 366,
       "progressBpsBefore": 513
@@ -5894,7 +6187,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1889646634",
@@ -5913,6 +6206,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "26466895925053796",
       "tokenAmount": "13766742645766567173614153",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 276,
       "progressBpsBefore": 366
@@ -5927,7 +6221,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1713801943",
@@ -5946,6 +6240,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "29476540124227106",
       "tokenAmount": "16698370954308794510823289",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 176,
       "progressBpsBefore": 276
@@ -5960,7 +6255,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1520226485",
@@ -5979,6 +6274,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "29122123875436216",
       "tokenAmount": "18383243831358665719954579",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 78,
       "progressBpsBefore": 176
@@ -5993,7 +6289,7 @@
     "type": "launchpad.trade",
     "entity": "0xf22ff201b2623f694da38081578406e82af7e471",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1357132175",
@@ -6012,6 +6308,7 @@
       "blockNumber": "55916677",
       "quoteAmount": "17818624350993461",
       "tokenAmount": "15406171437134245729899496",
+      "athMarketCap": "2289241243000000000",
       "blockTimestamp": 1789415088,
       "progressBpsAfter": 4,
       "progressBpsBefore": 78
@@ -6026,7 +6323,7 @@
     "type": "launchpad.launch",
     "entity": "0xb074f487bb2e42104a7fae2c0c9c3aed8a1b02b2",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Ink the Dog ",
       "type": "launchpad.launch",
@@ -6036,6 +6333,7 @@
         "telegram": null
       },
       "token": "0xb074f487bb2e42104a7fae2c0c9c3aed8a1b02b2",
+      "poolId": null,
       "ticker": "INK",
       "txHash": "0x79ba123fb2eb9b41c9942182c263b6ccc3276766548c79f3e8772d0a9c55f393",
       "chainId": 57073,
@@ -6044,11 +6342,15 @@
       "launchId": "0xe5b912916a24a625d359d6ca739f542a119d573959ae54298bc49ddbbb5f3e4d",
       "logIndex": 180,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55916917",
       "description": "the dog mascot of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789415328
     },
     "block": "55916917",
@@ -6061,7 +6363,7 @@
     "type": "launchpad.trade",
     "entity": "0xb074f487bb2e42104a7fae2c0c9c3aed8a1b02b2",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1422814994",
@@ -6080,6 +6382,7 @@
       "blockNumber": "55916924",
       "quoteAmount": "9899999999999999",
       "tokenAmount": "7148123288545413654287032",
+      "athMarketCap": "1422814994000000000",
       "blockTimestamp": 1789415335,
       "progressBpsAfter": 32,
       "progressBpsBefore": 0
@@ -6094,7 +6397,7 @@
     "type": "launchpad.trade",
     "entity": "0xb074f487bb2e42104a7fae2c0c9c3aed8a1b02b2",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -6113,6 +6416,7 @@
       "blockNumber": "55916975",
       "quoteAmount": "9702000000000001",
       "tokenAmount": "7148123288545413654287032",
+      "athMarketCap": "1422814994000000000",
       "blockTimestamp": 1789415386,
       "progressBpsAfter": 0,
       "progressBpsBefore": 32
@@ -6127,7 +6431,7 @@
     "type": "launchpad.launch",
     "entity": "0x1d8d57b9b6c568478c41a0bfd3148f1bf8f344d9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "We Are Gonna Make Ink",
       "type": "launchpad.launch",
@@ -6137,6 +6441,7 @@
         "telegram": null
       },
       "token": "0x1d8d57b9b6c568478c41a0bfd3148f1bf8f344d9",
+      "poolId": null,
       "ticker": "WAGMI",
       "txHash": "0x3f86b319417d7c4db454fa4304595973648d43b9c395603cb1678a0e8fee5a3a",
       "chainId": 57073,
@@ -6145,11 +6450,15 @@
       "launchId": "0xa8329af59ad6dac45ca1a9db605f85533ba064f3eb05ac1680944a8636800c1e",
       "logIndex": 7,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55917049",
       "description": "We Are Gonna Make Ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789415460
     },
     "block": "55917049",
@@ -6162,7 +6471,7 @@
     "type": "launchpad.trade",
     "entity": "0x1d8d57b9b6c568478c41a0bfd3148f1bf8f344d9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -6181,6 +6490,7 @@
       "blockNumber": "55917049",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415460,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -6195,7 +6505,7 @@
     "type": "launchpad.trade",
     "entity": "0x1d8d57b9b6c568478c41a0bfd3148f1bf8f344d9",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -6214,6 +6524,7 @@
       "blockNumber": "55917157",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415568,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6228,7 +6539,7 @@
     "type": "launchpad.launch",
     "entity": "0x202a234b5ee3903e7e3a29feacb806aff42c4e57",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Pelletcoin",
       "type": "launchpad.launch",
@@ -6238,6 +6549,7 @@
         "telegram": null
       },
       "token": "0x202a234b5ee3903e7e3a29feacb806aff42c4e57",
+      "poolId": null,
       "ticker": "PELLET",
       "txHash": "0x8bd091ffc6b2f43a8b9154023d5a4b2e124686bc77effada1532739643420867",
       "chainId": 57073,
@@ -6246,11 +6558,15 @@
       "launchId": "0xd1215b56713ed39397a0e2a39d5e75533f5a6deb4bb9ae5e1a0c9cb9a1e22c4a",
       "logIndex": 4,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55917335",
       "description": "the fartcoin of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789415746
     },
     "block": "55917335",
@@ -6263,7 +6579,7 @@
     "type": "launchpad.trade",
     "entity": "0x202a234b5ee3903e7e3a29feacb806aff42c4e57",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -6282,6 +6598,7 @@
       "blockNumber": "55917335",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415746,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -6296,7 +6613,7 @@
     "type": "launchpad.trade",
     "entity": "0x202a234b5ee3903e7e3a29feacb806aff42c4e57",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -6315,6 +6632,7 @@
       "blockNumber": "55917414",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789415825,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6329,7 +6647,7 @@
     "type": "launchpad.launch",
     "entity": "0x1877023a2c90d8651f8da9d24ec5f16381f2812d",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "King of the Ink",
       "type": "launchpad.launch",
@@ -6339,6 +6657,7 @@
         "telegram": null
       },
       "token": "0x1877023a2c90d8651f8da9d24ec5f16381f2812d",
+      "poolId": null,
       "ticker": "KOTI",
       "txHash": "0x1092c201ee35bf8c9bc445ae428779425c7636530621309e65f8d34fb62af516",
       "chainId": 57073,
@@ -6347,11 +6666,15 @@
       "launchId": "0x7e07420905b13de93e22a95907a15c9b58d8bf357caeccae6e8dd1fff529b6bb",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55917573",
       "description": "The hidden feature of InkySwap",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789415984
     },
     "block": "55917573",
@@ -6364,7 +6687,7 @@
     "type": "launchpad.trade",
     "entity": "0x1877023a2c90d8651f8da9d24ec5f16381f2812d",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1386068580",
@@ -6383,6 +6706,7 @@
       "blockNumber": "55917573",
       "quoteAmount": "4999999999999999",
       "tokenAmount": "3658955421866615216973529",
+      "athMarketCap": "1386068580000000000",
       "blockTimestamp": 1789415984,
       "progressBpsAfter": 16,
       "progressBpsBefore": 0
@@ -6397,7 +6721,7 @@
     "type": "launchpad.launch",
     "entity": "0xaacaf4126f18748d1551d0d2dc0117e0c8fb9bb8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Emperor of the INK",
       "type": "launchpad.launch",
@@ -6407,6 +6731,7 @@
         "telegram": null
       },
       "token": "0xaacaf4126f18748d1551d0d2dc0117e0c8fb9bb8",
+      "poolId": null,
       "ticker": "EOTI",
       "txHash": "0x468fe59789900a11d761885e459fa96af5c559a983eb8b8404c2665b48470ce4",
       "chainId": 57073,
@@ -6415,11 +6740,15 @@
       "launchId": "0xf7726fcae7060511dca1f6d5d53c4248b87eba3161c3e3f71da4cbdf0d04403e",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55917785",
       "description": "Emperor of the INK (EOTI)\nBecome the Emperor of the INK and get premium homepage visibility through competitive daily auctions",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789416196
     },
     "block": "55917785",
@@ -6432,7 +6761,7 @@
     "type": "launchpad.trade",
     "entity": "0xaacaf4126f18748d1551d0d2dc0117e0c8fb9bb8",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1386068580",
@@ -6451,6 +6780,7 @@
       "blockNumber": "55917785",
       "quoteAmount": "4999999999999999",
       "tokenAmount": "3658955421866615216973529",
+      "athMarketCap": "1386068580000000000",
       "blockTimestamp": 1789416196,
       "progressBpsAfter": 16,
       "progressBpsBefore": 0
@@ -6465,7 +6795,7 @@
     "type": "launchpad.launch",
     "entity": "0xf3594a5046c5b0413ea55c655885468ff2407e83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Ink-chan",
       "type": "launchpad.launch",
@@ -6475,6 +6805,7 @@
         "telegram": null
       },
       "token": "0xf3594a5046c5b0413ea55c655885468ff2407e83",
+      "poolId": null,
       "ticker": "INKCHAN",
       "txHash": "0x9c4a7271f7ed909e87a5768de0dcbfde541ce4ec026f70bde1f1496b5695d35e",
       "chainId": 57073,
@@ -6483,11 +6814,15 @@
       "launchId": "0x47fde20aaf71b8b6b93e843e6705057519bc98c1b5269e444f6f8c7f26b9a5a2",
       "logIndex": 7,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55917804",
       "description": "the anime mascot of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789416215
     },
     "block": "55917804",
@@ -6500,7 +6835,7 @@
     "type": "launchpad.trade",
     "entity": "0xf3594a5046c5b0413ea55c655885468ff2407e83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -6519,6 +6854,7 @@
       "blockNumber": "55917804",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789416215,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -6533,7 +6869,7 @@
     "type": "launchpad.trade",
     "entity": "0xf3594a5046c5b0413ea55c655885468ff2407e83",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -6552,6 +6888,7 @@
       "blockNumber": "55917872",
       "quoteAmount": "24500000000000001",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789416283,
       "progressBpsAfter": 0,
       "progressBpsBefore": 83
@@ -6566,7 +6903,7 @@
     "type": "launchpad.launch",
     "entity": "0x990f81fe719965811279e054acd8ff5c37cd727d",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "1 printer can change your life",
       "type": "launchpad.launch",
@@ -6576,6 +6913,7 @@
         "telegram": null
       },
       "token": "0x990f81fe719965811279e054acd8ff5c37cd727d",
+      "poolId": null,
       "ticker": "PRINTER",
       "txHash": "0xebeb94a1e41f426204d8fef85d316c60a906265f30abb31e0e9204179553891d",
       "chainId": 57073,
@@ -6584,11 +6922,15 @@
       "launchId": "0x40b28a2a1d751a9d80044dace7d34ebf2f1c2d587ee178eaa6779aaf0233fe85",
       "logIndex": 7,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55917897",
       "description": "1 printer can change your life",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789416308
     },
     "block": "55917897",
@@ -6601,7 +6943,7 @@
     "type": "launchpad.trade",
     "entity": "0x990f81fe719965811279e054acd8ff5c37cd727d",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -6620,6 +6962,7 @@
       "blockNumber": "55917897",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416308,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -6634,7 +6977,7 @@
     "type": "launchpad.trade",
     "entity": "0x990f81fe719965811279e054acd8ff5c37cd727d",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -6653,6 +6996,7 @@
       "blockNumber": "55918024",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416435,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -6667,7 +7011,7 @@
     "type": "launchpad.launch",
     "entity": "0x94f048d33c018d298ce953c4d4371bf8e640a5cb",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Magic Ink Money",
       "type": "launchpad.launch",
@@ -6677,6 +7021,7 @@
         "telegram": null
       },
       "token": "0x94f048d33c018d298ce953c4d4371bf8e640a5cb",
+      "poolId": null,
       "ticker": "MIM",
       "txHash": "0x10d8b0cc56d36d2eb39d1bc5bb02e5a69c5a07def4075001416f2512d7e2dac8",
       "chainId": 57073,
@@ -6685,11 +7030,15 @@
       "launchId": "0x6ce84d1b7553f5e1a2ad8bbfbadd5cc29524eed9beb6eb261fb6f84c29beed27",
       "logIndex": 12,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55918052",
       "description": "magic ink money",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789416463
     },
     "block": "55918052",
@@ -6702,7 +7051,7 @@
     "type": "launchpad.trade",
     "entity": "0x94f048d33c018d298ce953c4d4371bf8e640a5cb",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -6721,6 +7070,7 @@
       "blockNumber": "55918052",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416463,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -6735,7 +7085,7 @@
     "type": "launchpad.trade",
     "entity": "0x94f048d33c018d298ce953c4d4371bf8e640a5cb",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -6754,6 +7104,7 @@
       "blockNumber": "55918121",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416532,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -6768,7 +7119,7 @@
     "type": "launchpad.launch",
     "entity": "0x66ce009d8098127dfb9b3df25fcce0c81cee6faf",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Inky",
       "type": "launchpad.launch",
@@ -6778,6 +7129,7 @@
         "telegram": null
       },
       "token": "0x66ce009d8098127dfb9b3df25fcce0c81cee6faf",
+      "poolId": null,
       "ticker": "INKY",
       "txHash": "0xd56ed395cccad9e5f093debaeb39f2c2fcc293d92a7664055821b1438908c358",
       "chainId": 57073,
@@ -6786,11 +7138,15 @@
       "launchId": "0xbf181e19520994c08941ff63d089baad66a724d6e0aa1acc6af7a4e1148ded0a",
       "logIndex": 9,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55918136",
       "description": "the #1 pacman character",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789416547
     },
     "block": "55918136",
@@ -6803,7 +7159,7 @@
     "type": "launchpad.trade",
     "entity": "0x66ce009d8098127dfb9b3df25fcce0c81cee6faf",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -6822,6 +7178,7 @@
       "blockNumber": "55918136",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416547,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -6836,7 +7193,7 @@
     "type": "launchpad.trade",
     "entity": "0x66ce009d8098127dfb9b3df25fcce0c81cee6faf",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1347142836",
@@ -6855,6 +7212,7 @@
       "blockNumber": "55918455",
       "quoteAmount": "19600000000000001",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789416866,
       "progressBpsAfter": 0,
       "progressBpsBefore": 66
@@ -6869,7 +7227,7 @@
     "type": "launchpad.launch",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "squirtcoin",
       "type": "launchpad.launch",
@@ -6879,6 +7237,7 @@
         "telegram": null
       },
       "token": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
+      "poolId": null,
       "ticker": "SQUIRT",
       "txHash": "0x70cfa711cc4ba5ac3b871326a4ec65e1f7f5e532250fd628478d0ce0855c35a7",
       "chainId": 57073,
@@ -6887,11 +7246,15 @@
       "launchId": "0xb4bf90fdd0a473d7e5c9fb227f931dccac1b1f987fa8ec75c3ca8368ef6d9e81",
       "logIndex": 9,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55919497",
       "description": "squids squirt ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789417908
     },
     "block": "55919497",
@@ -6904,7 +7267,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1496076773",
@@ -6923,6 +7286,7 @@
       "blockNumber": "55919497",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "1496076773000000000",
       "blockTimestamp": 1789417908,
       "progressBpsAfter": 66,
       "progressBpsBefore": 0
@@ -6937,7 +7301,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1956065003",
@@ -6956,6 +7320,7 @@
       "blockNumber": "55919551",
       "quoteAmount": "74999999999999999",
       "tokenAmount": "43451286233090923388062879",
+      "athMarketCap": "1956065003000000000",
       "blockTimestamp": 1789417962,
       "progressBpsAfter": 316,
       "progressBpsBefore": 66
@@ -6970,7 +7335,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2326829362",
@@ -6989,6 +7354,7 @@
       "blockNumber": "55919551",
       "quoteAmount": "74999999999999999",
       "tokenAmount": "35023044592009160760451050",
+      "athMarketCap": "2326829362000000000",
       "blockTimestamp": 1789417962,
       "progressBpsAfter": 566,
       "progressBpsBefore": 316
@@ -7003,7 +7369,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2646144264",
@@ -7022,6 +7388,7 @@
       "blockNumber": "55919551",
       "quoteAmount": "74999999999999999",
       "tokenAmount": "30163039574749705118794626",
+      "athMarketCap": "2646144264000000000",
       "blockTimestamp": 1789417962,
       "progressBpsAfter": 816,
       "progressBpsBefore": 566
@@ -7036,7 +7403,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2839138811",
@@ -7055,6 +7422,7 @@
       "blockNumber": "55919557",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "18230599735495181236228351",
+      "athMarketCap": "2839138811000000000",
       "blockTimestamp": 1789417968,
       "progressBpsAfter": 983,
       "progressBpsBefore": 816
@@ -7069,7 +7437,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3019824318",
@@ -7088,6 +7456,7 @@
       "blockNumber": "55919557",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "17067866440453200841556567",
+      "athMarketCap": "3019824318000000000",
       "blockTimestamp": 1789417968,
       "progressBpsAfter": 1149,
       "progressBpsBefore": 983
@@ -7102,7 +7471,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3190292876",
@@ -7121,6 +7490,7 @@
       "blockNumber": "55919557",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "16102755718646661664504875",
+      "athMarketCap": "3190292876000000000",
       "blockTimestamp": 1789417968,
       "progressBpsAfter": 1316,
       "progressBpsBefore": 1149
@@ -7135,7 +7505,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3041358939",
@@ -7154,6 +7524,7 @@
       "blockNumber": "55919561",
       "quoteAmount": "42958474055297718",
       "tokenAmount": "14068558057524534306561674",
+      "athMarketCap": "3190292876000000000",
       "blockTimestamp": 1789417972,
       "progressBpsAfter": 1170,
       "progressBpsBefore": 1316
@@ -7168,7 +7539,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3177541184",
@@ -7187,6 +7558,7 @@
       "blockNumber": "55919562",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "12864011086781825435359508",
+      "athMarketCap": "3190292876000000000",
       "blockTimestamp": 1789417973,
       "progressBpsAfter": 1303,
       "progressBpsBefore": 1170
@@ -7201,7 +7573,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3308122088",
@@ -7220,6 +7592,7 @@
       "blockNumber": "55919562",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "12334898801263917128716037",
+      "athMarketCap": "3308122088000000000",
       "blockTimestamp": 1789417973,
       "progressBpsAfter": 1437,
       "progressBpsBefore": 1303
@@ -7234,7 +7607,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3433740749",
@@ -7253,6 +7626,7 @@
       "blockNumber": "55919562",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "11866156587183716769894502",
+      "athMarketCap": "3433740749000000000",
       "blockTimestamp": 1789417973,
       "progressBpsAfter": 1570,
       "progressBpsBefore": 1437
@@ -7267,7 +7641,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3554923249",
@@ -7286,6 +7660,7 @@
       "blockNumber": "55919562",
       "quoteAmount": "39999999999999999",
       "tokenAmount": "11447109223504555070933711",
+      "athMarketCap": "3554923249000000000",
       "blockTimestamp": 1789417973,
       "progressBpsAfter": 1703,
       "progressBpsBefore": 1570
@@ -7300,7 +7675,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3613991034",
@@ -7319,6 +7694,7 @@
       "blockNumber": "55919565",
       "quoteAmount": "19999999999999999",
       "tokenAmount": "5579645462594795017022549",
+      "athMarketCap": "3613991034000000000",
       "blockTimestamp": 1789417976,
       "progressBpsAfter": 1770,
       "progressBpsBefore": 1703
@@ -7333,7 +7709,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4284166174",
@@ -7352,6 +7728,7 @@
       "blockNumber": "55919567",
       "quoteAmount": "249999999999999999",
       "tokenAmount": "63305906353995070654475957",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417978,
       "progressBpsAfter": 2603,
       "progressBpsBefore": 1770
@@ -7366,7 +7743,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3824177944",
@@ -7385,6 +7762,7 @@
       "blockNumber": "55919574",
       "quoteAmount": "172635810558793206",
       "tokenAmount": "43451286233090923388062879",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417985,
       "progressBpsAfter": 2016,
       "progressBpsBefore": 2603
@@ -7399,7 +7777,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3453413585",
@@ -7418,6 +7796,7 @@
       "blockNumber": "55919574",
       "quoteAmount": "124892872023335650",
       "tokenAmount": "35023044592009160760451050",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417985,
       "progressBpsAfter": 1591,
       "progressBpsBefore": 2016
@@ -7432,7 +7811,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3134098683",
@@ -7451,6 +7830,7 @@
       "blockNumber": "55919574",
       "quoteAmount": "97362702540528506",
       "tokenAmount": "30163039574749705118794626",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417985,
       "progressBpsAfter": 1260,
       "progressBpsBefore": 1591
@@ -7465,7 +7845,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3008480023",
@@ -7484,6 +7864,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "35715512321584922",
       "tokenAmount": "11866156587183716769894502",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 1139,
       "progressBpsBefore": 1260
@@ -7498,7 +7879,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2872297778",
@@ -7517,6 +7898,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "37068691444139185",
       "tokenAmount": "12864011086781825435359508",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 1013,
       "progressBpsBefore": 1139
@@ -7531,7 +7913,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2741716873",
@@ -7550,6 +7932,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "33931668211553951",
       "tokenAmount": "12334898801263917128716037",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 897,
       "progressBpsBefore": 1013
@@ -7564,7 +7947,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2620534373",
@@ -7583,6 +7966,7 @@
       "blockNumber": "55919576",
       "quoteAmount": "30077315037478839",
       "tokenAmount": "11447109223504555070933711",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417987,
       "progressBpsAfter": 795,
       "progressBpsBefore": 897
@@ -7597,7 +7981,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2427539826",
@@ -7616,6 +8000,7 @@
       "blockNumber": "55919577",
       "quoteAmount": "45094415786188566",
       "tokenAmount": "18230599735495181236228351",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417988,
       "progressBpsAfter": 642,
       "progressBpsBefore": 795
@@ -7630,7 +8015,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2257071268",
@@ -7649,6 +8034,7 @@
       "blockNumber": "55919577",
       "quoteAmount": "36963222480457611",
       "tokenAmount": "16102755718646661664504875",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417988,
       "progressBpsAfter": 516,
       "progressBpsBefore": 642
@@ -7663,7 +8049,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2076385761",
@@ -7682,6 +8068,7 @@
       "blockNumber": "55919577",
       "quoteAmount": "36241804156595303",
       "tokenAmount": "17067866440453200841556567",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417988,
       "progressBpsAfter": 393,
       "progressBpsBefore": 516
@@ -7696,7 +8083,7 @@
     "type": "launchpad.trade",
     "entity": "0xd9ee2d2aa324b678f145720deb1e32a1daf6bc96",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "1406210621",
@@ -7715,6 +8102,7 @@
       "blockNumber": "55919580",
       "quoteAmount": "101415827942904660",
       "tokenAmount": "63305906353995070654475957",
+      "athMarketCap": "4284166174000000000",
       "blockTimestamp": 1789417991,
       "progressBpsAfter": 25,
       "progressBpsBefore": 393
@@ -7729,7 +8117,7 @@
     "type": "launchpad.launch",
     "entity": "0xcca88e6328e651201bd5bc431bea9ed70370b698",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "enk",
       "type": "launchpad.launch",
@@ -7739,6 +8127,7 @@
         "telegram": null
       },
       "token": "0xcca88e6328e651201bd5bc431bea9ed70370b698",
+      "poolId": null,
       "ticker": "ENK",
       "txHash": "0xbe6dd29e219db520f6673bdf97a57b6bfc1d789fb95d87650743c589d899f87b",
       "chainId": 57073,
@@ -7747,11 +8136,15 @@
       "launchId": "0x255541d0581229fb42ca67dd04ec99fbd20d480f56509234bbc55baa834d2349",
       "logIndex": 5,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55919979",
       "description": "the retarded version of ink",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789418390
     },
     "block": "55919979",
@@ -7764,7 +8157,7 @@
     "type": "launchpad.trade",
     "entity": "0xcca88e6328e651201bd5bc431bea9ed70370b698",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "1531048230",
@@ -7783,6 +8176,7 @@
       "blockNumber": "55919979",
       "quoteAmount": "24999999999999999",
       "tokenAmount": "17372022573374075429818044",
+      "athMarketCap": "1531048230000000000",
       "blockTimestamp": 1789418390,
       "progressBpsAfter": 83,
       "progressBpsBefore": 0
@@ -7797,7 +8191,7 @@
     "type": "launchpad.launch",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Grimace",
       "type": "launchpad.launch",
@@ -7807,6 +8201,7 @@
         "telegram": null
       },
       "token": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
+      "poolId": null,
       "ticker": "GRIMACE",
       "txHash": "0x16f213f1a851d96af5d9cbda652551c83c6eb28ff58e37499c907659b392c51e",
       "chainId": 57073,
@@ -7815,11 +8210,15 @@
       "launchId": "0xa29e6648f75bf2a977bcb38b35dc1299fb2df0d2455158f658a805363b4ce3e9",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55920008",
       "description": "grimace",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "5000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789418419
     },
     "block": "55920008",
@@ -7832,7 +8231,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2322492308",
@@ -7851,6 +8250,7 @@
       "blockNumber": "55920008",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "4378542177433323533168673",
+      "athMarketCap": "2322492308000000000",
       "blockTimestamp": 1789418419,
       "progressBpsAfter": 19,
       "progressBpsBefore": 0
@@ -7865,7 +8265,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2672210614",
@@ -7884,6 +8284,7 @@
       "blockNumber": "55920083",
       "quoteAmount": "49499999999999999",
       "tokenAmount": "19820998739411216869794717",
+      "athMarketCap": "2672210614000000000",
       "blockTimestamp": 1789418494,
       "progressBpsAfter": 118,
       "progressBpsBefore": 19
@@ -7898,7 +8299,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2737441532",
@@ -7917,6 +8318,7 @@
       "blockNumber": "55920095",
       "quoteAmount": "9999999999999999",
       "tokenAmount": "3697095399173279863223603",
+      "athMarketCap": "2737441532000000000",
       "blockTimestamp": 1789418506,
       "progressBpsAfter": 138,
       "progressBpsBefore": 118
@@ -7931,7 +8333,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2672210614",
@@ -7950,6 +8352,7 @@
       "blockNumber": "55920107",
       "quoteAmount": "9800000000000001",
       "tokenAmount": "3697095399173279863223603",
+      "athMarketCap": "2737441532000000000",
       "blockTimestamp": 1789418518,
       "progressBpsAfter": 118,
       "progressBpsBefore": 138
@@ -7964,7 +8367,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2799893781",
@@ -7983,6 +8386,7 @@
       "blockNumber": "55920121",
       "quoteAmount": "19799999999999999",
       "tokenAmount": "7236704064812077922452019",
+      "athMarketCap": "2799893781000000000",
       "blockTimestamp": 1789418532,
       "progressBpsAfter": 158,
       "progressBpsBefore": 118
@@ -7997,7 +8401,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2982957410",
@@ -8016,6 +8420,7 @@
       "blockNumber": "55920142",
       "quoteAmount": "29999999999999999",
       "tokenAmount": "10375504779970390765203247",
+      "athMarketCap": "2982957410000000000",
       "blockTimestamp": 1789418553,
       "progressBpsAfter": 218,
       "progressBpsBefore": 158
@@ -8030,7 +8435,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3525166756",
@@ -8049,6 +8454,7 @@
       "blockNumber": "55920145",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "30730821267117365874292506",
+      "athMarketCap": "3525166756000000000",
       "blockTimestamp": 1789418556,
       "progressBpsAfter": 418,
       "progressBpsBefore": 218
@@ -8063,7 +8469,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2982957410",
@@ -8082,6 +8488,7 @@
       "blockNumber": "55920412",
       "quoteAmount": "98000000000000001",
       "tokenAmount": "30730821267117365874292506",
+      "athMarketCap": "3525166756000000000",
       "blockTimestamp": 1789418823,
       "progressBpsAfter": 218,
       "progressBpsBefore": 418
@@ -8096,7 +8503,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2799893781",
@@ -8115,6 +8522,7 @@
       "blockNumber": "55920439",
       "quoteAmount": "29400000000000001",
       "tokenAmount": "10375504779970390765203247",
+      "athMarketCap": "3525166756000000000",
       "blockTimestamp": 1789418850,
       "progressBpsAfter": 158,
       "progressBpsBefore": 218
@@ -8129,7 +8537,7 @@
     "type": "launchpad.trade",
     "entity": "0xd2d4cd1c97bdf08baee8c387a6e8d3a4da2eebdc",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2891959007",
@@ -8148,6 +8556,7 @@
       "blockNumber": "55920556",
       "quoteAmount": "14849999999999999",
       "tokenAmount": "5217984581257427715706460",
+      "athMarketCap": "3525166756000000000",
       "blockTimestamp": 1789418967,
       "progressBpsAfter": 188,
       "progressBpsBefore": 158
@@ -8162,7 +8571,7 @@
     "type": "launchpad.launch",
     "entity": "0xb4d0c2b18d312b7b891b1d209b26765583148907",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Ink Purple Wave",
       "type": "launchpad.launch",
@@ -8172,6 +8581,7 @@
         "telegram": null
       },
       "token": "0xb4d0c2b18d312b7b891b1d209b26765583148907",
+      "poolId": null,
       "ticker": "PURPLE",
       "txHash": "0xde17929a125139e2871db2e2b586139644d2f8f1867256fd12c5885b386a1e33",
       "chainId": 57073,
@@ -8180,11 +8590,15 @@
       "launchId": "0xf769b8eb5e088dc442608526046f869863e0dc483fc317179b040eac383c0d20",
       "logIndex": 4,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55921340",
       "description": "Meme Turned World Ink $PURPLE",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789419751
     },
     "block": "55921340",
@@ -8197,7 +8611,7 @@
     "type": "launchpad.launch",
     "entity": "0x59b1e2e7bb74ca7f8c27e54c3d24177960498f30",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "uni dog abe",
       "type": "launchpad.launch",
@@ -8207,6 +8621,7 @@
         "telegram": null
       },
       "token": "0x59b1e2e7bb74ca7f8c27e54c3d24177960498f30",
+      "poolId": null,
       "ticker": "ABE",
       "txHash": "0x38ca4fac5f2f96b7c99034380b26a0b8e3967e491f325c4b00f9063c70ba452d",
       "chainId": 57073,
@@ -8215,11 +8630,15 @@
       "launchId": "0x7ae868f819efcbe473b8ea97e90edccbc12b1aefaa581668407740341ec9c573",
       "logIndex": 4,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55921448",
       "description": "uniswap dog",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "1000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789419859
     },
     "block": "55921448",
@@ -8232,7 +8651,7 @@
     "type": "launchpad.launch",
     "entity": "0x9c09dad611d5bc409037ce9e4c13cc0e08e0f810",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "Anita Inu",
       "type": "launchpad.launch",
@@ -8242,6 +8661,7 @@
         "telegram": null
       },
       "token": "0x9c09dad611d5bc409037ce9e4c13cc0e08e0f810",
+      "poolId": null,
       "ticker": "AI",
       "txHash": "0x31145a8f19164ac89db41e686df222ae3fa5a9b49d053c4e63cd5c7645bb4ad3",
       "chainId": 57073,
@@ -8250,11 +8670,15 @@
       "launchId": "0xbf97a334d479952c75271c8864babbd943664dfc580f08a85b5b20d8b8cd024a",
       "logIndex": 3,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55925039",
       "description": "Anita Inu is the Ai on inkchain ",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "3000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789423450
     },
     "block": "55925039",
@@ -8267,7 +8691,7 @@
     "type": "launchpad.launch",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
       "name": "KINK",
       "type": "launchpad.launch",
@@ -8277,6 +8701,7 @@
         "telegram": null
       },
       "token": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
+      "poolId": null,
       "ticker": "KINK",
       "txHash": "0x13cd0a5ff75b5a8b73860f3ed0b754f9c559a27bc7c93b505a90ed17dee3d5d4",
       "chainId": 57073,
@@ -8285,11 +8710,15 @@
       "launchId": "0x20fdf1a90a19532d2d39386112e51007195f0cdab70980028a0025187ec758cf",
       "logIndex": 7,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x0000000000000000000000000000000000000000",
       "blockNumber": "55926717",
       "description": "\n$KINK didn’t come from us. In October 2024, Bankless asked Ink founder Andrew Koller if the chain would ever launch a token and what it might be named. He shut down any official token plans, but then he mentioned that people on the team had been throwing around “kink” as a joke and that it would probably spawn a bunch of memes. That nickname was circulating internally before Ink even launched mainnet. We just took the joke and put it on-chain. 100% of fees used for buybacks and burns.\n",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "4000000000000000000",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789425128
     },
     "block": "55926717",
@@ -8302,7 +8731,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2156831354",
@@ -8321,6 +8750,7 @@
       "blockNumber": "55926717",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "25318076522943732712740186",
+      "athMarketCap": "2156831354000000000",
       "blockTimestamp": 1789425128,
       "progressBpsAfter": 126,
       "progressBpsBefore": 0
@@ -8335,7 +8765,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2189630933",
@@ -8354,6 +8784,7 @@
       "blockNumber": "55926733",
       "quoteAmount": "4999999999999999",
       "tokenAmount": "2300892320972330586173099",
+      "athMarketCap": "2189630933000000000",
       "blockTimestamp": 1789425144,
       "progressBpsAfter": 138,
       "progressBpsBefore": 126
@@ -8368,7 +8799,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2765090658",
@@ -8387,6 +8818,7 @@
       "blockNumber": "55926736",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "40407206700494136608741990",
+      "athMarketCap": "2765090658000000000",
       "blockTimestamp": 1789425147,
       "progressBpsAfter": 391,
       "progressBpsBefore": 138
@@ -8401,7 +8833,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2201175549",
@@ -8420,6 +8852,7 @@
       "blockNumber": "55926751",
       "quoteAmount": "98202329771086011",
       "tokenAmount": "40407206700494136608741990",
+      "athMarketCap": "2765090658000000000",
       "blockTimestamp": 1789425162,
       "progressBpsAfter": 143,
       "progressBpsBefore": 391
@@ -8434,7 +8867,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2169025489",
@@ -8453,6 +8886,7 @@
       "blockNumber": "55926760",
       "quoteAmount": "4926758494924889",
       "tokenAmount": "2300892320972330586173099",
+      "athMarketCap": "2765090658000000000",
       "blockTimestamp": 1789425171,
       "progressBpsAfter": 130,
       "progressBpsBefore": 143
@@ -8467,7 +8901,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2584682336",
@@ -8486,6 +8920,7 @@
       "blockNumber": "55926797",
       "quoteAmount": "69299999999999999",
       "tokenAmount": "29179435535404393168664266",
+      "athMarketCap": "2765090658000000000",
       "blockTimestamp": 1789425208,
       "progressBpsAfter": 305,
       "progressBpsBefore": 130
@@ -8500,7 +8935,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3072476262",
@@ -8519,6 +8954,7 @@
       "blockNumber": "55926850",
       "quoteAmount": "96783328300437704",
       "tokenAmount": "34243166076491749711371029",
+      "athMarketCap": "3072476262000000000",
       "blockTimestamp": 1789425261,
       "progressBpsAfter": 550,
       "progressBpsBefore": 305
@@ -8533,7 +8969,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3000824853",
@@ -8552,6 +8988,7 @@
       "blockNumber": "55926865",
       "quoteAmount": "15259054134220831",
       "tokenAmount": "5128130903152264153308178",
+      "athMarketCap": "3072476262000000000",
       "blockTimestamp": 1789425276,
       "progressBpsAfter": 511,
       "progressBpsBefore": 550
@@ -8566,7 +9003,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3227431633",
@@ -8585,6 +9022,7 @@
       "blockNumber": "55926917",
       "quoteAmount": "49499999999999999",
       "tokenAmount": "15900827966379325549380732",
+      "athMarketCap": "3227431633000000000",
       "blockTimestamp": 1789425328,
       "progressBpsAfter": 636,
       "progressBpsBefore": 511
@@ -8599,7 +9037,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3441211459",
@@ -8618,6 +9056,7 @@
       "blockNumber": "55926932",
       "quoteAmount": "49999999999999999",
       "tokenAmount": "15000168942548398291441573",
+      "athMarketCap": "3441211459000000000",
       "blockTimestamp": 1789425343,
       "progressBpsAfter": 762,
       "progressBpsBefore": 636
@@ -8632,7 +9071,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3829447297",
@@ -8651,6 +9090,7 @@
       "blockNumber": "55926937",
       "quoteAmount": "98999999999999999",
       "tokenAmount": "27246426833396827100956144",
+      "athMarketCap": "3829447297000000000",
       "blockTimestamp": 1789425348,
       "progressBpsAfter": 1012,
       "progressBpsBefore": 762
@@ -8665,7 +9105,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3847830962",
@@ -8684,6 +9124,7 @@
       "blockNumber": "55926961",
       "quoteAmount": "4949999999999999",
       "tokenAmount": "1289550000250859465365322",
+      "athMarketCap": "3847830962000000000",
       "blockTimestamp": 1789425372,
       "progressBpsAfter": 1025,
       "progressBpsBefore": 1012
@@ -8698,7 +9139,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4298296464",
@@ -8717,6 +9158,7 @@
       "blockNumber": "55926962",
       "quoteAmount": "128699999999999999",
       "tokenAmount": "31614246305051287316414410",
+      "athMarketCap": "4298296464000000000",
       "blockTimestamp": 1789425373,
       "progressBpsAfter": 1350,
       "progressBpsBefore": 1025
@@ -8731,7 +9173,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4385408231",
@@ -8750,6 +9192,7 @@
       "blockNumber": "55926965",
       "quoteAmount": "26530637098679999",
       "tokenAmount": "6111043043109745715643549",
+      "athMarketCap": "4385408231000000000",
       "blockTimestamp": 1789425376,
       "progressBpsAfter": 1417,
       "progressBpsBefore": 1350
@@ -8764,7 +9207,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4474509138",
@@ -8783,6 +9226,7 @@
       "blockNumber": "55926965",
       "quoteAmount": "27687108901319999",
       "tokenAmount": "6250586251853895206264732",
+      "athMarketCap": "4474509138000000000",
       "blockTimestamp": 1789425376,
       "progressBpsAfter": 1487,
       "progressBpsBefore": 1417
@@ -8797,7 +9241,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4551036626",
@@ -8816,6 +9260,7 @@
       "blockNumber": "55926965",
       "quoteAmount": "24224606999999999",
       "tokenAmount": "5368456283405380094509307",
+      "athMarketCap": "4551036626000000000",
       "blockTimestamp": 1789425376,
       "progressBpsAfter": 1548,
       "progressBpsBefore": 1487
@@ -8830,7 +9275,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4629339889",
@@ -8849,6 +9294,7 @@
       "blockNumber": "55926965",
       "quoteAmount": "25211933999999999",
       "tokenAmount": "5493030809738397958837707",
+      "athMarketCap": "4629339889000000000",
       "blockTimestamp": 1789425376,
       "progressBpsAfter": 1612,
       "progressBpsBefore": 1548
@@ -8863,7 +9309,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4701885722",
@@ -8882,6 +9328,7 @@
       "blockNumber": "55926965",
       "quoteAmount": "23741981999999999",
       "tokenAmount": "5089105494269211236276388",
+      "athMarketCap": "4701885722000000000",
       "blockTimestamp": 1789425376,
       "progressBpsAfter": 1672,
       "progressBpsBefore": 1612
@@ -8896,7 +9343,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4765443099",
@@ -8915,6 +9362,7 @@
       "blockNumber": "55926965",
       "quoteAmount": "21103730999999999",
       "tokenAmount": "4458517285074545879147305",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789425376,
       "progressBpsAfter": 1725,
       "progressBpsBefore": 1672
@@ -8929,7 +9377,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "4555880761",
@@ -8948,6 +9396,7 @@
       "blockNumber": "55927080",
       "quoteAmount": "68496581703722477",
       "tokenAmount": "15000168942548398291441573",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789425491,
       "progressBpsAfter": 1552,
       "progressBpsBefore": 1725
@@ -8962,7 +9411,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "4479128274",
@@ -8981,6 +9430,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "24316390843348939",
       "tokenAmount": "5493030809738397958837707",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1490,
       "progressBpsBefore": 1552
@@ -8995,7 +9445,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "4408019354",
@@ -9014,6 +9464,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "22159733837109076",
       "tokenAmount": "5089105494269211236276388",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1435,
       "progressBpsBefore": 1490
@@ -9028,7 +9479,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "4345720936",
@@ -9047,6 +9498,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "19122679423423902",
       "tokenAmount": "4458517285074545879147305",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1386,
       "progressBpsBefore": 1435
@@ -9061,7 +9513,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "4258384840",
@@ -9080,6 +9532,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "26349815610926442",
       "tokenAmount": "6250586251853895206264732",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1320,
       "progressBpsBefore": 1386
@@ -9094,7 +9547,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "4183373297",
@@ -9113,6 +9566,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "22204401429986610",
       "tokenAmount": "5368456283405380094509307",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1264,
       "progressBpsBefore": 1320
@@ -9127,7 +9581,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "4097987104",
@@ -9146,6 +9600,7 @@
       "blockNumber": "55927623",
       "quoteAmount": "24795187571817350",
       "tokenAmount": "6111043043109745715643549",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426034,
       "progressBpsAfter": 1201,
       "progressBpsBefore": 1264
@@ -9160,7 +9615,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4216806127",
@@ -9179,6 +9634,7 @@
       "blockNumber": "55927762",
       "quoteAmount": "34649999999999999",
       "tokenAmount": "8335705734864223055763844",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426173,
       "progressBpsAfter": 1288,
       "progressBpsBefore": 1201
@@ -9193,7 +9649,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3860273339",
@@ -9212,6 +9668,7 @@
       "blockNumber": "55928481",
       "quoteAmount": "100979193061927329",
       "tokenAmount": "25526083701494408070509898",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426892,
       "progressBpsAfter": 1033,
       "progressBpsBefore": 1288
@@ -9226,7 +9683,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3418786959",
@@ -9245,6 +9702,7 @@
       "blockNumber": "55928490",
       "quoteAmount": "112686189367488194",
       "tokenAmount": "31614246305051287316414410",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426901,
       "progressBpsAfter": 749,
       "progressBpsBefore": 1033
@@ -9259,7 +9717,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3038288758",
@@ -9278,6 +9736,7 @@
       "blockNumber": "55928490",
       "quoteAmount": "86152235719929443",
       "tokenAmount": "27246426833396827100956144",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426901,
       "progressBpsAfter": 531,
       "progressBpsBefore": 749
@@ -9292,7 +9751,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "2630857077",
@@ -9311,6 +9770,7 @@
       "blockNumber": "55928490",
       "quoteAmount": "80993560175523153",
       "tokenAmount": "29179435535404393168664266",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426901,
       "progressBpsAfter": 327,
       "progressBpsBefore": 531
@@ -9325,7 +9785,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "2982837603",
@@ -9344,6 +9804,7 @@
       "blockNumber": "55928577",
       "quoteAmount": "69299999999999999",
       "tokenAmount": "24704061374583159615766646",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426988,
       "progressBpsAfter": 502,
       "progressBpsBefore": 327
@@ -9358,7 +9819,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3098871204",
@@ -9377,6 +9838,7 @@
       "blockNumber": "55928586",
       "quoteAmount": "24749999999999999",
       "tokenAmount": "8140669117443622432755406",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789426997,
       "progressBpsAfter": 564,
       "progressBpsBefore": 502
@@ -9391,7 +9853,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3525015324",
@@ -9410,6 +9872,7 @@
       "blockNumber": "55928602",
       "quoteAmount": "98999999999999999",
       "tokenAmount": "29909726688344796004723936",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427013,
       "progressBpsAfter": 814,
       "progressBpsBefore": 564
@@ -9424,7 +9887,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3492888960",
@@ -9443,6 +9906,7 @@
       "blockNumber": "55928686",
       "quoteAmount": "7905822999630785",
       "tokenAmount": "2299131134441874743396543",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427097,
       "progressBpsAfter": 794,
       "progressBpsBefore": 814
@@ -9457,7 +9921,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "3066347534",
@@ -9476,6 +9940,7 @@
       "blockNumber": "55929259",
       "quoteAmount": "98105322832674961",
       "tokenAmount": "30545599357584907305125509",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427670,
       "progressBpsAfter": 546,
       "progressBpsBefore": 794
@@ -9490,7 +9955,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3488375394",
@@ -9509,6 +9974,7 @@
       "blockNumber": "55929379",
       "quoteAmount": "97019999999999999",
       "tokenAmount": "29620832421857973616638664",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789427790,
       "progressBpsAfter": 791,
       "progressBpsBefore": 546
@@ -9523,7 +9989,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "3764691408",
@@ -9542,6 +10008,7 @@
       "blockNumber": "55929621",
       "quoteAmount": "70289999999999999",
       "tokenAmount": "19389193611597398886103925",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789428032,
       "progressBpsAfter": 969,
       "progressBpsBefore": 791
@@ -9556,7 +10023,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4190486576",
@@ -9575,6 +10042,7 @@
       "blockNumber": "55929676",
       "quoteAmount": "118799999999999999",
       "tokenAmount": "29882377950607870650814056",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789428087,
       "progressBpsAfter": 1269,
       "progressBpsBefore": 969
@@ -9589,7 +10057,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4638103077",
@@ -9608,6 +10076,7 @@
       "blockNumber": "55929715",
       "quoteAmount": "138599999999999999",
       "tokenAmount": "31413008350425688810767544",
+      "athMarketCap": "4765443099000000000",
       "blockTimestamp": 1789428126,
       "progressBpsAfter": 1619,
       "progressBpsBefore": 1269
@@ -9622,7 +10091,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "4935913580",
@@ -9641,6 +10110,7 @@
       "blockNumber": "55931399",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "20896117132384229717342535",
+      "athMarketCap": "4935913580000000000",
       "blockTimestamp": 1789429810,
       "progressBpsAfter": 1871,
       "progressBpsBefore": 1619
@@ -9655,7 +10125,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5216750482",
@@ -9674,6 +10144,7 @@
       "blockNumber": "55931430",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "19704515755736332402690942",
+      "athMarketCap": "5216750482000000000",
       "blockTimestamp": 1789429841,
       "progressBpsAfter": 2124,
       "progressBpsBefore": 1871
@@ -9688,7 +10159,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5413252812",
@@ -9707,6 +10178,7 @@
       "blockNumber": "55931591",
       "quoteAmount": "73259999999999999",
       "tokenAmount": "13786104834945561127359223",
+      "athMarketCap": "5413252812000000000",
       "blockTimestamp": 1789430002,
       "progressBpsAfter": 2309,
       "progressBpsBefore": 2124
@@ -9721,7 +10193,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5670498102",
@@ -9740,6 +10212,7 @@
       "blockNumber": "55932770",
       "quoteAmount": "99999999999999999",
       "tokenAmount": "18048487207248720186264734",
+      "athMarketCap": "5670498102000000000",
       "blockTimestamp": 1789431181,
       "progressBpsAfter": 2561,
       "progressBpsBefore": 2309
@@ -9754,7 +10227,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5706836157",
@@ -9773,6 +10246,7 @@
       "blockNumber": "55933069",
       "quoteAmount": "14499999999999999",
       "tokenAmount": "2549007840618284818624914",
+      "athMarketCap": "5706836157000000000",
       "blockTimestamp": 1789431480,
       "progressBpsAfter": 2598,
       "progressBpsBefore": 2561
@@ -9787,7 +10261,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5780553434",
@@ -9806,6 +10280,7 @@
       "blockNumber": "55933432",
       "quoteAmount": "29699999999999999",
       "tokenAmount": "5171214060431226028278526",
+      "athMarketCap": "5780553434000000000",
       "blockTimestamp": 1789431843,
       "progressBpsAfter": 2673,
       "progressBpsBefore": 2598
@@ -9820,7 +10295,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "5810072903",
@@ -9839,6 +10314,7 @@
       "blockNumber": "55933485",
       "quoteAmount": "11999999999999999",
       "tokenAmount": "2070690833421972782043328",
+      "athMarketCap": "5810072903000000000",
       "blockTimestamp": 1789431896,
       "progressBpsAfter": 2703,
       "progressBpsBefore": 2673
@@ -9853,7 +10329,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "6045660156",
@@ -9872,6 +10348,7 @@
       "blockNumber": "55933875",
       "quoteAmount": "97959376488529169",
       "tokenAmount": "16528422285310133432388981",
+      "athMarketCap": "6045660156000000000",
       "blockTimestamp": 1789432286,
       "progressBpsAfter": 2951,
       "progressBpsBefore": 2703
@@ -9886,7 +10363,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "6092152216",
@@ -9905,6 +10382,7 @@
       "blockNumber": "55933936",
       "quoteAmount": "19791787339610215",
       "tokenAmount": "3261301878107611488225895",
+      "athMarketCap": "6092152216000000000",
       "blockTimestamp": 1789432347,
       "progressBpsAfter": 3001,
       "progressBpsBefore": 2951
@@ -9919,7 +10397,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "6344342803",
@@ -9938,6 +10416,7 @@
       "blockNumber": "55934635",
       "quoteAmount": "109999999999999999",
       "tokenAmount": "17693354064687690944893064",
+      "athMarketCap": "6344342803000000000",
       "blockTimestamp": 1789433046,
       "progressBpsAfter": 3278,
       "progressBpsBefore": 3001
@@ -9952,7 +10431,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "6586884893",
@@ -9971,6 +10450,7 @@
       "blockNumber": "55934663",
       "quoteAmount": "109999999999999999",
       "tokenAmount": "17016181526761100840437744",
+      "athMarketCap": "6586884893000000000",
       "blockTimestamp": 1789433074,
       "progressBpsAfter": 3556,
       "progressBpsBefore": 3278
@@ -9985,7 +10465,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "6651497983",
@@ -10004,6 +10484,7 @@
       "blockNumber": "55934702",
       "quoteAmount": "29999999999999999",
       "tokenAmount": "4532493603212617021657973",
+      "athMarketCap": "6651497983000000000",
       "blockTimestamp": 1789433113,
       "progressBpsAfter": 3632,
       "progressBpsBefore": 3556
@@ -10018,7 +10499,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "6698484815",
@@ -10037,6 +10518,7 @@
       "blockNumber": "55934735",
       "quoteAmount": "21999999999999999",
       "tokenAmount": "3295998859199504755550227",
+      "athMarketCap": "6698484815000000000",
       "blockTimestamp": 1789433146,
       "progressBpsAfter": 3687,
       "progressBpsBefore": 3632
@@ -10051,7 +10533,7 @@
     "type": "launchpad.trade",
     "entity": "0xa3b71dbc418eecf371d3e9ed8e18d99915df9166",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "6652428426",
@@ -10070,6 +10552,7 @@
       "blockNumber": "55935328",
       "quoteAmount": "21561497466379856",
       "tokenAmount": "3295998859199504755550227",
+      "athMarketCap": "6698484815000000000",
       "blockTimestamp": 1789433739,
       "progressBpsAfter": 3633,
       "progressBpsBefore": 3687
@@ -10084,7 +10567,7 @@
     "type": "launchpad.launch",
     "entity": "0x2c1490d01d2a34ec29478c0a490db8eaa6c054e1",
     "payload": {
-      "v": 1,
+      "v": 2,
       "hook": "0x86c02fc27ce0232ea0cb195e11f2dedfa497aac4",
       "name": "InkyPump Release Canary",
       "type": "launchpad.launch",
@@ -10094,6 +10577,7 @@
         "telegram": null
       },
       "token": "0x2c1490d01d2a34ec29478c0a490db8eaa6c054e1",
+      "poolId": null,
       "ticker": "CANARY",
       "txHash": "0x8922374bfe0e0c73057c1da7cfaa16680625e037061b0653d88fb926014487f5",
       "chainId": 57073,
@@ -10102,11 +10586,15 @@
       "launchId": "0x92317cc0bfc00a28ff70a2b91e84be68464ff3d08c26a6c16edfeca3b912de99",
       "logIndex": 5,
       "launchpad": "inkypump",
+      "customHook": null,
       "quoteAsset": "0x30987adf0b11dc698438a99ba04ec3a1ab2c7eab",
       "blockNumber": "55935443",
       "description": "Production release canary for the sealed MSTRx market. Test asset.",
+      "hookModules": null,
+      "poolManager": null,
       "targetRaise": "62596764164604451048",
       "totalSupply": "1000000000000000000000000000",
+      "startsInPool": false,
       "blockTimestamp": 1789433854
     },
     "block": "55935443",
@@ -10119,7 +10607,7 @@
     "type": "launchpad.trade",
     "entity": "0x2c1490d01d2a34ec29478c0a490db8eaa6c054e1",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "buy",
       "type": "launchpad.trade",
       "price": "24625996785",
@@ -10138,6 +10626,7 @@
       "blockNumber": "55935703",
       "quoteAmount": "3707791368300389",
       "tokenAmount": "147656517615880006053902",
+      "athMarketCap": "24625996785000000000",
       "blockTimestamp": 1789434114,
       "progressBpsAfter": 0,
       "progressBpsBefore": 0
@@ -10152,7 +10641,7 @@
     "type": "launchpad.trade",
     "entity": "0x2c1490d01d2a34ec29478c0a490db8eaa6c054e1",
     "payload": {
-      "v": 1,
+      "v": 2,
       "side": "sell",
       "type": "launchpad.trade",
       "price": "24608964323",
@@ -10171,6 +10660,7 @@
       "blockNumber": "55935938",
       "quoteAmount": "1781113305260700",
       "tokenAmount": "73828258807940003026951",
+      "athMarketCap": "24625996785000000000",
       "blockTimestamp": 1789434349,
       "progressBpsAfter": 0,
       "progressBpsBefore": 0

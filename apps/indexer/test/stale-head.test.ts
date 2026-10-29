@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, inject, it, vi } from "vitest"
 import type { Level } from "../src/log"
 import { Indexer } from "../src/loop"
 import { inkypumpSource } from "../src/sources/inkypump/index"
+import { PoolRegistry } from "../src/sources/pools"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 import { launch } from "./scenario"
@@ -33,7 +34,7 @@ async function caughtUpTo(cursor: bigint) {
     chain,
     store,
     logger,
-    sources: [inkypumpSource({ sql, chain, logger })],
+    sources: [inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger })],
   })
   await idx.init()
   await idx.tick()

@@ -24,8 +24,11 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
    * passes an empty array in its place.
    */
   filters(only?: readonly BackfillSource[]): (LogFilter | null)[]
-  /** One log array per filter, same order. Network reads allowed; no DB writes. */
-  process(logs: ChainLog[][], ctx: { toBlock: bigint }): Promise<B>
+  /**
+   * One log array per filter, same order. Network reads allowed; no DB writes. `live` is true for
+   * the live tick's spans and false for a backfill's.
+   */
+  process(logs: ChainLog[][], ctx: { toBlock: bigint; live: boolean }): Promise<B>
   write(tx: Tx, batch: B): Promise<void>
   /** Network reads before the rollback transaction. */
   prepareRollback(fork: bigint): Promise<R>
@@ -35,11 +38,18 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
 }
 
 /**
- * The names `backfill --sources` takes. `inkypump` is the InkyPump source; the NFT source's filters
- * come in three groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and
- * `nft-launches` (the Chimera factory).
+ * The names `backfill --sources` takes. `inkypump` is the InkyPump source and `v4-swaps` the swaps
+ * and burns of tokens with a registered Uniswap v4 pool. The NFT source's filters come in three
+ * groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and `nft-launches`
+ * (the Chimera factory).
  */
-export const BACKFILL_SOURCES = ["inkypump", "nft-mints", "nft-sales", "nft-launches"] as const
+export const BACKFILL_SOURCES = [
+  "inkypump",
+  "v4-swaps",
+  "nft-mints",
+  "nft-sales",
+  "nft-launches",
+] as const
 export type BackfillSource = (typeof BACKFILL_SOURCES)[number]
 
 /** `filter` when `only` is absent or names `group`, else null (see `Source.filters`). */
@@ -55,6 +65,7 @@ export function entityOf(e: IndexerEvent): string {
     case "launchpad.launch":
     case "launchpad.trade":
     case "launchpad.bond":
+    case "launchpad.swap":
       return e.token
     case "nft.collection":
     case "nft.drop":

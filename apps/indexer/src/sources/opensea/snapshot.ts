@@ -89,9 +89,14 @@ export function canonicalJson(v: unknown): string {
   return JSON.stringify(v)
 }
 
-/** sha256 of the event's canonical JSON without its base fields (hex). */
+/**
+ * sha256 of the event's canonical JSON without its base fields (hex). The hash identifies the
+ * collection's content, which a new schema version does not change, so `v` is hashed as 1: hashes
+ * stored before version 2 stay valid and no collection re-emits an identical snapshot.
+ */
 export function snapshotHash(e: NftEvent): string {
   const body = Object.fromEntries(Object.entries(e).filter(([k]) => !BASE_FIELDS.has(k)))
+  if ("v" in body) body.v = 1
   return createHash("sha256").update(canonicalJson(body)).digest("hex")
 }
 

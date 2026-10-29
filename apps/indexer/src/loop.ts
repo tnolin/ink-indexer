@@ -283,7 +283,7 @@ export class Indexer {
     try {
       const batches: SourceBatch[] = []
       for (const [i, source] of sources.entries())
-        batches.push(await source.process(logs[i]!, { toBlock }))
+        batches.push(await source.process(logs[i]!, { toBlock, live: moveCursor }))
       let cursor: Cursor | null = null
       if (moveCursor) {
         const end = await chain.getBlock(toBlock)

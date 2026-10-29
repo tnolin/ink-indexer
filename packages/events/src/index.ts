@@ -1,14 +1,16 @@
-export const SCHEMA_VERSION = 1 as const
+export const SCHEMA_VERSION = 2 as const
 
 /** Lowercase 0x-prefixed hex. */
 export type Address = `0x${string}`
 /** Lowercase 0x-prefixed 32-byte hex. */
 export type Hash = `0x${string}`
 
+export type LaunchpadKey = "inkypump" | "inkfun" | "tsunami" | "hookit" | "chimera"
+
 export type LaunchpadBase = {
   v: typeof SCHEMA_VERSION
   chainId: 57073
-  launchpad: "inkypump"
+  launchpad: LaunchpadKey
   token: Address
   launchId: Hash
   txHash: Hash
@@ -30,8 +32,16 @@ export type LaunchEvent = LaunchpadBase & {
   imageUrl: string | null
   links: { telegram: string | null; twitter: string | null; website: string | null }
   quoteAsset: Address
-  targetRaise: string
+  /** Null for a token that starts in a pool and has no bonding curve. */
+  targetRaise: string | null
   totalSupply: string
+  /** True when the token trades in a pool from its first block. */
+  startsInPool: boolean
+  poolId: Hash | null
+  poolManager: Address | null
+  /** Whether the pool uses a hook written for the launchpad. Null where it does not apply. */
+  customHook: boolean | null
+  hookModules: string[] | null
 }
 
 export type TradeEvent = LaunchpadBase & {
@@ -51,21 +61,75 @@ export type TradeEvent = LaunchpadBase & {
   /** Tokens sold over the sale supply in basis points, floored and capped at 10,000. */
   soldBps: number
   marketCap: string
+  /** The highest market cap the token has reached, on the curve or in its pool, in quote base units. */
+  athMarketCap: string
   quoteAsset: Address
 }
 
 export type BondEvent = LaunchpadBase & {
   type: "launchpad.bond"
   poolId: Hash
+  poolManager: Address
   liquidityQuote: string
   liquidityTokens: string
   quoteAsset: Address
 }
 
-export type LaunchpadEvent = LaunchEvent | TradeEvent | BondEvent
+/** A swap in a Uniswap v4 pool of a tracked token. Amounts are decimal strings in base units. */
+export type SwapEvent = LaunchpadBase & {
+  type: "launchpad.swap"
+  poolId: Hash
+  poolManager: Address
+  side: "buy" | "sell"
+  /** The transaction's sender. */
+  trader: Address
+  /** The address that called the pool manager. */
+  router: Address
+  tokenAmount: string
+  /** Quote paid on a buy, quote received on a sell. */
+  quoteAmount: string
+  quoteAsset: Address
+  /** Quote base units per 1e18 token base units after the swap. */
+  price: string
+  /** Price times the circulating supply, in quote base units. */
+  marketCap: string
+  /** The highest market cap the token has reached, on the curve or in its pool. */
+  athMarketCap: string
+  /** The pool's quote side after the swap, in quote base units. */
+  quoteLiquidity: string
+  /** Total supply minus the dead address's balance, in token base units. */
+  supply: string
+}
+
+export type LaunchpadEvent = LaunchEvent | TradeEvent | BondEvent | SwapEvent
+
+/** Launch row as written before schema version 2. */
+export type LaunchEventV1 = Omit<
+  LaunchEvent,
+  | "v"
+  | "launchpad"
+  | "targetRaise"
+  | "startsInPool"
+  | "poolId"
+  | "poolManager"
+  | "customHook"
+  | "hookModules"
+> & { v: 1; launchpad: "inkypump"; targetRaise: string }
+
+/** Trade row as written before schema version 2. */
+export type TradeEventV1 = Omit<TradeEvent, "v" | "launchpad" | "athMarketCap"> & {
+  v: 1
+  launchpad: "inkypump"
+}
+
+/** Bond row as written before schema version 2. */
+export type BondEventV1 = Omit<BondEvent, "v" | "launchpad" | "poolManager"> & {
+  v: 1
+  launchpad: "inkypump"
+}
 
 export type NftBase = {
-  v: typeof SCHEMA_VERSION
+  v: 1 | 2
   chainId: 57073
   /** Collection contract, lowercase. Also the row's `entity`. */
   contract: Address
@@ -253,3 +317,6 @@ export type NftEvent =
 
 export type IndexerEvent = LaunchpadEvent | NftEvent
 export type IndexerEventType = IndexerEvent["type"]
+
+/** Any payload that can be in `indexer.events`: current shapes and the rows written before version 2. */
+export type StoredEvent = IndexerEvent | LaunchEventV1 | TradeEventV1 | BondEventV1

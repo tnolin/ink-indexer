@@ -1,9 +1,14 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import {
   type Address,
+  type BondEvent,
+  type BondEventV1,
   type Hash,
   type IndexerEvent,
+  type LaunchEvent,
+  type LaunchEventV1,
   type LaunchpadEvent,
+  type LaunchpadKey,
   type NftCollectionEvent,
   type NftDropEvent,
   type NftEvent,
@@ -13,12 +18,56 @@ import {
   type NftSaleEvent,
   type NftStatsEvent,
   SCHEMA_VERSION,
+  type StoredEvent,
+  type SwapEvent,
   type TradeEvent,
+  type TradeEventV1,
 } from "../src/index"
 
 describe("@ink-indexer/events", () => {
-  it("is schema version 1", () => {
-    expect(SCHEMA_VERSION).toBe(1)
+  it("schema version is 2", () => {
+    expect(SCHEMA_VERSION).toBe(2)
+  })
+
+  it("LaunchpadKey lists five launchpads", () => {
+    expectTypeOf<LaunchpadKey>().toEqualTypeOf<
+      "inkypump" | "inkfun" | "tsunami" | "hookit" | "chimera"
+    >()
+  })
+
+  it("narrows launchpad.swap", () => {
+    const onlySwaps = (e: IndexerEvent) => (e.type === "launchpad.swap" ? e : null)
+    expectTypeOf(onlySwaps).returns.toEqualTypeOf<SwapEvent | null>()
+    const supply = (e: SwapEvent) => e.supply
+    expectTypeOf(supply).returns.toEqualTypeOf<string>()
+    expectTypeOf<SwapEvent["side"]>().toEqualTypeOf<"buy" | "sell">()
+    expectTypeOf<SwapEvent["poolId"]>().toEqualTypeOf<Hash>()
+    expectTypeOf<SwapEvent>().toExtend<LaunchpadEvent>()
+  })
+
+  it("launch events carry the pool fields", () => {
+    expectTypeOf<LaunchEvent["startsInPool"]>().toEqualTypeOf<boolean>()
+    expectTypeOf<LaunchEvent["poolId"]>().toEqualTypeOf<Hash | null>()
+    expectTypeOf<LaunchEvent["poolManager"]>().toEqualTypeOf<Address | null>()
+    expectTypeOf<LaunchEvent["customHook"]>().toEqualTypeOf<boolean | null>()
+    expectTypeOf<LaunchEvent["hookModules"]>().toEqualTypeOf<string[] | null>()
+    expectTypeOf<LaunchEvent["targetRaise"]>().toEqualTypeOf<string | null>()
+  })
+
+  it("trades carry the running ath and bonds the pool manager", () => {
+    expectTypeOf<TradeEvent["athMarketCap"]>().toEqualTypeOf<string>()
+    expectTypeOf<BondEvent["poolManager"]>().toEqualTypeOf<Address>()
+  })
+
+  it("StoredEvent accepts a v1 trade without athMarketCap", () => {
+    const { athMarketCap: _ath, v: _v, ...rest } = {} as TradeEvent
+    const old: TradeEventV1 = { ...rest, v: 1, launchpad: "inkypump" }
+    const stored: StoredEvent = old
+    expect(stored.v).toBe(1)
+    expectTypeOf<TradeEventV1["v"]>().toEqualTypeOf<1>()
+    expectTypeOf<LaunchEventV1["v"]>().toEqualTypeOf<1>()
+    expectTypeOf<BondEventV1["v"]>().toEqualTypeOf<1>()
+    expectTypeOf<IndexerEvent>().toExtend<StoredEvent>()
   })
 
   it("narrows the union by type", () => {

@@ -35,7 +35,7 @@ type Env = Record<string, string | undefined>
  * the OpenSea API and Stream services. A new launchpad adds a row.
  */
 const PLATFORMS = {
-  inkypump: { groups: ["inkypump"], openSea: false },
+  inkypump: { groups: ["inkypump", "v4-swaps"], openSea: false },
   opensea: { groups: ["nft-mints", "nft-sales"], openSea: true },
   chimera: { groups: ["nft-launches"], openSea: false },
 } as const satisfies Record<string, { groups: readonly BackfillSource[]; openSea: boolean }>

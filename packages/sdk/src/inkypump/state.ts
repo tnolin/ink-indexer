@@ -61,6 +61,23 @@ export async function readTotalSupplies(
   })) as bigint[]
 }
 
+/** `balanceOf(holder)` on each token at one block, in one multicall. */
+export async function readBalances(
+  client: StateReader,
+  pairs: { token: Address; holder: Address }[],
+  blockNumber: bigint,
+): Promise<bigint[]> {
+  if (pairs.length === 0) return []
+  return (await client.multicall({
+    allowFailure: false,
+    blockNumber,
+    contracts: pairs.map(
+      (p) =>
+        ({ address: p.token, abi: erc20Abi, functionName: "balanceOf", args: [p.holder] }) as const,
+    ),
+  })) as bigint[]
+}
+
 export async function readErc20Meta(
   client: StateReader,
   token: Address,

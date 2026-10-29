@@ -51,6 +51,7 @@ Each source is a module in `apps/indexer/src/sources/`. Adding a protocol means 
 | Source | What is tracked | How |
 | --- | --- | --- |
 | InkyPump V2 | Launches, curve buys and sells, curve progress, bond to Uniswap V4 | V2 hook events (`LaunchCreated`, `LaunchMetadata`, `Trade`, `LaunchFinalized`) read with `eth_getLogs`. See the [integration guide](https://docs.inkyswap.com/api-reference/contracts/integration-guide.md) |
+| Uniswap v4 pools | Swaps in the pools of tracked tokens, with the trader, market cap, all-time-high market cap and pool liquidity; transfers of those tokens to the dead address | PoolManager `Swap` logs filtered to the pool ids in the pool registry, and `Transfer` logs to the dead address, read with `eth_getLogs`. See ADR 0033 |
 | NFTs (chain) | ERC-721 and ERC-1155 mints and burns, SeaDrop drops and mint progress, Seaport sales, Chimera collection launches | `Transfer`, SeaDrop, `OrderFulfilled` and `CampaignCreated` logs on Ink. See ADR 0016 |
 | OpenSea | Collection pages, drop schedules, floors and stats, listings, item ranks, creator accounts | API v2 with chain slug `ink`, and the Stream API for listings, both drawing on one shared request budget. See ADR 0017 and ADR 0019 |
 
@@ -76,7 +77,7 @@ NFT events share a `contract` (also the row's `entity`) and a `source` of `chain
 - **One log, several events.** `indexer.events` is unique on `(tx_hash, log_index, sub)`, so a sweep or a log that crosses two mint milestones yields one row per event (ADR 0016).
 - **OpenSea budget.** Every process using the key draws from one request budget in Postgres (ADR 0019), so the hourly limit holds across processes.
 - **Stream.** Listings arrive over the Stream in shards of 50 collections per connection, with a one-connection fallback for every collection (ADR 0017).
-- **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera).
+- **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `v4-swaps` (Uniswap v4 swaps and burns for registered pools), `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera).
 
 ## Data model
 
@@ -84,9 +85,10 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 
 | Table | Key fields |
 | --- | --- |
-| `tokens` | address, launchpad, name, ticker, creator, created_at, phase, quote_asset, paired_stock |
+| `tokens` | address, launchpad, name, ticker, creator, created_at, phase, quote_asset, paired_stock, ath_market_cap, ath_block, dead_balance, dead_balance_block |
 | `curve_state` | token, progress_bps, curve_value, target, market_cap, updated_block |
-| `trades` | tx_hash, log_index, token, side, trader, amount_in, amount_out, block, venue |
+| `trades` | tx_hash, log_index, token, side, trader, amount_in, amount_out, block, venue, pool_id |
+| `pools` | pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0, created_block. The pool registry (ADR 0033) |
 | `hooks` | InkyPump hook contracts: address, launchpad, kind (native or xStocks), ABI family, quote asset |
 | `nft_collections` | contract, standard, kind, verdict and gates, why gate 1 failed, slug, name, safelist, first mint block and time, launchpad |
 | `nft_mints`, `nft_burns`, `nft_seadrop_mints` | tx_hash, log_index, contract, token_id, recipient, holder or minter, qty, block. Kept 8 days |
@@ -114,4 +116,4 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 
 ## Decisions
 
-Dated decision records live in [`adr/`](./adr).
+Events carry schema version 2 (ADR 0034). Dated decision records live in [`adr/`](./adr).

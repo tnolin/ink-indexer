@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { NftStatsEvent } from "@ink-indexer/events"
+import { type NftStatsEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
 import type { NftBatch } from "../src/sources/nft/index"
@@ -253,7 +253,7 @@ describe("stats job", () => {
     expect(rows[0]?.at.getTime()).toBe(T0)
     expect(await statsEvents()).toEqual([
       {
-        v: 1,
+        v: SCHEMA_VERSION,
         chainId: 57073,
         type: "nft.stats",
         contract: A,

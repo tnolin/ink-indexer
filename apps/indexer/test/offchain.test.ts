@@ -1,11 +1,12 @@
 import { connect, type Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type {
-  NftEvent,
-  NftListingEvent,
-  NftMintEvent,
-  NftSaleEvent,
-  NftStatsEvent,
+import {
+  type NftEvent,
+  type NftListingEvent,
+  type NftMintEvent,
+  type NftSaleEvent,
+  type NftStatsEvent,
+  SCHEMA_VERSION,
 } from "@ink-indexer/events"
 import { type Address, type Hash, pad, toHex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
@@ -31,7 +32,7 @@ beforeEach(async () => {
 afterEach(() => sql.end())
 
 const base = {
-  v: 1,
+  v: SCHEMA_VERSION,
   chainId: 57073,
   contract: CONTRACT,
   logIndex: 0,

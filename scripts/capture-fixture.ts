@@ -1,5 +1,7 @@
 // Records a transaction's InkyPump logs, plus launch state and token supply at its block, as a test fixture.
-// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl]
+// With --topics v4 it records the transaction's InkyPump, Uniswap v4 Swap and ERC-20 Transfer logs, the
+// transaction's sender, and the StateView slot0 and liquidity of each pool a LaunchFinalized log names.
+// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4]
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
@@ -10,18 +12,26 @@ import {
   LOG_TOPICS,
   readLaunchStates,
   readTotalSupplies,
+  SWAP_TOPIC,
+  TRANSFER_TOPIC,
 } from "@ink-indexer/sdk"
-import { type Address, createPublicClient, type Hash, type Hex, http } from "viem"
+import { type Address, createPublicClient, type Hash, type Hex, http, parseAbi } from "viem"
 import { ink } from "viem/chains"
 
-const [name, txHash, url = "https://rpc-gel.inkonchain.com"] = process.argv.slice(2)
-if (!name || !txHash) throw new Error("usage: capture-fixture.ts <name> <txHash> [httpRpcUrl]")
+const argv = process.argv.slice(2)
+const topicsAt = argv.indexOf("--topics")
+const mode = topicsAt === -1 ? "inkypump" : argv.splice(topicsAt, 2)[1]
+if (mode !== "inkypump" && mode !== "v4") throw new Error(`unknown --topics ${mode}`)
+const [name, txHash, url = "https://rpc-gel.inkonchain.com"] = argv
+if (!name || !txHash)
+  throw new Error("usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4]")
 const client = createPublicClient({ chain: ink, transport: http(url, { retryCount: 5 }) })
 
+const kept: Hex[] = mode === "v4" ? [...LOG_TOPICS, SWAP_TOPIC, TRANSFER_TOPIC] : [...LOG_TOPICS]
 const receipt = await client.getTransactionReceipt({ hash: txHash as Hash })
 const block = await client.getBlock({ blockNumber: receipt.blockNumber })
 const logs: ChainLog[] = receipt.logs
-  .filter((l) => l.topics[0] !== undefined && LOG_TOPICS.includes(l.topics[0]))
+  .filter((l) => l.topics[0] !== undefined && kept.includes(l.topics[0]))
   .map((l) => ({
     address: l.address.toLowerCase() as Address,
     topics: [...l.topics] as Hex[],
@@ -31,6 +41,52 @@ const logs: ChainLog[] = receipt.logs
     transactionHash: l.transactionHash,
     logIndex: l.logIndex,
   }))
+
+const dir = join(import.meta.dirname, "../packages/sdk/test/fixtures")
+mkdirSync(dir, { recursive: true })
+const save = (fixture: object, summary: string) => {
+  const json = JSON.stringify(fixture, (_k, v) => (typeof v === "bigint" ? `${v}n` : v), 2)
+  writeFileSync(join(dir, `${name}.json`), `${json}\n`)
+  console.log(`wrote ${name}.json: ${summary}`)
+}
+
+if (mode === "v4") {
+  const STATE_VIEW: Address = "0x76fd297e2d437cd7f76d50f01afe6160f86e9990"
+  const stateViewAbi = parseAbi([
+    "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
+    "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
+  ])
+  const poolIds = logs.flatMap((l) => {
+    const d = decodeLog(l)
+    return d?.kind === "launchFinalized" ? [d.poolId] : []
+  })
+  const pools = []
+  for (const poolId of poolIds) {
+    const [slot0, liquidity] = await client.multicall({
+      allowFailure: false,
+      blockNumber: block.number,
+      contracts: [
+        { address: STATE_VIEW, abi: stateViewAbi, functionName: "getSlot0", args: [poolId] },
+        { address: STATE_VIEW, abi: stateViewAbi, functionName: "getLiquidity", args: [poolId] },
+      ],
+    })
+    pools.push({ poolId, sqrtPriceX96: slot0[0], liquidity })
+  }
+  save(
+    {
+      name,
+      txHash: receipt.transactionHash,
+      blockNumber: block.number,
+      blockHash: block.hash,
+      timestamp: Number(block.timestamp),
+      logs,
+      senders: { [receipt.transactionHash]: receipt.from.toLowerCase() },
+      pools,
+    },
+    `${logs.length} logs, ${pools.length} pools`,
+  )
+  process.exit(0)
+}
 
 const keys = new Map<string, LaunchKey>()
 for (const l of logs) {
@@ -60,8 +116,4 @@ const fixture = {
   states,
   totalSupplies: Object.fromEntries(tokens.map((t, i) => [t, supplies[i]])),
 }
-const dir = join(import.meta.dirname, "../packages/sdk/test/fixtures")
-mkdirSync(dir, { recursive: true })
-const json = JSON.stringify(fixture, (_k, v) => (typeof v === "bigint" ? `${v}n` : v), 2)
-writeFileSync(join(dir, `${name}.json`), `${json}\n`)
-console.log(`wrote ${name}.json: ${logs.length} logs, ${states.length} launches`)
+save(fixture, `${logs.length} logs, ${states.length} launches`)

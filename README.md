@@ -24,7 +24,7 @@ ink-indexer watches the Ink blockchain for new memecoin launches, trades and bon
 
 | Package | License | What it does |
 | --- | --- | --- |
-| [`packages/sdk`](packages/sdk) | MIT | Event decoders, curve math and event builders for InkyPump V2, and decoders for NFT mints, SeaDrop, Seaport and Chimera |
+| [`packages/sdk`](packages/sdk) | MIT | Event decoders, curve math and event builders for InkyPump V2, Uniswap v4 swap decoding and pool math, and decoders for NFT mints, SeaDrop, Seaport and Chimera |
 | [`packages/events`](packages/events) | MIT | Typed, versioned event schema |
 | [`packages/db`](packages/db) | AGPL-3.0 | Postgres schema and migrations |
 | [`apps/indexer`](apps/indexer) | AGPL-3.0 | Follows Ink, reads OpenSea, and writes normalized events to Postgres |
@@ -56,6 +56,8 @@ Event shapes are documented in [`packages/events`](packages/events/README.md).
 
 ## NFTs
 
+Uniswap v4 swaps in the pools of InkyPump's bonded tokens are `launchpad.swap` events, each with the trader, the market cap after the swap, the token's all-time-high market cap and the pool's quote-side liquidity (ADR [0033](docs/adr/0033-uniswap-v4-swaps-and-pool-registry.md)). Events use schema version 2 ([ADR 0034](docs/adr/0034-events-schema-version-2.md)); rows written before it keep `v: 1`.
+
 Ink NFT events are `nft.collection`, `nft.drop`, `nft.mint`, `nft.listing`, `nft.sale`, `nft.stats` and `nft.launch`. Mints, burns, SeaDrop drops, Seaport sales and Chimera launches come from chain logs. Collection pages, drop schedules, floors, listings, item ranks and creator accounts come from OpenSea. Each `nft.collection` event carries the collection's verdict: `real` for collections that pass quality checks (a complete OpenSea page with a link of its own and a name of its own, a sound mint structure, traits, and minters who are not mostly repeat farm wallets), `pending` while checks are undecided, `filtered` once a check fails. Every collection's events stay readable. Read them like any other event:
 
 ```sql
@@ -68,14 +70,14 @@ Environment variables, all optional. An invalid value is logged and its default 
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `INDEXER_SOURCES` | `inkypump,opensea,chimera` | The platforms to run, comma-separated. `opensea` is the NFT mint, sale and OpenSea API parts, `chimera` the Chimera launches. A name that is unknown or repeated stops the start. `backfill` without `--sources` covers the enabled platforms |
+| `INDEXER_SOURCES` | `inkypump,opensea,chimera` | The platforms to run, comma-separated. `inkypump` is the InkyPump curve and its Uniswap v4 pools (`inkypump` and `v4-swaps`), `opensea` is the NFT mint, sale and OpenSea API parts, `chimera` the Chimera launches. A name that is unknown or repeated stops the start. `backfill` without `--sources` covers the enabled platforms |
 | `OPENSEA_API_KEY` | empty | OpenSea API key. Empty runs the chain sources only, after one warning |
 | `OPENSEA_REQUESTS_PER_HOUR` | 500 | The key's hourly request budget, shared by every process using the key |
 | `OPENSEA_MIN_INTERVAL_MS` | 300 | The shortest gap between two requests on the key |
 | `TICK_MIN_INTERVAL_MS` | 0 | The least time in milliseconds between the starts of two live ticks (0 to 60000). 0 runs a tick on every new block. A higher value reads several blocks per request and adds up to that much latency for every source. See [ADR 0022](docs/adr/0022-tick-min-interval.md) |
 | `NFT_HISTORY_START_BLOCK` | the first stored mint | The block the mint backfill started from. A collection that minted earlier is `legacy` and has no mint events |
 
-Backfill by source with `pnpm backfill --from <block> --sources nft-mints,nft-sales,nft-launches` (the names are `inkypump`, `nft-mints`, `nft-sales` and `nft-launches`; the default is every source). `pnpm nft:mark <contract> <value>` sets a collection's verdict or kind by hand (the values are listed in the indexer README). Details are in the [indexer README](apps/indexer/README.md) and ADRs [0016](docs/adr/0016-nft-chain-sources.md), [0017](docs/adr/0017-opensea-source.md), [0018](docs/adr/0018-off-chain-events.md) and [0019](docs/adr/0019-opensea-shared-budget.md).
+Backfill by source with `pnpm backfill --from <block> --sources nft-mints,nft-sales,nft-launches` (the names are `inkypump`, `v4-swaps`, `nft-mints`, `nft-sales` and `nft-launches`; the default is every source). `pnpm nft:mark <contract> <value>` sets a collection's verdict or kind by hand (the values are listed in the indexer README). Details are in the [indexer README](apps/indexer/README.md) and ADRs [0016](docs/adr/0016-nft-chain-sources.md), [0017](docs/adr/0017-opensea-source.md), [0018](docs/adr/0018-off-chain-events.md) and [0019](docs/adr/0019-opensea-shared-budget.md).
 
 ## Upgrading and rollback
 
@@ -105,7 +107,7 @@ alter table indexer.events drop column sub;
      Postgres `indexer` schema: hooks · tokens · curve_state · trades · events · cursors · recent_blocks
 ```
 
-Each tick asks for the logs of all enabled sources in a few `eth_getLogs` requests (filters that differ only in the event topic or the address share one) and splits the response back to each filter. Each new block triggers a catch-up from the last saved block, so backfill, live indexing and reconnects follow one path. Every source (InkyPump, NFTs) reads the same block range and shares one cursor and one rollback. Events are written unconfirmed and confirmed one block later; a reorg rolls back to the last matching block and re-ingests. Decisions are recorded in [`docs/adr`](docs/adr).
+Each tick asks for the logs of all enabled sources in a few `eth_getLogs` requests (filters that differ only in the event topic or the address share one) and splits the response back to each filter. Each new block triggers a catch-up from the last saved block, so backfill, live indexing and reconnects follow one path. Every source (InkyPump, Uniswap v4 pools, NFTs) reads the same block range and shares one cursor and one rollback. Events are written unconfirmed and confirmed one block later; a reorg rolls back to the last matching block and re-ingests. Decisions are recorded in [`docs/adr`](docs/adr).
 
 ## Contributing, security and license
 

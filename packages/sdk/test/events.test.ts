@@ -1,3 +1,5 @@
+import { SCHEMA_VERSION } from "@ink-indexer/events"
+import { toEventSelector } from "viem"
 import { describe, expect, it } from "vitest"
 import {
   bondEvent,
@@ -5,7 +7,9 @@ import {
   type LaunchCreated,
   type LaunchMetadata,
   launchEvent,
+  SWAP_TOPIC,
   tradeEvent,
+  UNISWAP_V4_POOL_MANAGER,
 } from "../src/index"
 import { loadFixture } from "./fixtures"
 
@@ -21,7 +25,7 @@ const HOOK = "0x893183da2411c7df81f103bfef09e4e46c326ac4"
 const ETH = "0x0000000000000000000000000000000000000000"
 const PARAMS = { targetRaise: 10n ** 18n, saleSupply: 8n * 10n ** 26n, gainBps: 0 }
 const BASE = {
-  v: 1,
+  v: SCHEMA_VERSION,
   chainId: 57073,
   launchpad: "inkypump",
   token: TOKEN,
@@ -73,6 +77,11 @@ describe("event builders", () => {
       quoteAsset: ETH,
       targetRaise: "1000000000000000000",
       totalSupply: "1000000000000000000000000000",
+      startsInPool: false,
+      poolId: null,
+      poolManager: null,
+      customHook: null,
+      hookModules: null,
     })
   })
 
@@ -105,6 +114,7 @@ describe("event builders", () => {
       totalSupply: 10n ** 27n,
       quoteAsset: ETH,
       progressBpsBefore: 1234,
+      athMarketCap: 3_000_000_000_000n,
     } as const
     expect(tradeEvent(trade, ctx, META)).toEqual({
       type: "launchpad.trade",
@@ -120,6 +130,7 @@ describe("event builders", () => {
       progressBpsAfter: 5000,
       soldBps: 5000,
       marketCap: "1000000000000",
+      athMarketCap: "3000000000000",
       quoteAsset: ETH,
     })
   })
@@ -143,6 +154,7 @@ describe("event builders", () => {
       totalSupply: 10n ** 27n,
       quoteAsset: ETH,
       progressBpsBefore: 0,
+      athMarketCap: 0n,
     } as const
     const e = tradeEvent(trade, ctx, META)
     expect([e.soldBps, e.progressBpsAfter]).toEqual([4000, 4000])
@@ -176,7 +188,21 @@ describe("event builders", () => {
       liquidityQuote: "2",
       liquidityTokens: "3",
       quoteAsset: ETH,
+      poolManager: UNISWAP_V4_POOL_MANAGER,
     })
+  })
+
+  it("sets schema version 2", () => {
+    expect(SCHEMA_VERSION).toBe(2)
+    expect(BASE.v).toBe(2)
+  })
+
+  it("SWAP_TOPIC matches the Swap signature", () => {
+    expect(SWAP_TOPIC).toBe(
+      toEventSelector(
+        "Swap(bytes32 indexed id, address indexed sender, int128 amount0, int128 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick, uint24 fee)",
+      ),
+    )
   })
 
   it("merges real LaunchCreated and LaunchMetadata logs", () => {

@@ -1,6 +1,11 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { NftCollectionEvent, NftGates, NftMintEvent } from "@ink-indexer/events"
+import {
+  type NftCollectionEvent,
+  type NftGates,
+  type NftMintEvent,
+  SCHEMA_VERSION,
+} from "@ink-indexer/events"
 import { decodeNftTransfers } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
@@ -239,7 +244,7 @@ describe("the verdict job", () => {
     expect(events[0]).toEqual({
       txHash: `nft:start:${PRTSCN}`,
       sub: "mint:stage_start:0",
-      v: 1,
+      v: SCHEMA_VERSION,
       chainId: 57073,
       type: "nft.mint",
       contract: PRTSCN,
