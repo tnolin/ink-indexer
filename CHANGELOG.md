@@ -4,6 +4,8 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+## [indexer-v0.4.0] - 2026-10-29
+
 ### Added
 
 - Events: schema version 2 and the `launchpad.swap` event for a swap in a tracked Uniswap v4 pool, with the trader, side, amounts, price, `marketCap`, `athMarketCap`, `quoteLiquidity` and `supply`. `launchpad.trade` carries `athMarketCap`, `launchpad.bond` carries `poolManager`, and `launchpad.launch` carries `startsInPool`, `poolId`, `poolManager`, `customHook` and `hookModules`, with `targetRaise` null for a token that has no curve. Rows written earlier keep `v: 1`; `LaunchEventV1`, `TradeEventV1` and `BondEventV1` describe them. Readers that ignore unknown event types keep working. See ADR 0034.
