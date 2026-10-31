@@ -174,11 +174,26 @@ describe("curve math", () => {
 
   it("progress is 10,000 bps when tokensSold equals curveSupply", () => {
     expect(inkfunProgressBps(CURVE, CURVE.curveSupply)).toBe(10_000)
-    // virtualTokens rounded up leaves the formula one wei under the target at a full curve.
-    const rounded = { ...CURVE, virtualTokens: 1_066_666_666_666_666_666_666_666_667n }
-    const value = inkfunCurveValue(rounded, rounded.curveSupply)
-    expect((value * 10_000n) / rounded.graduationTarget).toBe(9_999n)
-    expect(inkfunProgressBps(rounded, rounded.curveSupply)).toBe(10_000)
+  })
+
+  it("progress is 10,000 bps after a fill to the target with the contract's rounding", () => {
+    // The live curve rounds virtualTokens and tokensOut down and closes when the net quote raised
+    // reaches the target, so a full curve ends one base unit short of curveSupply.
+    const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b
+    const soldAt = (raised: bigint) =>
+      CURVE.virtualTokens -
+      ceilDiv(CURVE.virtualQuote * CURVE.virtualTokens, CURVE.virtualQuote + raised)
+    let raised = 0n
+    let sold = 0n
+    const step = CURVE.graduationTarget / 7n
+    while (raised < CURVE.graduationTarget) {
+      raised = raised + step > CURVE.graduationTarget ? CURVE.graduationTarget : raised + step
+      sold = soldAt(raised)
+    }
+    expect(sold).toBe(CURVE.curveSupply - 1n)
+    expect(inkfunProgressBps(CURVE, sold)).toBe(10_000)
+    // One wei short of the target the curve is still open.
+    expect(inkfunProgressBps(CURVE, soldAt(CURVE.graduationTarget - 1n))).toBe(9_999)
   })
 
   it("progress is 0 for nothing sold", () => {

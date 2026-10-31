@@ -25,12 +25,23 @@ export function inkfunPrice(c: InkfunCurve, sold: bigint): bigint {
 }
 
 /**
+ * The `tokensSold` at which the net quote raised reaches the graduation target, where the curve
+ * closes. The contract rounds token amounts down, so this is usually one base unit under `curveSupply`.
+ */
+export function inkfunClosingSold(c: InkfunCurve): bigint {
+  const denominator = c.virtualQuote + c.graduationTarget
+  const product = c.virtualQuote * c.virtualTokens
+  return c.virtualTokens - (product + denominator - 1n) / denominator
+}
+
+/**
  * Progress toward graduation in basis points (0 to 10,000): the net quote raised over the
- * graduation target. A fully sold curve is 10,000 whatever the rounding of the reserves leaves.
+ * graduation target. A curve that has sold up to its closing point is 10,000 whatever the
+ * rounding of the reserves leaves.
  */
 export function inkfunProgressBps(c: InkfunCurve, sold: bigint): number {
   if (c.graduationTarget <= 0n) return 0
-  if (sold >= c.curveSupply) return 10_000
+  if (sold >= c.curveSupply || sold >= inkfunClosingSold(c)) return 10_000
   const bps = (inkfunCurveValue(c, sold) * 10_000n) / c.graduationTarget
   return bps > 10_000n ? 10_000 : Number(bps)
 }
