@@ -322,6 +322,51 @@ describe("Tsunami launches", () => {
     }
   })
 
+  it("the first Initialize of the launch transaction names the hook, and a later one is ignored (synthetic)", async () => {
+    const t = await setup()
+    try {
+      const f = addFixture(t.chain, "tsunami-launch-riptide")
+      const real = t.chain.logs.find((l) => l.address === CALAMARI_POOL_MANAGER)!
+      // An earlier Initialize of the same pair that names the first hook.
+      const withHook = (hook: Address, logIndex: number) => ({
+        ...real,
+        logIndex,
+        data: (real.data.slice(0, 2 + 64 * 2) +
+          pad(hook, { size: 32 }).slice(2) +
+          real.data.slice(2 + 64 * 3)) as ChainLog["data"],
+      })
+      t.chain.logs.push(withHook(TSUNAMI_HOOKS.first, 3))
+      const batch = await t.batchOf(f.blockNumber)
+      expect(eventsOf(batch, "launchpad.launch")[0]).toMatchObject({ hook: TSUNAMI_HOOKS.first })
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("an Initialize naming a hook that is not one of Tsunami's is not used (synthetic)", async () => {
+    const t = await setup()
+    try {
+      const f = addFixture(t.chain, "tsunami-launch-riptide")
+      t.chain.logs = t.chain.logs.map((l) =>
+        l.address === CALAMARI_POOL_MANAGER
+          ? {
+              ...l,
+              data: (l.data.slice(0, 2 + 64 * 2) +
+                pad("0x00000000000000000000000000000000000000ab", { size: 32 }).slice(2) +
+                l.data.slice(2 + 64 * 3)) as ChainLog["data"],
+            }
+          : l,
+      )
+      const batch = await t.batchOf(f.blockNumber)
+      expect(eventsOf(batch, "launchpad.launch")[0]).toMatchObject({ hook: TSUNAMI_HOOKS.current })
+      expect(
+        t.warnings.filter((w) => w.msg === "launch without a Calamari Initialize"),
+      ).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("a launch whose metadata fetch fails is written text-only", async () => {
     const t = await setup({ fetch: metadataFetch({}) })
     try {

@@ -83,6 +83,8 @@ export type TsunamiDeps = {
 type Launched = Extract<TsunamiLog, { kind: "launched" }>
 type Item = { log: ChainLog; d: TsunamiLog; hook?: Address }
 
+const KNOWN_HOOKS: ReadonlySet<Address> = new Set(Object.values(TSUNAMI_HOOKS))
+
 /** Every Tsunami event: one topic0 position matching any of the event signatures. */
 const LOG_FILTER: LogFilter = { topics: [TSUNAMI_LOG_TOPICS] }
 
@@ -154,7 +156,14 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
           const launch = launchedIn
             .get(log.transactionHash)
             ?.find((l) => l.token === d.currency0 || l.token === d.currency1)
-          if (log.address === CALAMARI_POOL_MANAGER && launch) hooks.set(launch.curve, d.hooks)
+          // The first Initialize of the launch's pool names its hook, and only Tsunami's hooks count.
+          if (
+            log.address === CALAMARI_POOL_MANAGER &&
+            launch &&
+            KNOWN_HOOKS.has(d.hooks) &&
+            !hooks.has(launch.curve)
+          )
+            hooks.set(launch.curve, d.hooks)
           continue
         }
       }
