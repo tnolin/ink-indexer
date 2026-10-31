@@ -440,6 +440,26 @@ describe("Tsunami trust", () => {
     }
   })
 
+  it("warns for at most 1,000 unknown emitters, then once that there are too many", async () => {
+    const t = await setup()
+    try {
+      const f = addFixture(t.chain, "tsunami-launch-gm")
+      const buy = f.logs.find((l) => l.topics[0] === TSUNAMI_TOPICS.bought)!
+      t.chain.logs = Array.from({ length: 1_100 }, (_, i) => ({
+        ...buy,
+        logIndex: i,
+        address: `0x${(0x5000 + i).toString(16).padStart(40, "0")}` as Address,
+      }))
+      await t.batchOf(f.blockNumber)
+      expect(unknownWarnings(t.warnings)).toHaveLength(1_000)
+      expect(t.warnings.filter((w) => w.msg === "too many unknown emitters")).toHaveLength(1)
+      await t.batchOf(f.blockNumber)
+      expect(t.warnings.filter((w) => w.msg === "too many unknown emitters")).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("a TokenLaunched from the second factory is accepted (synthetic)", async () => {
     const t = await setup()
     try {

@@ -33,6 +33,8 @@ import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } fro
 
 /** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */
 const METADATA_CONCURRENCY = 4
+/** Unknown emitters named in a warning; past this one warning says there are more. */
+const MAX_WARNED = 1_000
 
 export type KnownCurve = {
   token: Address
@@ -103,10 +105,18 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
   const { sql, chain, logger, pools } = deps
   const curves = new Map<Address, KnownCurve>()
   const warned = new Set<Address>()
+  let warnedTooMany = false
   const warnedMoves = new Set<Hash>()
 
   const warnUnknown = (log: ChainLog) => {
     if (warned.has(log.address)) return
+    if (warned.size >= MAX_WARNED) {
+      if (!warnedTooMany) {
+        warnedTooMany = true
+        logger("warn", "too many unknown emitters", { limit: MAX_WARNED })
+      }
+      return
+    }
     warned.add(log.address)
     logger("warn", "ignoring Tsunami-shaped event from an unknown contract", {
       address: log.address,
