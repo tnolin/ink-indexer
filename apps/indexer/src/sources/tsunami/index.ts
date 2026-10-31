@@ -20,6 +20,7 @@ import {
   tsunamiTradeEvent,
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
+import { settleBounded } from "../../bounded"
 import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import { fetchIpfsJson } from "../../ipfs"
@@ -27,12 +28,14 @@ import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
-import { servedAt } from "../senders"
+import { blockSendersFor } from "../senders"
 import { type EventRow, pick, type Source } from "../source"
 import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
 
 /** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */
 const METADATA_CONCURRENCY = 4
+/** Launch blocks whose supplies a backfill span reads at once. */
+const SUPPLY_READS = 4
 /** Unknown emitters named in a warning; past this one warning says there are more. */
 const MAX_WARNED = 1_000
 
@@ -80,6 +83,8 @@ export type TsunamiDeps = {
   logger: Logger
   pools: PoolRegistry
   ipfs: { gateway: string; fetch?: typeof fetch }
+  /** Block-sender reads a backfill span keeps in flight; tests lower it. */
+  blockReads?: number
 }
 
 type Launched = Extract<TsunamiLog, { kind: "launched" }>
@@ -222,7 +227,40 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
     return total! - vault!
   }
 
-  async function process(input: ChainLog[]): Promise<TsunamiBatch> {
+  /**
+   * The supply less the Riptide vault's inventory, which is not circulating, of each launch, reading
+   * `limit` launch blocks at a time. The first block in order that failed fails the read; no
+   * block is started after a failure.
+   */
+  async function readSupplies(
+    launchBlocks: [bigint, Launched[]][],
+    limit: number,
+  ): Promise<Map<Address, bigint>> {
+    let failed = false
+    const settled = await settleBounded(launchBlocks, limit, async ([blockNumber, launched]) => {
+      if (failed) return null
+      try {
+        const tokens = launched.map((l) => l.token)
+        const total = await chain.readTotalSupplies(tokens, blockNumber)
+        const vault = await chain.readBalances(
+          tokens.map((token) => ({ token, holder: RIPTIDE_VAULT })),
+          blockNumber,
+        )
+        return launched.map((l, i) => [l.curve, total[i]! - vault[i]!] as const)
+      } catch (err) {
+        failed = true
+        throw err
+      }
+    })
+    const supplies = new Map<Address, bigint>()
+    for (const r of settled) {
+      if (r.status === "rejected") throw r.reason
+      for (const [curve, supply] of r.value ?? []) supplies.set(curve, supply)
+    }
+    return supplies
+  }
+
+  async function process(input: ChainLog[], live: boolean): Promise<TsunamiBatch> {
     const batch: TsunamiBatch = {
       tokens: [],
       bonds: [],
@@ -237,30 +275,35 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
     if (items.length === 0) return batch
 
     const blocks = groupByBlock(items)
-    // Supply less the Riptide vault's inventory, which is not circulating, per launch.
-    const supplies = new Map<Address, bigint>()
-    const launches: Launched[] = []
+    const launchBlocks: [bigint, Launched[]][] = []
     for (const [blockNumber, group] of blocks) {
       const launched = group.flatMap((i) => (i.d.kind === "launched" ? [i.d] : []))
-      if (launched.length === 0) continue
-      launches.push(...launched)
-      const tokens = launched.map((l) => l.token)
-      const total = await chain.readTotalSupplies(tokens, blockNumber)
-      const vault = await chain.readBalances(
-        tokens.map((token) => ({ token, holder: RIPTIDE_VAULT })),
-        blockNumber,
-      )
-      launched.forEach((l, i) => {
-        supplies.set(l.curve, total[i]! - vault[i]!)
-      })
+      if (launched.length > 0) launchBlocks.push([blockNumber, launched])
     }
-    const metadata = await fetchMetadata(launches)
+    const launches = launchBlocks.flatMap(([, launched]) => launched)
+
+    // The live tick reads supplies, then metadata, then each block when it reaches it. A backfill
+    // span runs all three together, then processes the logs in order from what was read.
+    let supplies: Map<Address, bigint>
+    let metadata: Map<Address, LaunchMetadataFields | null>
+    let senders: Awaited<ReturnType<typeof blockSendersFor>>
+    if (live) {
+      supplies = await readSupplies(launchBlocks, 1)
+      metadata = await fetchMetadata(launches)
+      senders = await blockSendersFor(chain, [], { live })
+    } else {
+      ;[senders, supplies, metadata] = await Promise.all([
+        blockSendersFor(chain, [...blocks.keys()], { live, limit: deps.blockReads }),
+        readSupplies(launchBlocks, SUPPLY_READS),
+        fetchMetadata(launches),
+      ])
+    }
 
     const athBefore = new Map<Address, bigint>()
     const curveRows = new Map<Address, CurveRow>()
     for (const [blockNumber, group] of blocks) {
       const blockHash = group[0]!.log.blockHash
-      const block = await servedAt(blockNumber, () => chain.getBlockSenders(blockNumber))
+      const block = await senders(blockNumber)
       // The logs and the block can come from different endpoints on either side of a reorg.
       if (!block || block.hash !== blockHash) throw new BlockNotServedError(blockNumber)
       batch.blocks.push({ number: blockNumber, hash: blockHash })
@@ -414,7 +457,7 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
   return {
     name: "tsunami",
     filters: (only) => [pick(only, "tsunami", LOG_FILTER)],
-    process: ([logs]) => process(logs ?? []),
+    process: ([logs], { live }) => process(logs ?? [], live),
     write: writeRows,
     async prepareRollback(fork) {
       const refresh = await curvesToRefresh(sql, fork)

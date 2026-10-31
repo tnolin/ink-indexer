@@ -14,7 +14,7 @@ import {
   tsunamiLaunchId,
   tsunamiMarketCap,
 } from "@ink-indexer/sdk"
-import { type Address, pad } from "viem"
+import { type Address, type Hash, pad, toHex } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import { loadTsunamiFixture } from "../../../packages/sdk/test/fixtures"
 import { BlockNotServedError } from "../src/errors"
@@ -50,7 +50,8 @@ const metadataFetch = (docs: Record<string, unknown> = DOCS, calls: string[] = [
 const unknownWarnings = <T extends { msg: string }>(w: T[]) =>
   w.filter((x) => x.msg === "ignoring Tsunami-shaped event from an unknown contract")
 
-async function setup(opts: { fetch?: Fetch } = {}) {
+async function setup(opts: { fetch?: Fetch; blockReads?: number; live?: boolean } = {}) {
+  const live = opts.live ?? false
   const sql: Sql = await resetDb(inject("databaseUrl"))
   const warnings: { msg: string; fields?: Record<string, unknown> }[] = []
   const logger: Logger = (level, msg, fields) => {
@@ -64,15 +65,16 @@ async function setup(opts: { fetch?: Fetch } = {}) {
     logger,
     pools,
     ipfs: { gateway: GATEWAY, fetch: opts.fetch ?? metadataFetch() },
+    blockReads: opts.blockReads,
   })
   // InkyPump's rollback removes the token, trade, pool and bond rows above a fork for every launchpad.
   const inkypump = inkypumpSource({ sql, chain, logger, pools })
-  const v4 = v4Source({ sql, chain, logger, pools })
+  const v4 = v4Source({ sql, chain, logger, pools, blockReads: opts.blockReads })
   const store = createStore(sql)
   await inkypump.reload()
   await source.reload()
   const batchOf = (to: bigint, from = 0n) =>
-    source.process([chain.logsIn(from, to)], { toBlock: to, live: false })
+    source.process([chain.logsIn(from, to)], { toBlock: to, live })
   const ingest = async (to: bigint, from = 0n) => {
     const batch = await batchOf(to, from)
     await store.writeBatch([batch], [(tx) => source.write(tx, batch)], {
@@ -84,10 +86,10 @@ async function setup(opts: { fetch?: Fetch } = {}) {
   /** One span as `main.ts` runs it: the swap request is built before the Tsunami source registers a pool. */
   const span = async (to: bigint, from = 0n) => {
     const filters = v4.filters()
-    const tsunami = await source.process([chain.logsIn(from, to)], { toBlock: to, live: false })
+    const tsunami = await source.process([chain.logsIn(from, to)], { toBlock: to, live })
     const swaps = await v4.process(
       filters.map((f) => (f ? chain.logsIn(from, to, f) : [])),
-      { toBlock: to, live: false },
+      { toBlock: to, live },
     )
     return { tsunami, swaps }
   }
@@ -311,16 +313,19 @@ describe("Tsunami launches", () => {
     }
   })
 
-  it("a missing transaction sender fails the span as not served", async () => {
-    const t = await setup({ fetch: metadataFetch({}) })
-    try {
-      const f = addFixture(t.chain, "tsunami-launch-gm")
-      t.chain.senders.get(f.blockNumber)?.senders.delete(f.txHash)
-      await expect(t.batchOf(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
-    } finally {
-      await t.sql.end()
-    }
-  })
+  it.each([true, false])(
+    "a missing transaction sender fails the span as not served (live: %s)",
+    async (live) => {
+      const t = await setup({ fetch: metadataFetch({}), live })
+      try {
+        const f = addFixture(t.chain, "tsunami-launch-gm")
+        t.chain.senders.get(f.blockNumber)?.senders.delete(f.txHash)
+        await expect(t.batchOf(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
+      } finally {
+        await t.sql.end()
+      }
+    },
+  )
 
   it("the first Initialize of the launch transaction names the hook, and a later one is ignored (synthetic)", async () => {
     const t = await setup()
@@ -505,34 +510,40 @@ describe("Tsunami trust", () => {
     }
   })
 
-  it("one getBlockSenders per block with Tsunami logs", async () => {
-    const t = await setup()
-    try {
-      const f = addFixture(t.chain, "tsunami-launch-riptide")
-      await t.batchOf(f.blockNumber)
-      expect(f.logs).toHaveLength(3)
-      expect(t.chain.getBlockSendersCalls).toBe(1)
-      expect(t.chain.readBalancesCalls).toBe(1)
-    } finally {
-      await t.sql.end()
-    }
-  })
+  it.each([true, false])(
+    "one getBlockSenders per block with Tsunami logs (live: %s)",
+    async (live) => {
+      const t = await setup({ live })
+      try {
+        const f = addFixture(t.chain, "tsunami-launch-riptide")
+        await t.batchOf(f.blockNumber)
+        expect(f.logs).toHaveLength(3)
+        expect(t.chain.getBlockSendersCalls).toBe(1)
+        expect(t.chain.readBalancesCalls).toBe(1)
+      } finally {
+        await t.sql.end()
+      }
+    },
+  )
 
-  it("a block the endpoint does not serve fails the span, and so does a mismatched hash", async () => {
-    const t = await setup()
-    try {
-      const f = addFixture(t.chain, "tsunami-launch-gm")
-      t.chain.senders.delete(f.blockNumber)
-      await expect(t.batchOf(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
-      t.chain.senders.set(f.blockNumber, {
-        hash: pad("0x01", { size: 32 }),
-        senders: new Map([[f.txHash, f.sender]]),
-      })
-      await expect(t.batchOf(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
-    } finally {
-      await t.sql.end()
-    }
-  })
+  it.each([true, false])(
+    "a block the endpoint does not serve fails the span, and so does a mismatched hash (live: %s)",
+    async (live) => {
+      const t = await setup({ live })
+      try {
+        const f = addFixture(t.chain, "tsunami-launch-gm")
+        t.chain.senders.delete(f.blockNumber)
+        await expect(t.batchOf(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
+        t.chain.senders.set(f.blockNumber, {
+          hash: pad("0x01", { size: 32 }),
+          senders: new Map([[f.txHash, f.sender]]),
+        })
+        await expect(t.batchOf(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
+      } finally {
+        await t.sql.end()
+      }
+    },
+  )
 
   it("a malformed Tsunami log is skipped and the rest of the span is written", async () => {
     const t = await setup()
@@ -1182,6 +1193,238 @@ describe("Tsunami pool moves", () => {
       expect(
         (await t.sql`select phase from indexer.tokens where address = ${grad.curves[0]!.token}`)[0],
       ).toEqual({ phase: "bonded" })
+    } finally {
+      await t.sql.end()
+    }
+  })
+})
+
+describe("Tsunami backfill reads", () => {
+  const LAUNCHES = [
+    "tsunami-launch-riptide",
+    "tsunami-launch-gm",
+    "tsunami-launch-usdc",
+    "tsunami-launch-usdc-buyer",
+    "tsunami-launch-pool-moved",
+  ] as const
+
+  /** Everything the burst has: launches, curve trades, a graduation and the pool's first swap. */
+  function burst(chain: FakeChain) {
+    const fixtures = [
+      addFixture(chain, "tsunami-launch-riptide"),
+      addFixture(chain, "tsunami-launch-gm"),
+      addFixture(chain, "tsunami-launch-usdc-buyer"),
+      addFixture(chain, "tsunami-usdc-buy"),
+      addFixture(chain, "tsunami-graduation-gm"),
+    ]
+    const first = addCalamari(chain, "calamari-swap-gm-first")
+    const to = [...fixtures.map((f) => f.blockNumber), first.blockNumber].reduce((a, b) =>
+      a > b ? a : b,
+    )
+    return { to }
+  }
+
+  /** The last reads to finish are the first blocks', so a reader that took them in completion order would mix blocks up. */
+  const reverseDelays = (chain: FakeChain, blocks: bigint[]) => {
+    const order = [...blocks].sort((a, b) => (a < b ? -1 : 1))
+    chain.sendersDelayMs = (n) => (order.length - order.indexOf(n)) * 3
+    chain.supplyDelayMs = (n) => (order.length - order.indexOf(n)) * 3
+  }
+
+  /** `count` trades on the USDC curve, each in its own later block. */
+  function manyTrades(chain: FakeChain, count: number) {
+    addFixture(chain, "tsunami-launch-usdc-buyer")
+    const trade = addFixture(chain, "tsunami-usdc-buy")
+    const blocks: bigint[] = []
+    for (let i = 0; i < count; i++) {
+      const block = trade.blockNumber + 10n + BigInt(i)
+      const tx = pad(toHex(0xfeed00 + i), { size: 32 }) as Hash
+      for (const l of trade.logs) chain.add({ ...l, blockNumber: block, transactionHash: tx })
+      chain.senders.set(block, {
+        hash: chain.hashOf(block),
+        senders: new Map([[tx, trade.sender]]),
+      })
+      blocks.push(block)
+    }
+    return { blocks, to: blocks[blocks.length - 1]! }
+  }
+
+  const copyOfRows = async (sql: Sql) => ({
+    events:
+      await sql`select type, entity, payload, block, block_hash, tx_hash, log_index, confirmed from indexer.events order by block, log_index, type`,
+    tokens: await sql`select * from indexer.tokens order by address`,
+    trades: await sql`select * from indexer.trades order by block, tx_hash, log_index`,
+    pools: await sql`select * from indexer.pools order by pool_id`,
+    curve: await sql`select * from indexer.curve_state order by token`,
+  })
+
+  it("a backfill span gives the same batch with 8 reads in flight as with 1", async () => {
+    const batches = []
+    const widest = []
+    for (const blockReads of [1, undefined]) {
+      const t = await setup({ blockReads })
+      try {
+        const { to } = burst(t.chain)
+        reverseDelays(t.chain, [...t.chain.senders.keys()])
+        batches.push(await t.span(to))
+        widest.push(t.chain.maxSendersInFlight)
+      } finally {
+        await t.sql.end()
+      }
+    }
+    expect(widest).toEqual([1, 5])
+    expect(batches[0]!.tsunami.events.length).toBeGreaterThan(5)
+    expect(batches[0]!.swaps.events).toHaveLength(1)
+    expect(batches[1]).toEqual(batches[0])
+  })
+
+  it("the same span written twice, with 1 and with 8 reads in flight, leaves identical rows", async () => {
+    const written = []
+    for (const blockReads of [1, undefined]) {
+      const t = await setup({ blockReads })
+      try {
+        const { to } = burst(t.chain)
+        reverseDelays(t.chain, [...t.chain.senders.keys()])
+        await t.ingestSpan(to)
+        written.push(await copyOfRows(t.sql))
+      } finally {
+        await t.sql.end()
+      }
+    }
+    expect(written[0]!.events.length).toBeGreaterThan(5)
+    expect(written[0]!.trades.length).toBeGreaterThan(2)
+    const strip = <T extends Record<string, unknown>>(rows: T[]) =>
+      rows.map(({ created_at: _a, updated_at: _b, ...rest }) => rest)
+    expect(strip(written[1]!.tokens)).toEqual(strip(written[0]!.tokens))
+    expect(strip(written[1]!.trades)).toEqual(strip(written[0]!.trades))
+    expect(strip(written[1]!.pools)).toEqual(strip(written[0]!.pools))
+    expect(strip(written[1]!.curve)).toEqual(strip(written[0]!.curve))
+    expect(written[1]!.events).toEqual(written[0]!.events)
+  })
+
+  it("a backfill span reads each block with Tsunami logs once, at most 8 at a time", async () => {
+    const t = await setup()
+    try {
+      const { blocks, to } = manyTrades(t.chain, 24)
+      reverseDelays(t.chain, blocks)
+      const batch = await t.batchOf(to)
+      const tsunamiBlocks = batch.blocks.length
+      expect(tsunamiBlocks).toBeGreaterThanOrEqual(25)
+      expect(t.chain.getBlockSendersCalls).toBe(tsunamiBlocks)
+      expect(new Set(t.chain.sendersOrder).size).toBe(tsunamiBlocks)
+      expect(t.chain.maxSendersInFlight).toBe(8)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a backfill span reads launch supplies at most 4 blocks at a time", async () => {
+    const t = await setup()
+    try {
+      const fixtures = LAUNCHES.map((name) => addFixture(t.chain, name))
+      const launchBlocks = new Set(fixtures.map((f) => f.blockNumber))
+      expect(launchBlocks.size).toBe(LAUNCHES.length)
+      t.chain.supplyDelayMs = () => 5
+      const to = fixtures.map((f) => f.blockNumber).reduce((a, b) => (a > b ? a : b))
+      await t.batchOf(to)
+      expect(t.chain.maxSupplyInFlight).toBe(4)
+      expect(t.chain.supplyReads.map((r) => r.block).sort()).toEqual([...launchBlocks].sort())
+      expect(t.chain.balanceReads.sort()).toEqual([...launchBlocks].sort())
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a failed supply read fails the span at the first launch block that failed, and starts no later one", async () => {
+    for (const live of [true, false]) {
+      const t = await setup({ live })
+      try {
+        const fixtures = LAUNCHES.map((name) => addFixture(t.chain, name))
+        const blocks = fixtures.map((f) => f.blockNumber).sort((a, b) => (a < b ? -1 : 1))
+        const to = blocks[blocks.length - 1]!
+        const read = t.chain.readTotalSupplies.bind(t.chain)
+        t.chain.readTotalSupplies = async (tokens, block) => {
+          if (block === blocks[1]) throw new Error(`supply ${block}`)
+          if (block === blocks[3]) throw new Error(`supply ${block}`)
+          return read(tokens, block)
+        }
+        await expect(t.batchOf(to)).rejects.toThrow(`supply ${blocks[1]}`)
+        if (live) expect(t.chain.supplyReads.map((r) => r.block)).toEqual([blocks[0]])
+        else expect(t.chain.supplyReads.map((r) => r.block)).not.toContain(blocks[4])
+      } finally {
+        await t.sql.end()
+      }
+    }
+  })
+
+  it("a backfill span starts metadata fetches before its block and supply reads finish", async () => {
+    const times = {
+      firstFetch: Number.POSITIVE_INFINITY,
+      lastBlockRead: 0,
+      firstSupplyRead: Number.POSITIVE_INFINITY,
+    }
+    const base = metadataFetch()
+    const fetched: Fetch = (async (url: string) => {
+      times.firstFetch = Math.min(times.firstFetch, performance.now())
+      return base(url)
+    }) as unknown as Fetch
+    const t = await setup({ fetch: fetched })
+    try {
+      const { to } = manyTrades(t.chain, 10)
+      addFixture(t.chain, "tsunami-launch-gm")
+      const read = t.chain.getBlockSenders.bind(t.chain)
+      t.chain.getBlockSenders = async (n) => {
+        const r = await read(n)
+        times.lastBlockRead = performance.now()
+        return r
+      }
+      const supplies = t.chain.readTotalSupplies.bind(t.chain)
+      t.chain.readTotalSupplies = async (tokens, block) => {
+        const r = await supplies(tokens, block)
+        times.firstSupplyRead = Math.min(times.firstSupplyRead, performance.now())
+        return r
+      }
+      t.chain.sendersDelayMs = () => 40
+      t.chain.supplyDelayMs = () => 40
+      await t.batchOf(to)
+      expect(times.firstFetch).toBeLessThan(times.lastBlockRead)
+      expect(times.firstFetch).toBeLessThan(times.firstSupplyRead)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("the live tick keeps its read order: supplies, then metadata, then each block in order, one at a time", async () => {
+    const order: string[] = []
+    const base = metadataFetch()
+    const fetched: Fetch = (async (url: string) => {
+      order.push("metadata")
+      return base(url)
+    }) as unknown as Fetch
+    const t = await setup({ fetch: fetched, live: true })
+    try {
+      const { blocks, to } = manyTrades(t.chain, 6)
+      addFixture(t.chain, "tsunami-launch-gm")
+      const supplies = t.chain.readTotalSupplies.bind(t.chain)
+      t.chain.readTotalSupplies = async (tokens, block) => {
+        order.push("supply")
+        return supplies(tokens, block)
+      }
+      const read = t.chain.getBlockSenders.bind(t.chain)
+      t.chain.getBlockSenders = async (n) => {
+        order.push("block")
+        return read(n)
+      }
+      t.chain.sendersDelayMs = (n) => Number(blocks.length - blocks.indexOf(n)) * 2
+      t.chain.supplyDelayMs = () => 3
+      await t.batchOf(to)
+      const kinds = order.filter((k, i) => k !== order[i - 1])
+      expect(kinds).toEqual(["supply", "metadata", "block"])
+      expect(t.chain.maxSendersInFlight).toBe(1)
+      expect(t.chain.maxSupplyInFlight).toBe(1)
+      expect(t.chain.sendersOrder).toEqual(
+        [...t.chain.sendersOrder].sort((a, b) => (a < b ? -1 : 1)),
+      )
     } finally {
       await t.sql.end()
     }
