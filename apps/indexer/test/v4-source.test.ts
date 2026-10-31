@@ -6,7 +6,7 @@ import {
   decodeSwap,
   marketCap,
   NATIVE_QUOTE_ASSET,
-  quoteReserve,
+  poolMarketCap,
   SWAP_TOPIC,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
@@ -550,10 +550,17 @@ describe("v4 source in Calamari pools", () => {
     )
   })
 
+  const QUOTE_LIQUIDITY = {
+    // Post-swap liquidity 49,827,707,290,221,572 at √P 1.587e39 (USDC is currency0): 2.48684 USDC.
+    "calamari-swap-usdc": "2486840",
+    // Liquidity 102,124,144,697,556,272,531,684 at √P 4.125e25 (the token is currency0): 53.17 wNVDAx.
+    "calamari-swap-wnvdax": "53173809750392932681",
+  } as const
+
   it.each(["calamari-swap-usdc", "calamari-swap-wnvdax"] as const)(
     "%s: market cap and liquidity are in the quote's base units, from the pool's price",
     async (name) => {
-      const { decoded, p, run } = recorded(name)
+      const { f, decoded, p, run } = recorded(name)
       const batch = await run()
       const ev = batch.events[0]!.event as {
         marketCap: string
@@ -562,22 +569,32 @@ describe("v4 source in Calamari pools", () => {
         tokenAmount: string
         side: string
         supply: string
-        price: string
       }
       expect(ev.supply).toBe(String(SUPPLY))
-      expect(ev.quoteLiquidity).toBe(
-        quoteReserve(decoded.liquidity, decoded.sqrtPriceX96, p.tokenIsCurrency0).toString(),
-      )
-      // The swap's average price is `supply × quote / tokens`. The pool price after a buy is above
-      // it and after a sell below it; a wrong decimal scale would put it orders of magnitude away.
-      const implied = (SUPPLY * BigInt(ev.quoteAmount)) / BigInt(ev.tokenAmount)
-      const cap = BigInt(ev.marketCap)
+      expect(ev.quoteLiquidity).toBe(QUOTE_LIQUIDITY[name])
       expect(ev.side).toBe(name === "calamari-swap-usdc" ? "sell" : "buy")
-      expect(ev.side === "buy" ? cap >= implied : cap <= implied).toBe(true)
-      expect(cap * 100n, `${p.quoteDecimals}-decimal cap ${cap} vs ${implied}`).toBeGreaterThan(
-        implied,
-      )
-      expect(cap).toBeLessThan(implied * 100n)
+
+      // The price the swap executed at lies between the pool's price before and after it. Dollars
+      // and tokens are in different decimals, so a wrong scale puts the cap orders of magnitude away.
+      // The swap's amounts include the pool fee on the input side (hundredths of a basis point).
+      const after = BigInt(ev.marketCap)
+      const before = poolMarketCap(f.before.sqrtPriceX96, p.tokenIsCurrency0, SUPPLY)
+      const fee = BigInt(decoded.fee)
+      const quote = BigInt(ev.quoteAmount)
+      const tokens = BigInt(ev.tokenAmount)
+      const executed =
+        ev.side === "buy"
+          ? (SUPPLY * quote * (1_000_000n - fee)) / (tokens * 1_000_000n)
+          : (SUPPLY * quote * 1_000_000n) / (tokens * (1_000_000n - fee))
+      const [low, high] = before < after ? [before, after] : [after, before]
+      expect(
+        executed >= low && executed <= high,
+        `${before} before, ${executed} executed, ${after} after`,
+      ).toBe(true)
+      // The cap after a buy is above the cap before it, and after a sell below.
+      expect(ev.side === "buy" ? after > before : after < before).toBe(true)
+      expect(after * 100n).toBeGreaterThan(executed)
+      expect(after).toBeLessThan(executed * 100n)
     },
   )
 })

@@ -209,8 +209,12 @@ export const CALAMARI_FIXTURES = [
 ] as const
 export type CalamariFixtureName = (typeof CALAMARI_FIXTURES)[number]
 
-export function loadCalamariFixture(name: CalamariFixtureName): Omit<V4Fixture, "name"> & {
+export type CalamariFixture = Omit<V4Fixture, "name"> & {
   name: CalamariFixtureName
-} {
+  /** The pool's price before the transaction: its previous Swap, or the PoolSeeded of its graduation. */
+  before: { source: "Swap" | "PoolSeeded"; block: number; tx: Hash; sqrtPriceX96: bigint }
+}
+
+export function loadCalamariFixture(name: CalamariFixtureName): CalamariFixture {
   return readFixtureJson(name)
 }

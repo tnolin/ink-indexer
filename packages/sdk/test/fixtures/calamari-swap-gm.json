@@ -35,5 +35,11 @@
   "senders": {
     "0xe5185777ecc75ba149e5ab2b5544b55ed246ebc64b1dcf6f4bac019a7e844f78": "0xee352e34a7cd45aa3003f26b2a1a4d19858ac798"
   },
-  "pools": []
+  "pools": [],
+  "before": {
+    "source": "Swap",
+    "block": 59911097,
+    "tx": "0xbd93ff10f588a88c2c635bef1340b9f1e39a36acff63deab5a86cb4a9ff5c9fd",
+    "sqrtPriceX96": "94833416182829232994051108223960n"
+  }
 }

@@ -60,10 +60,11 @@ const byPosition = (a: Kept, b: Kept) =>
       : 1
 
 /**
- * Swaps in the Uniswap v4 pools of the shared registry (in Uniswap's or Calamari's PoolManager), and transfers of their tokens to the dead
- * address. Each swap becomes a `launchpad.swap` event and a pool trade, valued at the pool price
- * on the supply outside the dead address. The InkyPump source owns the registry's lifecycle: it
- * registers pools, rolls back pool trades and ath, and reloads the registry.
+ * Swaps in the Uniswap v4 pools of the shared registry, whether the pool sits in Uniswap's or in
+ * Calamari's PoolManager, and transfers of their tokens to the dead address. Each swap becomes a
+ * `launchpad.swap` event and a pool trade, valued at the pool price on the supply outside the dead
+ * address. The InkyPump source owns the registry's lifecycle: it registers pools, rolls back pool
+ * trades and ath, and reloads the registry.
  */
 export function v4Source(deps: {
   sql: Sql

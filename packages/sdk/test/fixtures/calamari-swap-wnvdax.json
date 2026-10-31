@@ -139,5 +139,11 @@
   "senders": {
     "0xaaa7fc4aed132e81860a820c9764d98b5c66bef83544e190b320616f6afa1c87": "0xc552d3e5295a1d11ea55877aeea395b532f351cb"
   },
-  "pools": []
+  "pools": [],
+  "before": {
+    "source": "PoolSeeded",
+    "block": 56879077,
+    "tx": "0x745a59dc4b20af6cd462ea07b4e4488b7a519dbf138426ffe991460455ffc373",
+    "sqrtPriceX96": "39106371835322547073234472n"
+  }
 }
