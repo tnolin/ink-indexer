@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { ChainLog, LaunchKey, LaunchState } from "@ink-indexer/sdk"
+import type { ChainLog, InkfunLaunchState, LaunchKey, LaunchState } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Chain } from "../src/chain"
 import type { LogFilter } from "../src/rpc"
@@ -17,6 +17,12 @@ export type RecordedCalls = {
   readLaunchStates: { keys: LaunchKey[]; block: bigint; result: LaunchState[] }[]
   readTotalSupplies: { tokens: Address[]; block: bigint; result: bigint[] }[]
   readErc20Meta: { token: Address; result: { decimals: number; symbol: string } }[]
+  readInkfunLaunches?: {
+    launches: { token: Address; curve: Address }[]
+    block: bigint
+    result: InkfunLaunchState[]
+  }[]
+  readCurveSold?: { curves: Address[]; block: bigint; result: bigint[] }[]
   getBlockSenders?: {
     block: bigint
     result: { hash: Hash; timestamp: number; senders: [Hash, Address][] } | null
@@ -71,6 +77,10 @@ export class ReplayChain implements Chain {
       this.answers.set(`readTotalSupplies:${stringify([c.tokens, c.block])}`, c.result)
     for (const c of calls.readErc20Meta)
       this.answers.set(`readErc20Meta:${stringify([c.token])}`, c.result)
+    for (const c of calls.readInkfunLaunches ?? [])
+      this.answers.set(`readInkfunLaunches:${stringify([c.launches, c.block])}`, c.result)
+    for (const c of calls.readCurveSold ?? [])
+      this.answers.set(`readCurveSold:${stringify([c.curves, c.block])}`, c.result)
     for (const c of calls.getBlockSenders ?? [])
       this.answers.set(
         `getBlockSenders:${stringify([c.block])}`,
@@ -125,6 +135,14 @@ export class ReplayChain implements Chain {
 
   async readTotalSupplies(tokens: Address[], block: bigint) {
     return this.answer<bigint[]>("readTotalSupplies", [tokens, block])
+  }
+
+  async readInkfunLaunches(launches: { token: Address; curve: Address }[], block: bigint) {
+    return this.answer<InkfunLaunchState[]>("readInkfunLaunches", [launches, block])
+  }
+
+  async readCurveSold(curves: Address[], block: bigint) {
+    return this.answer<bigint[]>("readCurveSold", [curves, block])
   }
 
   async readErc20Meta(token: Address) {

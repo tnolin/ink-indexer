@@ -408,3 +408,35 @@ describe("viemChain block senders and balances", () => {
     expect(sleeps).toEqual([1_000])
   })
 })
+
+describe("viemChain ink.fun reads", () => {
+  it("readInkfunLaunches and readCurveSold retry a transport error", async () => {
+    const curve = "0x00000000000000000000000000000000000000c1"
+    const token = "0x00000000000000000000000000000000000000d1"
+    let calls = 0
+    const ok = (result: unknown) => ({ status: "success", result })
+    const client = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => {
+        throw new Error("not used")
+      },
+      multicall: async (args: { contracts: { functionName: string }[] }) => {
+        if (++calls % 2 === 1) throw socketError()
+        return args.contracts[0]?.functionName === "tokensSold"
+          ? [7n]
+          : [ok(1n), ok(2n), ok(3n), ok(4n), ok(5n), ok(6n), ok("ipfs://x")]
+      },
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const sleeps: number[] = []
+    const chain = viemChain(client, {} as LogRouter, {
+      logger: () => {},
+      sleep: async (ms) => {
+        sleeps.push(ms)
+      },
+    })
+    const [launch] = await chain.readInkfunLaunches([{ token, curve }], 10n)
+    expect(launch?.metadataURI).toBe("ipfs://x")
+    expect(await chain.readCurveSold([curve], 10n)).toEqual([7n])
+    expect(sleeps).toEqual([1_000, 1_000])
+  })
+})

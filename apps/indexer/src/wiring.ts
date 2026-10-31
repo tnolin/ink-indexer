@@ -39,6 +39,7 @@ const PLATFORMS = {
   inkypump: { groups: ["inkypump", "v4-swaps"], openSea: false },
   opensea: { groups: ["nft-mints", "nft-sales"], openSea: true },
   chimera: { groups: ["nft-launches"], openSea: false },
+  inkfun: { groups: ["inkfun", "v4-swaps"], openSea: false },
 } as const satisfies Record<string, { groups: readonly BackfillSource[]; openSea: boolean }>
 type Platform = keyof typeof PLATFORMS
 
@@ -71,7 +72,7 @@ export function readSources(env: Env, log: Logger): SourceSelection {
   log("info", "sources", { running: names })
   return {
     names,
-    groups: names.flatMap((n) => PLATFORMS[n].groups),
+    groups: [...new Set(names.flatMap((n) => PLATFORMS[n].groups))],
     openSea: names.some((n) => PLATFORMS[n].openSea),
   }
 }

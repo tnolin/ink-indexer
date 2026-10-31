@@ -8,7 +8,7 @@ import type { AthRow, Batch, CurveRow, KnownLaunch } from "./index"
 // InkyPump's tables: reads for processing and rollback, and writes inside the loop's transaction.
 
 const LAUNCHPAD = "inkypump"
-const s = (x: bigint) => x.toString()
+export const s = (x: bigint) => x.toString()
 /** Rows per multi-row insert: Postgres allows 65,534 parameters per statement, so 1,000 rows leaves room for 65 columns. */
 const CHUNK = 1_000
 export function* chunks<T>(rows: T[]): Generator<T[]> {
@@ -49,7 +49,7 @@ const hookRecord = (r: HookRow) => ({
   discovered_block: s(r.discoveredBlock),
 })
 
-const curveRecord = (c: CurveRow) => ({
+export const curveRecord = (c: CurveRow) => ({
   token: c.token,
   progress_bps: c.progressBps,
   curve_value: s(c.curveValue),

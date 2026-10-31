@@ -2,6 +2,7 @@ import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
   CHIMERA_FACTORY,
+  INKFUN_TOPICS,
   NATIVE_QUOTE_ASSET,
   SEADROP_V1,
   UNISWAP_V4_POOL_MANAGER,
@@ -11,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
+import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { PoolRegistry } from "../src/sources/pools"
@@ -30,12 +32,19 @@ const quiet: Logger = () => {}
 const sources = (env: Record<string, string | undefined>) => readSources(env, quiet)
 
 describe("readSources", () => {
-  it("enables inkypump, opensea and chimera when unset or empty", () => {
+  it("enables every platform when unset or empty", () => {
     for (const v of [undefined, "", "  "]) {
       const s = sources({ INDEXER_SOURCES: v })
-      expect(s.names).toEqual(["inkypump", "opensea", "chimera"])
+      expect(s.names).toEqual(["inkypump", "opensea", "chimera", "inkfun"])
       expect(s.openSea).toBe(true)
-      expect(s.groups).toEqual(["inkypump", "v4-swaps", "nft-mints", "nft-sales", "nft-launches"])
+      expect(s.groups).toEqual([
+        "inkypump",
+        "v4-swaps",
+        "nft-mints",
+        "nft-sales",
+        "nft-launches",
+        "inkfun",
+      ])
     }
   })
 
@@ -52,6 +61,18 @@ describe("readSources", () => {
       groups: ["nft-launches"],
       openSea: false,
     })
+    expect(sources({ INDEXER_SOURCES: "inkfun" })).toMatchObject({
+      groups: ["inkfun", "v4-swaps"],
+      openSea: false,
+    })
+  })
+
+  it("lists a shared backfill group once", () => {
+    expect(sources({ INDEXER_SOURCES: "inkypump,inkfun" }).groups).toEqual([
+      "inkypump",
+      "v4-swaps",
+      "inkfun",
+    ])
   })
 
   it("trims whitespace around names and is case-sensitive", () => {
@@ -64,7 +85,7 @@ describe("readSources", () => {
 
   it("rejects an unknown name, naming the allowed ones", () => {
     expect(() => sources({ INDEXER_SOURCES: "inkypump,bogus" })).toThrow(
-      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera)",
+      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera, inkfun)",
     )
   })
 
@@ -86,7 +107,7 @@ describe("the live tick with INDEXER_SOURCES", () => {
   const POOL: Hash = `0x${"d1".repeat(32)}`
 
   /** The filters the live tick asks for, over every source, with one registered pool. */
-  async function liveFilters(env: Record<string, string | undefined>) {
+  async function liveFilters(env: Record<string, string | undefined>, registered = true) {
     const chain = new FakeChain(1000n)
     const asked: LogFilter[] = []
     const getLogs = chain.getLogs.bind(chain)
@@ -107,31 +128,42 @@ describe("the live tick with INDEXER_SOURCES", () => {
       only: sources(env).groups,
       sources: [
         inkypumpSource({ sql, chain, pools, logger: quiet }),
+        inkfunSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
         v4Source({ sql, chain, pools, logger: quiet }),
         nftSource({ sql, chain, logger: quiet }),
       ],
     })
     await idx.init()
     // init loads the registry from the empty database; a pool registered afterwards keeps both v4 filters on.
-    pools.add(
-      {
-        poolId: POOL,
-        poolManager: UNISWAP_V4_POOL_MANAGER,
-        token: TOKEN,
-        launchId: POOL,
-        launchpad: "inkypump",
-        quoteAsset: NATIVE_QUOTE_ASSET,
-        tokenIsCurrency0: false,
-        createdBlock: 1n,
-      },
-      10n ** 27n,
-    )
+    if (registered)
+      pools.add(
+        {
+          poolId: POOL,
+          poolManager: UNISWAP_V4_POOL_MANAGER,
+          token: TOKEN,
+          launchId: POOL,
+          launchpad: "inkypump",
+          quoteAsset: NATIVE_QUOTE_ASSET,
+          tokenIsCurrency0: false,
+          createdBlock: 1n,
+        },
+        10n ** 27n,
+      )
     await idx.tick()
     return asked
   }
 
   it("reads every filter by default, in 7 requests", async () => {
     expect(await liveFilters({})).toHaveLength(7)
+  })
+
+  it("inkfun alone reads one filter while no pool is registered, and ink.fun's merges with InkyPump's", async () => {
+    expect(await liveFilters({ INDEXER_SOURCES: "inkfun" }, false)).toHaveLength(1)
+    const withPool = await liveFilters({ INDEXER_SOURCES: "inkfun" })
+    expect(withPool).toHaveLength(3)
+    const both = await liveFilters({ INDEXER_SOURCES: "inkypump,inkfun" })
+    expect(both).toHaveLength(3)
+    expect(JSON.stringify(both[0]?.topics)).toContain(INKFUN_TOPICS.bought)
   })
 
   it("inkypump alone reads its own and the two v4 filters and no NFT filter, in 3 requests", async () => {

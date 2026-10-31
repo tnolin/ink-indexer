@@ -14,7 +14,12 @@ import {
 } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
-import { swapLog, transferLog } from "../../../packages/sdk/test/builders"
+import {
+  inkfunBoughtLog,
+  inkfunLaunchCreatedLog,
+  swapLog,
+  transferLog,
+} from "../../../packages/sdk/test/builders"
 import {
   loadChimeraCampaigns,
   loadNftFixture,
@@ -24,6 +29,7 @@ import type { Chain } from "../src/chain"
 import { readLogs } from "../src/log-plan"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
+import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { PoolRegistry } from "../src/sources/pools"
@@ -49,6 +55,8 @@ const A1 = "0x00000000000000000000000000000000000000a1"
 /** A token with a registered v4 pool, and that pool's id. */
 const V4_TOKEN = "0x00000000000000000000000000000000000000a2"
 const V4_POOL = `0x${"a2".repeat(32)}` as Hash
+const FUN_TOKEN = "0x00000000000000000000000000000000000000a5" as const
+const FUN_CURVE = "0x00000000000000000000000000000000000000a6" as const
 const word = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash
 const ADDR_WORD = (a: string) => `0x${"0".repeat(24)}${a.slice(2)}` as Hash
 
@@ -149,7 +157,29 @@ function buildPool(): { logs: ChainLog[]; extra: ChainLog[] } {
       },
     ),
   ]
-  const logs = [...calls.logs, ...moved, ...extra, ...v4].sort(
+  // ink.fun: a launch and a buy on its curve, which the merged InkyPump request also returns.
+  const inkfun = [
+    inkfunLaunchCreatedLog(
+      { token: FUN_TOKEN, curve: FUN_CURVE, creator: A1, name: "Fun", symbol: "FUN" },
+      {
+        blockNumber: at(14),
+        blockHash: word(Number(at(14))),
+        transactionHash: word(0xbad200),
+        logIndex: 9_200,
+      },
+    ),
+    inkfunBoughtLog(
+      { payer: A1, beneficiary: A1, quoteIn: 100n, fee: 1n, tokensOut: 10n, tokensSold: 10n },
+      {
+        address: FUN_CURVE,
+        blockNumber: at(14),
+        blockHash: word(Number(at(14))),
+        transactionHash: word(0xbad200),
+        logIndex: 9_201,
+      },
+    ),
+  ]
+  const logs = [...calls.logs, ...moved, ...extra, ...v4, ...inkfun].sort(
     (a, b) => Number(a.blockNumber - b.blockNumber) || a.logIndex - b.logIndex,
   )
   return { logs, extra }
@@ -180,6 +210,19 @@ class PoolChain implements Chain {
   readTotalSupplies = (...a: Parameters<Chain["readTotalSupplies"]>) =>
     this.replay.readTotalSupplies(...a)
   readErc20Meta = (...a: Parameters<Chain["readErc20Meta"]>) => this.replay.readErc20Meta(...a)
+  readInkfunLaunches = async (launches: unknown[]) =>
+    launches.map(() => ({
+      curve: {
+        virtualQuote: 1_400_000_000_000_000_000n,
+        virtualTokens: 1_066_666_666_666_666_666_666_666_666n,
+        curveSupply: 800_000_000n * 10n ** 18n,
+        graduationTarget: 4_200_000_000_000_000_000n,
+      },
+      lpSupply: 200_000_000n * 10n ** 18n,
+      totalSupply: 10n ** 27n,
+      metadataURI: null,
+    }))
+  readCurveSold = async (curves: unknown[]) => curves.map(() => 0n)
   readErc20Names = async (tokens: string[]) => tokens.map(() => ({ symbol: null, name: null }))
   getBlockSenders = async () => null
   readBalances = async (pairs: unknown[]) => pairs.map(() => 0n)
@@ -214,6 +257,7 @@ function sourcesFor(chain: Chain, sql: Sql) {
   )
   return [
     inkypumpSource({ sql, chain, pools, logger: quiet }),
+    inkfunSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
     v4Source({ sql, chain, pools, logger: quiet }),
     nftSource({ sql, chain, logger: quiet }),
   ]
@@ -263,7 +307,7 @@ describe("merged eth_getLogs requests, per-filter path against merged path", () 
     expect(rows).toHaveLength(ALL.length)
   })
 
-  it("asks 10 requests before and 7 after when every group is on", async () => {
+  it("asks 11 requests before and 7 after when every group is on", async () => {
     const chain = new PoolChain(pool)
     await readLogs(
       chain,
