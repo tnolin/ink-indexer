@@ -1,5 +1,11 @@
 import { SCHEMA_VERSION } from "@ink-indexer/events"
-import { type Address, type Hex, toEventSelector } from "viem"
+import {
+  type Address,
+  encodeAbiParameters,
+  type Hex,
+  parseAbiParameters,
+  toEventSelector,
+} from "viem"
 import { describe, expect, it } from "vitest"
 import {
   CALAMARI_POOL_MANAGER,
@@ -166,10 +172,32 @@ describe("decodeTsunamiLog", () => {
     expect(decodeTsunamiLog({ topics: [], data: "0x" })).toBeNull()
   })
 
-  it("bounds name and symbol", () => {
-    const { log } = one("tsunami-legacy-smoke", "launched")
-    const d = decodeTsunamiLog(log)
-    expect(d?.kind === "launched" && d.name.length <= 100 && d.symbol.length <= 32).toBe(true)
+  it("bounds and cleans name and symbol: 300 characters with a NUL and a lone surrogate (synthetic)", () => {
+    // SMOKE's recorded legacy TokenLaunched, its data re-encoded with a hostile name and symbol.
+    const { d, log } = one("tsunami-legacy-smoke", "launched")
+    const hostile = `A\u0000${"x".repeat(150)}\ud800${"y".repeat(150)}`
+    const data = encodeAbiParameters(
+      parseAbiParameters(
+        "string, string, string, uint256, address, address, (uint256, uint256, uint256, uint256)",
+      ),
+      [
+        hostile,
+        d.uri,
+        hostile,
+        d.targetRaise,
+        d.quote,
+        d.creator,
+        [d.state.realBase, d.state.realQuote, d.state.virtualBase, d.state.virtualQuote],
+      ],
+    )
+    const out = decodeTsunamiLog({ topics: log.topics, data })
+    if (out?.kind !== "launched") throw new Error("not decoded")
+    for (const text of [out.name, out.symbol]) expect(text).not.toContain("\u0000")
+    expect(out.name).toHaveLength(100)
+    expect(out.symbol).toHaveLength(32)
+    expect(out.name.startsWith("Ax")).toBe(true)
+    // A lone surrogate cannot survive UTF-8, so the string reaches the decoder as U+FFFD.
+    expect(`${out.name}${out.symbol}`).not.toMatch(/[\ud800-\udfff]/)
   })
 })
 
