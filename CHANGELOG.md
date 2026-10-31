@@ -2,6 +2,20 @@
 
 Notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- Indexer: Tsunami launches with their name, image, description and links read from IPFS, curve trades, graduation into a Calamari pool, the move of a pool to a new one, and the pool's swaps, backfilled from the original factory's deploy block. The platform and backfill name is `tsunami`; it also turns on `v4-swaps`, and it is part of the default `INDEXER_SOURCES`. Tsunami shares one `eth_getLogs` request with the other launchpads, so a tick makes no extra request. `TSUNAMI_IPFS_GATEWAY` sets the gateway for metadata. See ADR 0036.
+- SDK: Tsunami decoding, curve math (price, market cap, progress), event builders and state reads, and metadata parsing.
+- DB: migration 0017 adds a `tsunami` hook kind and the three hooks of Tsunami's pools.
+
+### Changed
+
+- Indexer: swaps are read from every PoolManager that holds a registered pool, not only Uniswap's, and a swap counts only when its pool's PoolManager emitted it.
+- Indexer: the warning for token metadata that could not be fetched names the launchpad and the token.
+- Indexer: an ink.fun or Tsunami event from an unknown contract warns for at most 1,000 addresses, then once that there are more.
+
 ## [indexer-v0.5.0] - 2026-10-31
 
 ### Added
