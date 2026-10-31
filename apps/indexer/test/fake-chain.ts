@@ -46,8 +46,8 @@ export class FakeChain implements Chain {
   /** Per token, what `symbol()` and `name()` answer; null is a revert. A token with no entry reverts on both. */
   erc20Names = new Map<string, { symbol: string | null; name: string | null }>()
   nameReads: { tokens: Address[]; block: bigint }[] = []
-  /** Per block, its hash and each transaction's sender. A block with no entry is not served (null). */
-  senders = new Map<bigint, { hash: Hash; senders: Map<Hash, Address> }>()
+  /** Per block, its hash, each transaction's sender and, when given, its timestamp (else the block number). A block with no entry is not served (null). */
+  senders = new Map<bigint, { hash: Hash; senders: Map<Hash, Address>; timestamp?: number }>()
   /** Per `token:holder`, the balance; a function gives it per block. A pair with no entry reads 0. */
   balances = new Map<string, bigint | ((block: bigint) => bigint)>()
   getBlockSendersCalls = 0
@@ -125,7 +125,7 @@ export class FakeChain implements Chain {
   async getBlockSenders(n: bigint) {
     this.getBlockSendersCalls++
     const s = this.senders.get(n)
-    return s ? { hash: s.hash, timestamp: Number(n), senders: s.senders } : null
+    return s ? { hash: s.hash, timestamp: s.timestamp ?? Number(n), senders: s.senders } : null
   }
 
   async readBalances(pairs: { token: Address; holder: Address }[], block: bigint) {

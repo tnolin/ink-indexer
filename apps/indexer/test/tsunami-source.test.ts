@@ -153,6 +153,10 @@ describe("Tsunami launches", () => {
           "https://images.inkjet.trade/marks/8928869bf3444cbdce574294876e7c2761103de3804c6d5c5843ecdf95cc9d9d-1024.webp",
       })
       expect(calls).toEqual([`${GATEWAY}/ipfs/${GM_CID}`])
+      // The block's real timestamp, not its number.
+      expect(launch).toMatchObject({ blockTimestamp: 1_789_577_715 })
+      expect(f.timestamp).toBe(1_789_577_715)
+      expect(batch.tokens[0]?.createdAt).toEqual(new Date(1_789_577_715 * 1000))
     } finally {
       await t.sql.end()
     }
@@ -553,6 +557,9 @@ describe("Tsunami through the database", () => {
         },
       ])
       expect(r.state).toMatchObject([{ progress_bps: 35, curve_value: "15048000000000000" }])
+      const created = await t.sql`select created_at from indexer.tokens`
+      expect(created[0]?.created_at).toEqual(new Date(f.timestamp * 1000))
+      expect(r.events.map((e) => e.payload.blockTimestamp)).toEqual([f.timestamp, f.timestamp])
       expect(r.trades).toMatchObject([{ side: "buy", trader: f.sender, venue: "curve" }])
       expect(r.events.map((e) => e.type)).toEqual(["launchpad.launch", "launchpad.trade"])
     } finally {
@@ -644,7 +651,20 @@ describe("Tsunami graduation", () => {
       ])
       const closingBuy = tsunami.events[2]?.event
       expect(closingBuy).toMatchObject({ progressBpsAfter: 10_000, soldBps: 10_000 })
+      const seedBuy = tsunami.events[1]?.event
+      if (seedBuy?.type !== "launchpad.trade" || closingBuy?.type !== "launchpad.trade")
+        throw new Error("expected trades")
+      // Each trade starts where the previous one on the curve ended.
+      expect(closingBuy.progressBpsBefore).toBe(seedBuy.progressBpsAfter)
+      expect(seedBuy.progressBpsAfter).toBeGreaterThan(0)
+      // The curve row keeps the closing buy's value and market cap through the migration.
+      expect(tsunami.curve[0]).toMatchObject({
+        curveValue: BigInt(closingBuy.curveValue),
+        marketCap: BigInt(closingBuy.marketCap),
+        updatedBlock: grad.blockNumber,
+      })
       expect(tsunami.events[3]?.event).toMatchObject({
+        blockTimestamp: 1_789_577_745,
         poolId: GM_POOL,
         poolManager: CALAMARI_POOL_MANAGER,
         quoteAsset: ETH,

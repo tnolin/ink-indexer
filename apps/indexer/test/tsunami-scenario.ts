@@ -22,7 +22,11 @@ export function addFixture(chain: FakeChain, name: TsunamiFixtureName): TsunamiF
   const known = chain.senders.get(f.blockNumber)
   const senders = known?.senders ?? new Map()
   senders.set(f.txHash, f.sender)
-  chain.senders.set(f.blockNumber, { hash: chain.hashOf(f.blockNumber), senders })
+  chain.senders.set(f.blockNumber, {
+    hash: chain.hashOf(f.blockNumber),
+    senders,
+    timestamp: f.timestamp,
+  })
   for (const c of f.curves) {
     chain.supplies.set(c.token, c.totalSupply)
     chain.balances.set(`${c.token}:${RIPTIDE_VAULT}`, c.vaultBalance)
@@ -60,6 +64,10 @@ export function addCalamari(chain: FakeChain, name: CalamariFixtureName) {
   for (const l of f.logs) chain.add(l)
   const senders = chain.senders.get(f.blockNumber)?.senders ?? new Map()
   for (const [tx, from] of Object.entries(f.senders)) senders.set(tx as Hash, from)
-  chain.senders.set(f.blockNumber, { hash: chain.hashOf(f.blockNumber), senders })
+  chain.senders.set(f.blockNumber, {
+    hash: chain.hashOf(f.blockNumber),
+    senders,
+    timestamp: f.timestamp,
+  })
   return f
 }
