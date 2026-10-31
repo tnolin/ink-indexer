@@ -52,6 +52,14 @@ export async function curvesToRefresh(sql: Sql, fork: bigint): Promise<KnownCurv
   return rows.map(toKnown)
 }
 
+/** Tokens of Tsunami that were bonded above `fork`. */
+export async function bondedAbove(sql: Sql, fork: bigint): Promise<Address[]> {
+  const rows = await sql<{ address: Address }[]>`
+    select address from indexer.tokens
+    where launchpad = 'tsunami' and created_block <= ${s(fork)} and bonded_block > ${s(fork)}`
+  return rows.map((r) => r.address)
+}
+
 /**
  * Tokens, bonds, pools, curve state, trades and ath. Rows are inserted `on conflict do nothing`
  * so a backfill can overlap rows the live loop wrote. Events, block hashes and the cursor are the

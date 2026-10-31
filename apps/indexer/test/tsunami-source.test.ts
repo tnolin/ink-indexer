@@ -6,6 +6,7 @@ import {
   CALAMARI_POOL_MANAGER,
   type ChainLog,
   decodeTsunamiLog,
+  RIPTIDE_VAULT,
   TSUNAMI_FACTORY,
   TSUNAMI_FACTORY_2,
   TSUNAMI_HOOKS,
@@ -21,9 +22,10 @@ import type { Logger } from "../src/log"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { PoolRegistry } from "../src/sources/pools"
 import { tsunamiSource } from "../src/sources/tsunami/index"
+import { v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
 import { FakeChain } from "./fake-chain"
-import { addFixture, ETH, seedToken } from "./tsunami-scenario"
+import { addCalamari, addFixture, ETH, seedToken } from "./tsunami-scenario"
 
 const GATEWAY = "https://gw.example"
 const SHITCOIN_CID = "QmcaeX23WJnjF1khSSyHcA9MdrK9ryz6uu4KN3zfE1kdiK"
@@ -65,6 +67,7 @@ async function setup(opts: { fetch?: Fetch } = {}) {
   })
   // InkyPump's rollback removes the token, trade, pool and bond rows above a fork for every launchpad.
   const inkypump = inkypumpSource({ sql, chain, logger, pools })
+  const v4 = v4Source({ sql, chain, logger, pools })
   const store = createStore(sql)
   await inkypump.reload()
   await source.reload()
@@ -78,17 +81,50 @@ async function setup(opts: { fetch?: Fetch } = {}) {
     })
     return batch
   }
+  /** One span as `main.ts` runs it: the swap request is built before the Tsunami source registers a pool. */
+  const span = async (to: bigint, from = 0n) => {
+    const filters = v4.filters()
+    const tsunami = await source.process([chain.logsIn(from, to)], { toBlock: to, live: false })
+    const swaps = await v4.process(
+      filters.map((f) => (f ? chain.logsIn(from, to, f) : [])),
+      { toBlock: to, live: false },
+    )
+    return { tsunami, swaps }
+  }
+  const ingestSpan = async (to: bigint, from = 0n) => {
+    const { tsunami, swaps } = await span(to, from)
+    await store.writeBatch(
+      [tsunami, swaps],
+      [(tx) => source.write(tx, tsunami), (tx) => v4.write(tx, swaps)],
+      { cursor: { block: to, hash: chain.hashOf(to) }, head: to },
+    )
+    return { tsunami, swaps }
+  }
   const rollback = async (fork: bigint) => {
     const base = await inkypump.prepareRollback(fork)
     const prepared = await source.prepareRollback(fork)
+    const dead = await v4.prepareRollback(fork)
     await store.rollback(fork, chain.hashOf(fork), [
       (tx) => inkypump.rollback(tx, fork, base),
       (tx) => source.rollback(tx, fork, prepared),
+      (tx) => v4.rollback(tx, fork, dead),
     ])
     await inkypump.reload()
     await source.reload()
   }
-  return { sql, chain, pools, source, warnings, batchOf, ingest, rollback }
+  return {
+    sql,
+    chain,
+    pools,
+    source,
+    warnings,
+    batchOf,
+    ingest,
+    span,
+    ingestSpan,
+    rollback,
+    inkypump,
+  }
 }
 
 const eventsOf = (batch: { events: { event: { type: string } }[] }, type: string) =>
@@ -579,6 +615,392 @@ describe("Tsunami through the database", () => {
       expect(await t.sql`select address from indexer.tokens where launchpad = 'tsunami'`).toEqual(
         [],
       )
+    } finally {
+      await t.sql.end()
+    }
+  })
+})
+
+const GM_POOL = "0x62e1beee65ed1467a36c6592d85443db355e4679e2d1a347ec790bb9235c0a46"
+const USDC = "0x2d270e6886d130d724215a266106e6832161eaed"
+const WNVDAX = "0xa8ddb5cd96b5222afe198316e9a57caa642850d5"
+const MOVE_SOURCE_POOL = "0x4e382b945a2507a78a2cea0e6579f714d3fdb000a14fdd9edd22291d7bcbf327"
+const MOVE_DESTINATION_POOL = "0xed7b47a35435bac0ddc639e2bf4f138ee29d0581223d0de7ef0ff2f2f53808d0"
+
+describe("Tsunami graduation", () => {
+  it("GM: closing buy at 10000 bps, then the bond, then the pool's first swap in the same span", async () => {
+    const t = await setup()
+    try {
+      const launch = addFixture(t.chain, "tsunami-launch-gm")
+      const grad = addFixture(t.chain, "tsunami-graduation-gm")
+      const first = addCalamari(t.chain, "calamari-swap-gm-first")
+      const { tsunami, swaps } = await t.span(first.blockNumber, launch.blockNumber)
+      const types = tsunami.events.map((e) => `${e.event.type}@${e.block}:${e.event.logIndex}`)
+      expect(types).toEqual([
+        `launchpad.launch@${launch.blockNumber}:10`,
+        `launchpad.trade@${launch.blockNumber}:14`,
+        `launchpad.trade@${grad.blockNumber}:13`,
+        `launchpad.bond@${grad.blockNumber}:21`,
+      ])
+      const closingBuy = tsunami.events[2]?.event
+      expect(closingBuy).toMatchObject({ progressBpsAfter: 10_000, soldBps: 10_000 })
+      expect(tsunami.events[3]?.event).toMatchObject({
+        poolId: GM_POOL,
+        poolManager: CALAMARI_POOL_MANAGER,
+        quoteAsset: ETH,
+      })
+      expect(tsunami.pools).toEqual([
+        {
+          poolId: GM_POOL,
+          poolManager: CALAMARI_POOL_MANAGER,
+          token: grad.curves[0]?.token,
+          launchId: tsunamiLaunchId(grad.curves[0]!.curve),
+          launchpad: "tsunami",
+          quoteAsset: ETH,
+          tokenIsCurrency0: false,
+          createdBlock: grad.blockNumber,
+        },
+      ])
+      expect(tsunami.bonds).toEqual([
+        { token: grad.curves[0]?.token, block: grad.blockNumber, totalSupply: 10n ** 27n },
+      ])
+      expect(tsunami.curve[0]).toMatchObject({ progressBps: 10_000 })
+      // The pool's first swap is read in the same span, on the migration supply.
+      expect(swaps.events).toHaveLength(1)
+      const swap = swaps.events[0]?.event
+      if (swap?.type !== "launchpad.swap") throw new Error("expected a swap")
+      expect(swap).toMatchObject({
+        launchpad: "tsunami",
+        poolId: GM_POOL,
+        poolManager: CALAMARI_POOL_MANAGER,
+        side: "buy",
+        supply: String(10n ** 27n),
+      })
+      const curveCaps = tsunami.events.flatMap((e) =>
+        e.event.type === "launchpad.trade" ? [BigInt(e.event.marketCap)] : [],
+      )
+      expect(BigInt(swap.athMarketCap)).toBeGreaterThanOrEqual(
+        curveCaps.reduce((a, b) => (a > b ? a : b)),
+      )
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("the bond alone writes curve state at 10000 bps (synthetic)", async () => {
+    const t = await setup()
+    try {
+      const launch = addFixture(t.chain, "tsunami-launch-gm")
+      const grad = addFixture(t.chain, "tsunami-graduation-gm")
+      // Without the closing buy, only TokenMigrated can write the 10000.
+      t.chain.logs = t.chain.logs.filter(
+        (l) => l.topics[0] !== TSUNAMI_TOPICS.bought || l.blockNumber !== grad.blockNumber,
+      )
+      const batch = await t.batchOf(grad.blockNumber, launch.blockNumber)
+      expect(batch.curve).toHaveLength(1)
+      expect(batch.curve[0]).toMatchObject({ progressBps: 10_000, updatedBlock: grad.blockNumber })
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a TokenMigrated from the curve of another token is ignored with a warning (synthetic)", async () => {
+    const t = await setup()
+    try {
+      const grad = addFixture(t.chain, "tsunami-graduation-gm")
+      const other = loadTsunamiFixture("tsunami-launch-riptide").curves[0]!
+      // A known curve, but of a different token than the one the log names.
+      await seedToken(t.sql, { curve: other.curve, token: other.token })
+      await t.source.reload()
+      const migrated = grad.logs.find((l) => l.topics[0] === TSUNAMI_TOPICS.migrated)!
+      t.chain.logs = t.chain.logs
+        .filter((l) => l.topics[0] === TSUNAMI_TOPICS.migrated)
+        .map((l) => (l === migrated ? { ...l, address: other.curve } : l))
+      const batch = await t.batchOf(grad.blockNumber, grad.blockNumber)
+      expect(batch.bonds).toEqual([])
+      expect(batch.pools).toEqual([])
+      expect(unknownWarnings(t.warnings)).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("SMOKE: launch, trade and bond from one transaction, in that order", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      const f = addFixture(t.chain, "tsunami-legacy-smoke")
+      const batch = await t.batchOf(f.blockNumber)
+      expect(batch.events.map((e) => `${e.event.type}:${e.event.logIndex}`)).toEqual([
+        "launchpad.launch:7",
+        "launchpad.trade:10",
+        "launchpad.bond:17",
+      ])
+      expect(batch.events[1]?.event).toMatchObject({ progressBpsAfter: 10_000 })
+      expect(batch.pools).toHaveLength(1)
+      expect(t.pools.byId(batch.pools[0]!.poolId)?.token).toBe(f.curves[0]?.token)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("the USDC graduation registers the pool with USDC as currency0, the token as currency1 and quote USDC", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      addFixture(t.chain, "tsunami-launch-usdc")
+      const grad = addFixture(t.chain, "tsunami-usdc-graduation")
+      const batch = await t.batchOf(grad.blockNumber)
+      expect(batch.pools).toMatchObject([
+        {
+          poolId: "0xd53d54fb54efe6edb1db17919033f9b9950518489ca6a884a96ea5138c1be8f0",
+          poolManager: CALAMARI_POOL_MANAGER,
+          token: "0xb600d140dd47d92985304cb2fd061d70a8217bb4",
+          quoteAsset: USDC,
+          tokenIsCurrency0: false,
+        },
+      ])
+      expect(eventsOf(batch, "launchpad.bond")[0]).toMatchObject({ quoteAsset: USDC })
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("the wNVDAx graduation registers the pool with the token as currency0 and quote wNVDAx", async () => {
+    const t = await setup()
+    try {
+      const f = loadTsunamiFixture("tsunami-wnvdax-graduation")
+      const c = f.curves[0]!
+      await seedToken(t.sql, { curve: c.curve, token: c.token, quote: WNVDAX })
+      await t.source.reload()
+      addFixture(t.chain, "tsunami-wnvdax-graduation")
+      const batch = await t.batchOf(f.blockNumber, f.blockNumber)
+      expect(batch.pools).toMatchObject([
+        {
+          token: c.token,
+          quoteAsset: WNVDAX,
+          tokenIsCurrency0: true,
+          poolManager: CALAMARI_POOL_MANAGER,
+        },
+      ])
+      // The quote of the trade events is the quote the launch named.
+      expect(eventsOf(batch, "launchpad.bond")[0]).toMatchObject({ quoteAsset: WNVDAX })
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a Riptide token's graduation supply excludes the vault balance (synthetic)", async () => {
+    const t = await setup()
+    try {
+      const launch = addFixture(t.chain, "tsunami-launch-gm")
+      const grad = addFixture(t.chain, "tsunami-graduation-gm")
+      const token = grad.curves[0]!.token
+      // No Riptide token has graduated: a vault inventory appears at the graduation block only.
+      t.chain.balances.set(`${token}:${RIPTIDE_VAULT}`, (b) =>
+        b >= grad.blockNumber ? 3n * 10n ** 26n : 0n,
+      )
+      const batch = await t.batchOf(grad.blockNumber, launch.blockNumber)
+      expect(batch.bonds).toEqual([
+        { token, block: grad.blockNumber, totalSupply: 7n * 10n ** 26n },
+      ])
+      expect(t.pools.marks(token)?.totalSupply).toBe(7n * 10n ** 26n)
+      expect(t.chain.balanceReads).toContain(grad.blockNumber)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("after reload, the pool's market cap uses the migration supply", async () => {
+    const t = await setup()
+    try {
+      const launch = addFixture(t.chain, "tsunami-launch-gm")
+      const grad = addFixture(t.chain, "tsunami-graduation-gm")
+      const token = grad.curves[0]!.token
+      t.chain.balances.set(`${token}:${RIPTIDE_VAULT}`, (b) =>
+        b >= grad.blockNumber ? 3n * 10n ** 26n : 0n,
+      )
+      await t.ingestSpan(grad.blockNumber, launch.blockNumber)
+      expect(
+        (
+          await t.sql`select total_supply::text, phase from indexer.tokens where address = ${token}`
+        )[0],
+      ).toEqual({ total_supply: String(7n * 10n ** 26n), phase: "bonded" })
+      await t.inkypump.reload()
+      expect(t.pools.marks(token)?.totalSupply).toBe(7n * 10n ** 26n)
+      expect(t.pools.byId(GM_POOL)?.poolManager).toBe(CALAMARI_POOL_MANAGER)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("rollback below the migration removes the pool, un-bonds the token and restores its supply", async () => {
+    const t = await setup()
+    try {
+      const launch = addFixture(t.chain, "tsunami-launch-gm")
+      const grad = addFixture(t.chain, "tsunami-graduation-gm")
+      const token = grad.curves[0]!.token
+      t.chain.balances.set(`${token}:${RIPTIDE_VAULT}`, (b) =>
+        b >= grad.blockNumber ? 3n * 10n ** 26n : 0n,
+      )
+      await t.ingestSpan(grad.blockNumber, launch.blockNumber)
+      expect(await t.sql`select pool_id from indexer.pools`).toHaveLength(1)
+      // At the fork the curve was still open and the vault held nothing.
+      t.chain.supplies.set(token, 10n ** 27n)
+      t.chain.tsunamiCurves.set(grad.curves[0]!.curve, launch.curves[0]!.state)
+      await t.rollback(grad.blockNumber - 1n)
+      expect(await t.sql`select pool_id from indexer.pools`).toEqual([])
+      expect(
+        (
+          await t.sql`select phase, bonded_block, total_supply::text from indexer.tokens where address = ${token}`
+        )[0],
+      ).toEqual({ phase: "curve", bonded_block: null, total_supply: String(10n ** 27n) })
+      expect(t.chain.balanceReads).toContain(grad.blockNumber - 1n)
+    } finally {
+      await t.sql.end()
+    }
+  })
+})
+
+describe("Tsunami pool moves", () => {
+  /** Launch, graduation, the move and the first swap in the destination pool, as one span. */
+  async function movedScenario(t: Awaited<ReturnType<typeof setup>>) {
+    const launch = addFixture(t.chain, "tsunami-launch-pool-moved")
+    const grad = addFixture(t.chain, "tsunami-graduation-moved")
+    const move = addFixture(t.chain, "tsunami-pool-move")
+    const swap = addCalamari(t.chain, "calamari-swap-moved")
+    return { launch, grad, move, swap }
+  }
+
+  it("a pool move registers the destination pool, and a destination swap in the same span is indexed", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      const { launch, move, swap } = await movedScenario(t)
+      const { tsunami, swaps } = await t.span(swap.blockNumber, launch.blockNumber)
+      expect(tsunami.pools.map((p) => p.poolId)).toEqual([MOVE_SOURCE_POOL, MOVE_DESTINATION_POOL])
+      expect(tsunami.pools[1]).toMatchObject({
+        token: tsunami.pools[0]?.token,
+        poolManager: CALAMARI_POOL_MANAGER,
+        quoteAsset: ETH,
+        tokenIsCurrency0: false,
+        createdBlock: move.blockNumber,
+      })
+      // The move emits no event of its own.
+      expect(tsunami.events.map((e) => e.event.type)).toEqual([
+        "launchpad.launch",
+        "launchpad.trade",
+        "launchpad.trade",
+        "launchpad.bond",
+      ])
+      expect(swaps.events).toHaveLength(1)
+      expect(swaps.events[0]?.event).toMatchObject({
+        type: "launchpad.swap",
+        poolId: MOVE_DESTINATION_POOL,
+        poolManager: CALAMARI_POOL_MANAGER,
+      })
+      expect(t.pools.byId(MOVE_SOURCE_POOL)).toBeDefined()
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("the CreatorPoolMigrated emitter is the launched curve", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      const { launch, move } = await movedScenario(t)
+      const moved = move.logs.find((l) => l.topics[0] === TSUNAMI_TOPICS.poolMoved)
+      expect(moved?.address).toBe(launch.curves[0]?.curve)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a pool move from an unknown source pool is ignored with one warning", async () => {
+    const t = await setup()
+    try {
+      const f = loadTsunamiFixture("tsunami-launch-pool-moved")
+      const c = f.curves[0]!
+      // The curve and token are known, but no pool was ever registered for them.
+      await seedToken(t.sql, { curve: c.curve, token: c.token })
+      await t.source.reload()
+      const move = addFixture(t.chain, "tsunami-pool-move")
+      const batch = await t.batchOf(move.blockNumber, move.blockNumber)
+      expect(batch.pools).toEqual([])
+      expect(
+        t.warnings.filter((w) => w.msg === "pool move from an unregistered pool"),
+      ).toHaveLength(1)
+      // A second move log from the same curve adds no second warning.
+      const again = await t.batchOf(move.blockNumber, move.blockNumber)
+      expect(again.pools).toEqual([])
+      expect(
+        t.warnings.filter((w) => w.msg === "pool move from an unregistered pool"),
+      ).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a pool move naming another token's pool as its source is ignored (synthetic)", async () => {
+    const t = await setup()
+    try {
+      const f = loadTsunamiFixture("tsunami-launch-pool-moved")
+      const c = f.curves[0]!
+      await seedToken(t.sql, { curve: c.curve, token: c.token })
+      await t.source.reload()
+      // The source pool exists, but it belongs to a different token.
+      t.pools.add(
+        {
+          poolId: MOVE_SOURCE_POOL,
+          poolManager: CALAMARI_POOL_MANAGER,
+          token: "0x00000000000000000000000000000000000000ee",
+          launchId: tsunamiLaunchId(c.curve),
+          launchpad: "tsunami",
+          quoteAsset: ETH,
+          tokenIsCurrency0: false,
+          createdBlock: 1n,
+        },
+        10n ** 27n,
+      )
+      const move = addFixture(t.chain, "tsunami-pool-move")
+      const batch = await t.batchOf(move.blockNumber, move.blockNumber)
+      expect(batch.pools).toEqual([])
+      expect(t.pools.byId(MOVE_DESTINATION_POOL)).toBeUndefined()
+      expect(
+        t.warnings.filter((w) => w.msg === "pool move from an unregistered pool"),
+      ).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a pool move from a contract that is not a launched curve is ignored", async () => {
+    const t = await setup()
+    try {
+      const move = addFixture(t.chain, "tsunami-pool-move")
+      const batch = await t.batchOf(move.blockNumber, move.blockNumber)
+      expect(batch.pools).toEqual([])
+      expect(unknownWarnings(t.warnings)).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("rollback below a pool move removes only the destination pool", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      const { launch, grad, move, swap } = await movedScenario(t)
+      await t.ingestSpan(swap.blockNumber, launch.blockNumber)
+      expect(
+        (await t.sql`select pool_id from indexer.pools order by created_block`).map(
+          (r) => r.pool_id,
+        ),
+      ).toEqual([MOVE_SOURCE_POOL, MOVE_DESTINATION_POOL])
+      t.chain.tsunamiCurves.set(grad.curves[0]!.curve, grad.curves[0]!.state)
+      await t.rollback(move.blockNumber - 1n)
+      expect((await t.sql`select pool_id from indexer.pools`).map((r) => r.pool_id)).toEqual([
+        MOVE_SOURCE_POOL,
+      ])
+      expect(
+        (await t.sql`select phase from indexer.tokens where address = ${grad.curves[0]!.token}`)[0],
+      ).toEqual({ phase: "bonded" })
     } finally {
       await t.sql.end()
     }

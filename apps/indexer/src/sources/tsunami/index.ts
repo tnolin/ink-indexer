@@ -5,12 +5,14 @@ import {
   decodeTsunamiLog,
   type LaunchMetadataFields,
   parseTsunamiMetadata,
+  poolIdOf,
   RIPTIDE_VAULT,
   TSUNAMI_FACTORIES,
   TSUNAMI_HOOKS,
   TSUNAMI_LOG_TOPICS,
   type TsunamiCurveState,
   type TsunamiLog,
+  tsunamiBondEvent,
   tsunamiLaunchEvent,
   tsunamiLaunchId,
   tsunamiMarketCap,
@@ -27,7 +29,7 @@ import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
 import { servedAt } from "../v4/index"
-import { curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
+import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
 
 /** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */
 const METADATA_CONCURRENCY = 4
@@ -99,6 +101,7 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
   const { sql, chain, logger, pools } = deps
   const curves = new Map<Address, KnownCurve>()
   const warned = new Set<Address>()
+  const warnedMoves = new Set<Hash>()
 
   const warnUnknown = (log: ChainLog) => {
     if (warned.has(log.address)) return
@@ -127,19 +130,24 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
       }
     const hooks = new Map<Address, Address>()
     const items: Item[] = []
-    const created = new Set<Address>()
+    const created = new Map<Address, Address>()
+    /** The token of a curve launched earlier or in this span. */
+    const tokenOf = (curve: Address) => curves.get(curve)?.token ?? created.get(curve)
     for (const { log, d } of decoded) {
       let ok: boolean
       switch (d.kind) {
         case "launched":
           ok = TSUNAMI_FACTORIES.has(log.address)
-          if (ok) created.add(d.curve)
+          if (ok) created.set(d.curve, d.token)
           break
         case "bought":
         case "sold":
-        case "migrated":
         case "poolMoved":
-          ok = curves.has(log.address) || created.has(log.address)
+          ok = tokenOf(log.address) !== undefined
+          break
+        case "migrated":
+          // A curve graduates its own token.
+          ok = tokenOf(log.address) === d.token
           break
         case "initialize": {
           // Uniswap's and other Calamari pools emit the same topic: only a launch's own pool counts.
@@ -182,6 +190,17 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
       Array.from({ length: Math.min(METADATA_CONCURRENCY, launches.length) }, worker),
     )
     return out
+  }
+
+  /**
+   * The supply market cap is priced on at `block`: total supply less the Riptide vault's balance, which
+   * holds a second supply of a Riptide launch's token for 24 hours and is not in circulation.
+   */
+  // shortcut: the Riptide vault's buys, sells and burns after the launch and graduation reads are not counted in the supply used for market cap. Track the vault's transfers of tokens with an open Riptide window if its trading moves market cap noticeably.
+  async function circulatingSupply(token: Address, block: bigint): Promise<bigint> {
+    const [total] = await chain.readTotalSupplies([token], block)
+    const [vault] = await chain.readBalances([{ token, holder: RIPTIDE_VAULT }], block)
+    return total! - vault!
   }
 
   async function process(input: ChainLog[]): Promise<TsunamiBatch> {
@@ -305,6 +324,63 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
             known.token,
             curveRow(known.token, d.state, known.targetRaise, known.supply, blockNumber),
           )
+        } else if (d.kind === "migrated") {
+          const known = curves.get(log.address)!
+          // The graduation moves tokens into the pool, so the supply is read again at this block.
+          const supply = await circulatingSupply(d.token, blockNumber)
+          const before = curveRows.get(d.token)
+          const marketCap = before?.marketCap ?? tsunamiMarketCap(d.state, known.supply)
+          known.supply = supply
+          known.progressBps = 10_000
+          const pool: PoolEntry = {
+            poolId: poolIdOf(d.key),
+            poolManager: CALAMARI_POOL_MANAGER,
+            token: d.token,
+            launchId: known.launchId,
+            launchpad: "tsunami",
+            // v4 orders a pool's currencies by address, so either one can be the token.
+            quoteAsset: d.key.currency0 === d.token ? d.key.currency1 : d.key.currency0,
+            tokenIsCurrency0: d.key.currency0 === d.token,
+            createdBlock: blockNumber,
+          }
+          pools.add(pool, supply)
+          batch.pools.push(pool)
+          batch.bonds.push({ token: d.token, block: blockNumber, totalSupply: supply })
+          batch.events.push({
+            event: tsunamiBondEvent(d, { launchId: known.launchId, quote: known.quote }, meta),
+            block: blockNumber,
+            blockHash,
+          })
+          curveRows.set(d.token, {
+            token: d.token,
+            progressBps: 10_000,
+            curveValue: before?.curveValue ?? d.state.realQuote,
+            target: known.targetRaise,
+            marketCap,
+            updatedBlock: blockNumber,
+          })
+        } else if (d.kind === "poolMoved") {
+          const known = curves.get(log.address)!
+          const from = pools.byId(d.source)
+          if (!from || from.token !== known.token) {
+            if (!warnedMoves.has(d.source)) {
+              warnedMoves.add(d.source)
+              logger("warn", "pool move from an unregistered pool", {
+                token: known.token,
+                tx: log.transactionHash,
+              })
+            }
+            continue
+          }
+          // The destination has the same currencies, so the token sits on the same side. The
+          // source stays registered: its swaps are real.
+          const destination: PoolEntry = {
+            ...from,
+            poolId: d.destination,
+            createdBlock: blockNumber,
+          }
+          pools.add(destination, pools.marks(known.token)?.totalSupply ?? known.supply)
+          batch.pools.push(destination)
         }
       }
     }
@@ -331,9 +407,17 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
               fork,
             )
           : []
+      // A token bonded above the fork had its supply set at its graduation; read it back.
+      const unbonded = await bondedAbove(sql, fork)
+      const supplies: Supply[] = []
+      for (const token of unbonded)
+        supplies.push({ token, totalSupply: await circulatingSupply(token, fork) })
+      const supplyAt = new Map(supplies.map((x) => [x.token, x.totalSupply]))
       return {
-        curve: refresh.map((c, i) => curveRow(c.token, states[i]!, c.targetRaise, c.supply, fork)),
-        supplies: [],
+        curve: refresh.map((c, i) =>
+          curveRow(c.token, states[i]!, c.targetRaise, supplyAt.get(c.token) ?? c.supply, fork),
+        ),
+        supplies,
       }
     },
     rollback: (tx, _fork, prepared) => rollbackRows(tx, prepared),

@@ -164,6 +164,7 @@ export const TSUNAMI_FIXTURES = [
   "tsunami-kbtc-buy",
   "tsunami-usdc-graduation",
   "tsunami-wnvdax-graduation",
+  "tsunami-graduation-moved",
   "tsunami-pool-move",
   "tsunami-launch-usdc",
   "tsunami-launch-usdc-buyer",
@@ -205,14 +206,21 @@ export function loadTsunamiFixture(name: TsunamiFixtureName): TsunamiFixture {
 export const CALAMARI_FIXTURES = [
   "calamari-swap-usdc",
   "calamari-swap-gm",
+  "calamari-swap-gm-first",
+  "calamari-swap-moved",
   "calamari-swap-wnvdax",
 ] as const
 export type CalamariFixtureName = (typeof CALAMARI_FIXTURES)[number]
 
 export type CalamariFixture = Omit<V4Fixture, "name"> & {
   name: CalamariFixtureName
-  /** The pool's price before the transaction: its previous Swap, or the PoolSeeded of its graduation. */
-  before: { source: "Swap" | "PoolSeeded"; block: number; tx: Hash; sqrtPriceX96: bigint }
+  /** The pool's price before the transaction: its previous Swap, or the PoolSeeded of its graduation, or the Initialize of a pool created by a move. */
+  before: {
+    source: "Swap" | "PoolSeeded" | "Initialize"
+    block: number
+    tx: Hash
+    sqrtPriceX96: bigint
+  }
 }
 
 export function loadCalamariFixture(name: CalamariFixtureName): CalamariFixture {

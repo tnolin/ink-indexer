@@ -1,7 +1,9 @@
 import type { Sql } from "@ink-indexer/db"
 import { RIPTIDE_VAULT, TSUNAMI_HOOKS, tsunamiLaunchId } from "@ink-indexer/sdk"
-import type { Address } from "viem"
+import type { Address, Hash } from "viem"
 import {
+  type CalamariFixtureName,
+  loadCalamariFixture,
   loadTsunamiFixture,
   type TsunamiFixture,
   type TsunamiFixtureName,
@@ -50,4 +52,14 @@ export async function seedToken(
   await sql`
     insert into indexer.curve_state (token, progress_bps, curve_value, target, market_cap, updated_block)
     values (${a.token}, 0, 0, ${(a.targetRaise ?? 4_200_000_000_000_000_000n).toString()}, 0, ${(a.createdBlock ?? 1n).toString()})`
+}
+
+/** A recorded Calamari swap transaction: its logs and the sender of its transaction. */
+export function addCalamari(chain: FakeChain, name: CalamariFixtureName) {
+  const f = loadCalamariFixture(name)
+  for (const l of f.logs) chain.add(l)
+  const senders = chain.senders.get(f.blockNumber)?.senders ?? new Map()
+  for (const [tx, from] of Object.entries(f.senders)) senders.set(tx as Hash, from)
+  chain.senders.set(f.blockNumber, { hash: chain.hashOf(f.blockNumber), senders })
+  return f
 }

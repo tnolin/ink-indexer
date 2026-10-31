@@ -48,8 +48,8 @@ export class FakeChain implements Chain {
   nameReads: { tokens: Address[]; block: bigint }[] = []
   /** Per block, its hash and each transaction's sender. A block with no entry is not served (null). */
   senders = new Map<bigint, { hash: Hash; senders: Map<Hash, Address> }>()
-  /** Per `token:holder`, the balance. A pair with no entry reads 0. */
-  balances = new Map<string, bigint>()
+  /** Per `token:holder`, the balance; a function gives it per block. A pair with no entry reads 0. */
+  balances = new Map<string, bigint | ((block: bigint) => bigint)>()
   getBlockSendersCalls = 0
   readBalancesCalls = 0
   /** The block of every readBalances call. */
@@ -131,7 +131,10 @@ export class FakeChain implements Chain {
   async readBalances(pairs: { token: Address; holder: Address }[], block: bigint) {
     this.readBalancesCalls++
     this.balanceReads.push(block)
-    return pairs.map((p) => this.balances.get(`${p.token}:${p.holder}`) ?? 0n)
+    return pairs.map((p) => {
+      const v = this.balances.get(`${p.token}:${p.holder}`) ?? 0n
+      return typeof v === "function" ? v(block) : v
+    })
   }
 
   async getLogs(from: bigint, to: bigint, filter: LogFilter) {

@@ -416,6 +416,18 @@ describe("v4 source in Calamari pools", () => {
       tokenIsCurrency0: false,
       quoteDecimals: 18,
     },
+    "calamari-swap-gm-first": {
+      token: "0x1d6a5f9e7f00f89b764262a776fcf27159a6a0cc",
+      quote: NATIVE_QUOTE_ASSET,
+      tokenIsCurrency0: false,
+      quoteDecimals: 18,
+    },
+    "calamari-swap-moved": {
+      token: "0x9ea7eecd0cddcdd0d287cd37f6c6ad6e320d9c9d",
+      quote: NATIVE_QUOTE_ASSET,
+      tokenIsCurrency0: false,
+      quoteDecimals: 18,
+    },
     // USDC sorts below the token, so the token is currency1 and the quote has 6 decimals.
     "calamari-swap-usdc": {
       token: "0xb600d140dd47d92985304cb2fd061d70a8217bb4",
