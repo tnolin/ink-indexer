@@ -100,9 +100,31 @@ describe("fetchIpfsJson", () => {
     expect(calls).toHaveLength(3)
   })
 
-  it("a body that is not JSON is a failure", async () => {
-    const fake = (async () => new Response("<html>")) as unknown as typeof fetch
+  it("a body that is not JSON is a failure and is not retried", async () => {
+    let n = 0
+    const fake = (async () => {
+      n += 1
+      return new Response("<html>")
+    }) as unknown as typeof fetch
     expect(await fetchIpfsJson(URI, { gateway: GATEWAY, fetch: fake, sleep: noSleep })).toBeNull()
+    expect(n).toBe(1)
+  })
+
+  it("cancels the body of a non-200 answer before retrying", async () => {
+    let cancelled = 0
+    const fake = (async () => {
+      const body = new ReadableStream({
+        pull(c) {
+          c.enqueue(new TextEncoder().encode("x"))
+        },
+        cancel() {
+          cancelled += 1
+        },
+      })
+      return new Response(body, { status: 502 })
+    }) as unknown as typeof fetch
+    expect(await fetchIpfsJson(URI, { gateway: GATEWAY, fetch: fake, sleep: noSleep })).toBeNull()
+    expect(cancelled).toBe(3)
   })
 })
 

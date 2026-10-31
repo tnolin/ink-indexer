@@ -44,9 +44,9 @@ async function readBounded(res: Response): Promise<string | null> {
 
 /**
  * The JSON behind an `ipfs://` URI, fetched through the gateway. Other schemes are never fetched.
- * Makes up to `attempts` (3) tries, each bounded by `timeoutMs`; a non-200 answer, a body over
- * 64 KB or a body that is not JSON counts as a failure. Null after the last failure, with one
- * warning that names the token and never the gateway URL.
+ * Makes up to `attempts` (3) tries, each bounded by `timeoutMs`; a non-200 answer, a timeout or a
+ * body over 64 KB is retried, and a body that is not JSON ends the attempts. Null after the last
+ * failure, with one warning that names the token and never the gateway URL.
  */
 export async function fetchIpfsJson(uri: string, deps: IpfsDeps): Promise<unknown | null> {
   const cid = ipfsCid(uri)
@@ -61,10 +61,18 @@ export async function fetchIpfsJson(uri: string, deps: IpfsDeps): Promise<unknow
       })
       if (res.status === 200) {
         const body = await readBounded(res)
-        if (body !== null) return JSON.parse(body)
+        if (body !== null) {
+          try {
+            return JSON.parse(body)
+          } catch {
+            break
+          }
+        }
+      } else {
+        await res.body?.cancel()
       }
     } catch {
-      // timeout, network error or invalid JSON: try again
+      // timeout or network error: try again
     }
     if (attempt < attempts) await sleep(RETRY_DELAY_MS)
   }
