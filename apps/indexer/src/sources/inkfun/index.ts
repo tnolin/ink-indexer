@@ -12,6 +12,8 @@ import {
   type InkfunLaunchState,
   type InkfunLog,
   type InkfunSold,
+  inkfunBondEvent,
+  inkfunClosingSold,
   inkfunCurveValue,
   inkfunLaunchEvent,
   inkfunLaunchId,
@@ -21,6 +23,7 @@ import {
   type LaunchMetadataFields,
   NATIVE_QUOTE_ASSET,
   parseInkfunMetadata,
+  UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Chain } from "../../chain"
@@ -31,7 +34,7 @@ import type { LogFilter } from "../../rpc"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
-import { curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
+import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
 
 const WHOLE_TOKEN = 10n ** 18n
 
@@ -277,6 +280,42 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
             marketCap: BigInt(event.marketCap),
             updatedBlock: blockNumber,
           })
+        } else if (d.kind === "migrated") {
+          const known = byToken.get(d.token)!
+          // The graduation burns tokens, so the supply after it is read at this block.
+          const [supply] = await chain.readTotalSupplies([d.token], blockNumber)
+          const preBurnSupply = known.totalSupply
+          known.totalSupply = supply!
+          known.progressBps = 10_000
+          const pool: PoolEntry = {
+            poolId: d.poolId,
+            poolManager: UNISWAP_V4_POOL_MANAGER,
+            token: d.token,
+            launchId: known.launchId,
+            launchpad: "inkfun",
+            quoteAsset: NATIVE_QUOTE_ASSET,
+            // The native quote is the zero address, so the token is always currency1.
+            tokenIsCurrency0: false,
+            createdBlock: blockNumber,
+          }
+          pools.add(pool, supply!)
+          batch.pools.push(pool)
+          batch.bonds.push({ token: d.token, block: blockNumber, totalSupply: supply! })
+          batch.events.push({
+            event: inkfunBondEvent(d, { launchId: known.launchId }, meta),
+            block: blockNumber,
+            blockHash,
+          })
+          const sold = inkfunClosingSold(known.params)
+          const before = curveRows.get(d.token)
+          curveRows.set(d.token, {
+            token: d.token,
+            progressBps: 10_000,
+            curveValue: before?.curveValue ?? known.params.graduationTarget,
+            target: known.params.graduationTarget,
+            marketCap: before?.marketCap ?? marketCapOf(known.params, sold, preBurnSupply),
+            updatedBlock: blockNumber,
+          })
         }
       }
     }
@@ -303,7 +342,11 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
               fork,
             )
           : []
-      const supplies: Supply[] = []
+      // A token bonded above the fork had its supply set to the post-burn amount; read it back.
+      const unbonded = await bondedAbove(sql, fork)
+      const read = unbonded.length > 0 ? await chain.readTotalSupplies(unbonded, fork) : []
+      const supplies: Supply[] = unbonded.map((token, i) => ({ token, totalSupply: read[i]! }))
+      const supplyAt = new Map(supplies.map((x) => [x.token, x.totalSupply]))
       return {
         curve: refresh.map((c, i) => {
           const s = sold[i]!
@@ -312,7 +355,7 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
             progressBps: inkfunProgressBps(c.params, s),
             curveValue: inkfunCurveValue(c.params, s),
             target: c.params.graduationTarget,
-            marketCap: marketCapOf(c.params, s, c.totalSupply),
+            marketCap: marketCapOf(c.params, s, supplyAt.get(c.token) ?? c.totalSupply),
             updatedBlock: fork,
           }
         }),
@@ -327,6 +370,9 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
     },
   }
 }
+
+// shortcut: a launch that enters recovery (RecoveryOpened) reopens sells at a pro-rata price, and those sells are still emitted as curve trades priced from tokensSold. Read RecoveryOpened and stop emitting trade events for that curve once a launch enters recovery.
+// shortcut: holders can burn ink.fun tokens with burn(), which sends them to the zero address and lowers totalSupply; only transfers to the dead address lower the supply used for market cap. Track transfers to the zero address in the v4 source if burns show up.
 
 function tokenRow(
   d: InkfunLaunchCreated,

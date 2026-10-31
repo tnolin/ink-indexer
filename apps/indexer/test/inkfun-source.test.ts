@@ -1,13 +1,23 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import { INKFUN_HOOK, inkfunCurveValue } from "@ink-indexer/sdk"
+import {
+  INKFUN_HOOK,
+  inkfunClosingSold,
+  inkfunCurveValue,
+  inkfunPrice,
+  NATIVE_QUOTE_ASSET,
+  UNISWAP_V4_POOL_MANAGER,
+} from "@ink-indexer/sdk"
 import { describe, expect, inject, it } from "vitest"
+import { swapLog } from "../../../packages/sdk/test/builders"
 import { loadInkfunFixture } from "../../../packages/sdk/test/fixtures"
 import { BlockNotServedError } from "../src/errors"
 import type { Logger } from "../src/log"
+import { Indexer } from "../src/loop"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { PoolRegistry } from "../src/sources/pools"
+import { processLogs as processSwaps, v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
 import { FakeChain } from "./fake-chain"
 import {
@@ -16,8 +26,11 @@ import {
   curveOf,
   inkfunBuy,
   inkfunLaunch,
+  inkfunMigrate,
   inkfunSell,
   launchIdOf,
+  nextTx,
+  poolIdOf,
   soldFor,
   TOTAL_SUPPLY,
   tokenOf,
@@ -450,3 +463,252 @@ describe("through the database", () => {
     }
   })
 })
+
+describe("migration into a Uniswap v4 pool", () => {
+  const BURNED_SUPPLY = TOTAL_SUPPLY - 3_000_000n * 10n ** 18n
+  const Q96 = 1n << 96n
+  const closing = inkfunClosingSold(CURVE_PARAMS)
+
+  it("Migrated emits launchpad.bond and registers the pool with the supply read at its block", async () => {
+    const t = await setup()
+    try {
+      inkfunLaunch(t.chain, { n: 1, block: B })
+      inkfunBuy(t.chain, { n: 1, block: B + 1n, sold: closing })
+      inkfunMigrate(t.chain, { n: 1, block: B + 1n, logIndex: 2 })
+      t.chain.supplies.set(tokenOf(1), BURNED_SUPPLY)
+      const batch = await t.batchOf(B + 1n)
+      expect(batch.events.map((e) => e.event.type)).toEqual([
+        "launchpad.launch",
+        "launchpad.trade",
+        "launchpad.bond",
+      ])
+      expect(batch.events[2]?.event).toMatchObject({
+        launchpad: "inkfun",
+        token: tokenOf(1),
+        launchId: launchIdOf(1),
+        poolId: poolIdOf(1),
+        poolManager: UNISWAP_V4_POOL_MANAGER,
+        liquidityQuote: "4150000000000000000",
+        liquidityTokens: (197_000_000n * 10n ** 18n).toString(),
+        quoteAsset: NATIVE_QUOTE_ASSET,
+      })
+      const entry = {
+        poolId: poolIdOf(1),
+        poolManager: UNISWAP_V4_POOL_MANAGER,
+        token: tokenOf(1),
+        launchId: launchIdOf(1),
+        launchpad: "inkfun",
+        quoteAsset: NATIVE_QUOTE_ASSET,
+        tokenIsCurrency0: false,
+        createdBlock: B + 1n,
+      }
+      expect(batch.pools).toEqual([entry])
+      expect(t.pools.byId(poolIdOf(1))).toEqual(entry)
+      expect(t.pools.marks(tokenOf(1))?.totalSupply).toBe(BURNED_SUPPLY)
+      expect(batch.bonds).toEqual([
+        { token: tokenOf(1), block: B + 1n, totalSupply: BURNED_SUPPLY },
+      ])
+      expect(batch.curve.find((c) => c.token === tokenOf(1))?.progressBps).toBe(10_000)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("Migrated for an unknown token, or from another contract, is ignored", async () => {
+    const t = await setup()
+    try {
+      inkfunLaunch(t.chain, { n: 1, block: B })
+      inkfunMigrate(t.chain, { n: 7, block: B + 1n })
+      inkfunMigrate(t.chain, {
+        n: 1,
+        block: B + 2n,
+        address: "0x00000000000000000000000000000000000000f9",
+      })
+      const batch = await t.batchOf(B + 2n)
+      expect(batch.events.map((e) => e.event.type)).toEqual(["launchpad.launch"])
+      expect(batch.pools).toEqual([])
+      expect(batch.bonds).toEqual([])
+      expect(unknownContractWarnings(t.warnings).length).toBeGreaterThan(0)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a deferred graduation bonds at the later Migrated", async () => {
+    const t = await setup()
+    try {
+      inkfunLaunch(t.chain, { n: 1, block: B })
+      // The closing buy lands without a Migrated in its transaction.
+      inkfunBuy(t.chain, { n: 1, block: B + 1n, sold: closing })
+      const first = await t.batchOf(B + 1n)
+      expect(first.events.map((e) => e.event.type)).toEqual(["launchpad.launch", "launchpad.trade"])
+      expect(first.bonds).toEqual([])
+      expect(first.pools).toEqual([])
+      t.chain.supplies.set(tokenOf(1), BURNED_SUPPLY)
+      inkfunMigrate(t.chain, { n: 1, block: B + 9n })
+      const later = await t.source.process([t.chain.logsIn(B + 9n, B + 9n)], {
+        toBlock: B + 9n,
+        live: false,
+      })
+      expect(later.events.map((e) => e.event.type)).toEqual(["launchpad.bond"])
+      expect(later.events[0]?.block).toBe(B + 9n)
+      expect(later.bonds).toEqual([
+        { token: tokenOf(1), block: B + 9n, totalSupply: BURNED_SUPPLY },
+      ])
+      expect(later.curve).toMatchObject([{ token: tokenOf(1), progressBps: 10_000 }])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  const swapIn = (
+    chain: FakeChain,
+    a: { n: number; block: bigint; logIndex: number; sqrtPriceX96?: bigint },
+  ) => {
+    const tx = nextTx()
+    chain.add(
+      swapLog(
+        {
+          poolId: poolIdOf(a.n),
+          sender: CREATOR,
+          amount0: -(10n ** 15n),
+          amount1: 10n ** 20n,
+          sqrtPriceX96: a.sqrtPriceX96 ?? Q96,
+          liquidity: 10n ** 21n,
+        },
+        { blockNumber: a.block, transactionHash: tx, logIndex: a.logIndex },
+      ),
+    )
+    const s = chain.senders.get(a.block) ?? { hash: chain.hashOf(a.block), senders: new Map() }
+    s.senders.set(tx, CREATOR)
+    chain.senders.set(a.block, s)
+  }
+
+  it("closing buy, migration and the first swap in one block", async () => {
+    const sql: Sql = await resetDb(inject("databaseUrl"))
+    try {
+      const chain = new FakeChain(B + 100n)
+      const pools = new PoolRegistry()
+      const logger: Logger = () => {}
+      const idx = new Indexer({
+        chain,
+        store: createStore(sql),
+        logger,
+        sources: [
+          inkypumpSource({ sql, chain, logger, pools }),
+          inkfunSource({
+            sql,
+            chain,
+            logger,
+            pools,
+            ipfs: { gateway: GATEWAY, fetch: metadataFetch({}) },
+          }),
+          v4Source({ sql, chain, logger, pools }),
+        ],
+      })
+      await idx.init()
+      // The v4 source reads nothing while the registry is empty; production always has pools.
+      pools.add(
+        {
+          poolId: poolIdOf(9),
+          poolManager: UNISWAP_V4_POOL_MANAGER,
+          token: tokenOf(9),
+          launchId: launchIdOf(9),
+          launchpad: "inkypump",
+          quoteAsset: NATIVE_QUOTE_ASSET,
+          tokenIsCurrency0: false,
+          createdBlock: 1n,
+        },
+        TOTAL_SUPPLY,
+      )
+      inkfunLaunch(chain, { n: 1, block: B, uri: null })
+      inkfunBuy(chain, { n: 1, block: B + 1n, sold: closing, logIndex: 1 })
+      inkfunMigrate(chain, { n: 1, block: B + 1n, logIndex: 2 })
+      swapIn(chain, { n: 1, block: B + 1n, logIndex: 3 })
+      chain.supplies.set(tokenOf(1), BURNED_SUPPLY)
+      await idx.backfill(B, B + 1n)
+      const events =
+        await sql`select type, payload, log_index from indexer.events where block = ${String(B + 1n)} order by log_index`
+      expect(events.map((e) => e.type)).toEqual([
+        "launchpad.trade",
+        "launchpad.bond",
+        "launchpad.swap",
+      ])
+      expect(events[0]?.payload.progressBpsAfter).toBe(10_000)
+      const swap = events[2]?.payload
+      expect(swap.supply).toBe(BURNED_SUPPLY.toString())
+      expect(swap.launchpad).toBe("inkfun")
+      expect(BigInt(swap.athMarketCap)).toBeGreaterThanOrEqual(
+        BigInt(events[0]?.payload.athMarketCap),
+      )
+      expect(
+        await sql`select count(*)::int as n from indexer.trades where venue <> 'curve'`,
+      ).toEqual([{ n: 1 }])
+    } finally {
+      await sql.end()
+    }
+  })
+
+  it("after reload, the pool's market cap still uses the post-burn supply", async () => {
+    const t = await setup()
+    try {
+      inkfunLaunch(t.chain, { n: 1, block: B })
+      inkfunBuy(t.chain, { n: 1, block: B + 1n, sold: closing })
+      inkfunMigrate(t.chain, { n: 1, block: B + 1n, logIndex: 2 })
+      t.chain.supplies.set(tokenOf(1), BURNED_SUPPLY)
+      await t.ingest(B + 1n)
+      expect(await t.sql`select total_supply::text as s, phase from indexer.tokens`).toEqual([
+        { s: BURNED_SUPPLY.toString(), phase: "bonded" },
+      ])
+      const fresh = new PoolRegistry()
+      await fresh.load(t.sql)
+      expect(fresh.marks(tokenOf(1))?.totalSupply).toBe(BURNED_SUPPLY)
+      swapIn(t.chain, { n: 1, block: B + 2n, logIndex: 0 })
+      const batch = await processSwaps(t.chain.logsIn(B + 2n, B + 2n), [], {
+        chain: t.chain,
+        pools: fresh,
+        readDeadAt: B + 2n,
+      })
+      const swap = batch.events[0]?.event
+      if (swap?.type !== "launchpad.swap") throw new Error("expected a swap")
+      expect(swap.supply).toBe(BURNED_SUPPLY.toString())
+      expect(BigInt(swap.marketCap)).toBe(BURNED_SUPPLY)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("rollback below the migration removes the pool, un-bonds the token and restores its total supply", async () => {
+    const t = await setup()
+    try {
+      inkfunLaunch(t.chain, { n: 1, block: B })
+      inkfunBuy(t.chain, { n: 1, block: B + 1n, sold: soldFor(10n ** 17n) })
+      inkfunBuy(t.chain, { n: 1, block: B + 5n, sold: closing })
+      inkfunMigrate(t.chain, { n: 1, block: B + 5n, logIndex: 2 })
+      t.chain.supplies.set(tokenOf(1), BURNED_SUPPLY)
+      await t.ingest(B + 5n)
+      expect(await t.sql`select pool_id from indexer.pools`).toHaveLength(1)
+
+      t.chain.supplies.set(tokenOf(1), TOTAL_SUPPLY)
+      t.chain.curveSold.set(curveOf(1), soldFor(10n ** 17n))
+      await t.rollback(B + 3n)
+
+      expect(await t.sql`select pool_id from indexer.pools`).toEqual([])
+      expect(
+        await t.sql`select phase, bonded_block, total_supply::text as s from indexer.tokens`,
+      ).toEqual([{ phase: "curve", bonded_block: null, s: TOTAL_SUPPLY.toString() }])
+      expect(t.pools.byId(poolIdOf(1))).toBeUndefined()
+      const [state] =
+        await t.sql`select progress_bps, market_cap::text as mc, updated_block from indexer.curve_state`
+      expect(state?.updated_block).toBe(B + 3n)
+      expect(state?.progress_bps).toBeLessThan(10_000)
+      expect(BigInt(state?.mc)).toBe(
+        (inkfunPriceAt(soldFor(10n ** 17n)) * TOTAL_SUPPLY) / 10n ** 18n,
+      )
+    } finally {
+      await t.sql.end()
+    }
+  })
+})
+
+const inkfunPriceAt = (sold: bigint) => inkfunPrice(CURVE_PARAMS, sold)
