@@ -58,7 +58,10 @@ export type TradeEvent = LaunchpadBase & {
   target: string
   progressBpsBefore: number
   progressBpsAfter: number
-  /** Tokens sold over the sale supply in basis points, floored and capped at 10,000. */
+  /**
+   * The progress the launchpad's own site shows, in basis points from 0 to 10,000: tokens sold over
+   * the sale supply on InkyPump, net quote raised over `target` on ink.fun.
+   */
   soldBps: number
   marketCap: string
   /** The highest market cap the token has reached, on the curve or in its pool, in quote base units. */
