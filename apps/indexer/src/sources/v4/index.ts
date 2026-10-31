@@ -152,7 +152,7 @@ export function v4Source(deps: {
  * load-balanced node that does not have the block yet, fails the span as not served so the tick
  * retries it. Transport errors pass through unchanged.
  */
-async function servedAt<T>(block: bigint, read: () => Promise<T>): Promise<T> {
+export async function servedAt<T>(block: bigint, read: () => Promise<T>): Promise<T> {
   try {
     return await read()
   } catch (err) {

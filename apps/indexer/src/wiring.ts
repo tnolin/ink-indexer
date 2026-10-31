@@ -40,6 +40,7 @@ const PLATFORMS = {
   opensea: { groups: ["nft-mints", "nft-sales"], openSea: true },
   chimera: { groups: ["nft-launches"], openSea: false },
   inkfun: { groups: ["inkfun", "v4-swaps"], openSea: false },
+  tsunami: { groups: ["tsunami", "v4-swaps"], openSea: false },
 } as const satisfies Record<string, { groups: readonly BackfillSource[]; openSea: boolean }>
 type Platform = keyof typeof PLATFORMS
 

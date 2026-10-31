@@ -14,7 +14,7 @@ import {
   UNISWAP_V4_POOL_MANAGER,
   ZERO_TOPIC,
 } from "@ink-indexer/sdk"
-import type { Hash } from "viem"
+import type { Address, Hash } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import {
   inkfunBoughtLog,
@@ -25,6 +25,7 @@ import {
 import {
   loadChimeraCampaigns,
   loadNftFixture,
+  loadTsunamiFixture,
   NFT_FIXTURES,
 } from "../../../packages/sdk/test/fixtures"
 import type { Chain } from "../src/chain"
@@ -36,6 +37,7 @@ import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { PoolRegistry } from "../src/sources/pools"
 import { BACKFILL_SOURCES, type BackfillSource } from "../src/sources/source"
+import { tsunamiSource } from "../src/sources/tsunami/index"
 import { v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
 import { matchesFilter } from "./fake-chain"
@@ -62,6 +64,7 @@ const CALAMARI_TOKEN = "0x00000000000000000000000000000000000000a7"
 const CALAMARI_POOL = `0x${"a7".repeat(32)}` as Hash
 const FUN_TOKEN = "0x00000000000000000000000000000000000000a5" as const
 const FUN_CURVE = "0x00000000000000000000000000000000000000a6" as const
+const TSUNAMI_TX = `0x${(0xbad300).toString(16).padStart(64, "0")}` as Hash
 const word = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash
 const ADDR_WORD = (a: string) => `0x${"0".repeat(24)}${a.slice(2)}` as Hash
 
@@ -201,7 +204,18 @@ function buildPool(): { logs: ChainLog[]; extra: ChainLog[] } {
       },
     ),
   ]
-  const logs = [...calls.logs, ...moved, ...extra, ...v4, ...inkfun].sort(
+  // Tsunami: SHITCOIN's recorded launch and seed buy, moved into the range. The pool-creation
+  // events of the same transaction are left out, as they are not in the source's topics.
+  const tsunamiFixture = loadTsunamiFixture("tsunami-launch-riptide")
+  const tsunami = tsunamiFixture.logs
+    .filter((l) => l.address !== CALAMARI_POOL_MANAGER)
+    .map((l) => ({
+      ...l,
+      blockNumber: at(15),
+      blockHash: word(Number(at(15))),
+      transactionHash: TSUNAMI_TX,
+    }))
+  const logs = [...calls.logs, ...moved, ...extra, ...v4, ...inkfun, ...tsunami].sort(
     (a, b) => Number(a.blockNumber - b.blockNumber) || a.logIndex - b.logIndex,
   )
   return { logs, extra }
@@ -229,8 +243,9 @@ class PoolChain implements Chain {
   }
   readLaunchStates = (...a: Parameters<Chain["readLaunchStates"]>) =>
     this.replay.readLaunchStates(...a)
+  /** The recorded answers, and a billion tokens for a token the recording never saw (Tsunami's). */
   readTotalSupplies = (...a: Parameters<Chain["readTotalSupplies"]>) =>
-    this.replay.readTotalSupplies(...a)
+    this.replay.readTotalSupplies(...a).catch(() => a[0].map(() => 10n ** 27n))
   readErc20Meta = (...a: Parameters<Chain["readErc20Meta"]>) => this.replay.readErc20Meta(...a)
   readInkfunLaunches = async (launches: unknown[]) =>
     launches.map(() => ({
@@ -245,8 +260,20 @@ class PoolChain implements Chain {
       metadataURI: null,
     }))
   readCurveSold = async (curves: unknown[]) => curves.map(() => 0n)
+  readTsunamiCurves = async (curves: unknown[]) =>
+    curves.map(() => ({ realBase: 0n, realQuote: 0n, virtualBase: 1n, virtualQuote: 1n }))
   readErc20Names = async (tokens: string[]) => tokens.map(() => ({ symbol: null, name: null }))
-  getBlockSenders = async () => null
+  /** Answers for the block holding the Tsunami transaction only. */
+  getBlockSenders = async (n: bigint) => {
+    const txs = this.pool.filter((l) => l.blockNumber === n && l.transactionHash === TSUNAMI_TX)
+    return txs.length === 0
+      ? null
+      : {
+          hash: txs[0]!.blockHash,
+          timestamp: Number(n),
+          senders: new Map([[TSUNAMI_TX, A1 as Address]]),
+        }
+  }
   readBalances = async (pairs: unknown[]) => pairs.map(() => 0n)
   readMintStats = async () => null
   readMaxSupply = async () => null
@@ -293,6 +320,7 @@ function sourcesFor(chain: Chain, sql: Sql) {
   return [
     inkypumpSource({ sql, chain, pools, logger: quiet }),
     inkfunSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
+    tsunamiSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
     v4Source({ sql, chain, pools, logger: quiet }),
     nftSource({ sql, chain, logger: quiet }),
   ]

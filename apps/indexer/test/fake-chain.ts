@@ -1,4 +1,10 @@
-import type { ChainLog, InkfunLaunchState, LaunchKey, LaunchState } from "@ink-indexer/sdk"
+import type {
+  ChainLog,
+  InkfunLaunchState,
+  LaunchKey,
+  LaunchState,
+  TsunamiCurveState,
+} from "@ink-indexer/sdk"
 import { type Address, type Hash, pad, toHex } from "viem"
 import type { Chain } from "../src/chain"
 import type { LogFilter } from "../src/rpc"
@@ -55,6 +61,9 @@ export class FakeChain implements Chain {
   /** Per ink.fun curve address, its `tokensSold()`; a function gives it per block. A curve with no entry throws. */
   curveSold = new Map<string, bigint | ((block: bigint) => bigint)>()
   curveSoldReads: { curves: Address[]; block: bigint }[] = []
+  /** Per Tsunami curve address, what `readTsunamiCurves` answers; a function gives it per block. A curve with no entry throws. */
+  tsunamiCurves = new Map<string, TsunamiCurveState | ((block: bigint) => TsunamiCurveState)>()
+  tsunamiCurveReads: { curves: Address[]; block: bigint }[] = []
   /** Every getBlock call. */
   getBlockCalls: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
@@ -158,6 +167,15 @@ export class FakeChain implements Chain {
     return curves.map((c) => {
       const v = this.curveSold.get(c)
       if (v === undefined) throw new Error(`no fake tokensSold for ${c}`)
+      return typeof v === "function" ? v(block) : v
+    })
+  }
+
+  async readTsunamiCurves(curves: Address[], block: bigint) {
+    this.tsunamiCurveReads.push({ curves, block })
+    return curves.map((c) => {
+      const v = this.tsunamiCurves.get(c)
+      if (v === undefined) throw new Error(`no fake Tsunami curve for ${c}`)
       return typeof v === "function" ? v(block) : v
     })
   }
