@@ -384,6 +384,23 @@ describe("builders", () => {
     expect(ev.ticker).toBe("TK")
   })
 
+  it("launch builder cuts a name to 100 characters and a ticker to 32", () => {
+    const ev = inkfunLaunchEvent(
+      {
+        kind: "launchCreated",
+        token: TOKEN,
+        curve: CURVE_ADDR,
+        creator: CREATOR,
+        name: "n".repeat(500),
+        symbol: "s".repeat(500),
+      },
+      { totalSupply: 1n, graduationTarget: 2n, metadata: null },
+      META,
+    )
+    expect(ev.name).toBe("n".repeat(100))
+    expect(ev.ticker).toBe("s".repeat(32))
+  })
+
   it("bond builder carries the Uniswap PoolManager", () => {
     const poolId = pad("0xabcd", { size: 32 }) as Hash
     const ev = inkfunBondEvent(

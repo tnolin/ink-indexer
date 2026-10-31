@@ -28,7 +28,11 @@ const base = (token: Address, launchId: Hash, m: LogMeta) => ({
   blockTimestamp: m.blockTimestamp,
 })
 
-const orNull = (s: string) => (s ? cleanText(s) || null : null)
+const MAX_NAME = 100
+const MAX_TICKER = 32
+
+/** Cleaned text cut to `max` characters; null when nothing is left. */
+const orNull = (s: string, max: number) => cleanText(cleanText(s).slice(0, max)) || null
 
 export function inkfunLaunchEvent(
   created: InkfunLaunchCreated,
@@ -44,8 +48,8 @@ export function inkfunLaunchEvent(
     ...base(created.token, inkfunLaunchId(created.curve), m),
     hook: INKFUN_HOOK,
     creator: created.creator,
-    name: orNull(created.name),
-    ticker: orNull(created.symbol),
+    name: orNull(created.name, MAX_NAME),
+    ticker: orNull(created.symbol, MAX_TICKER),
     description: ctx.metadata?.description ?? null,
     imageUrl: ctx.metadata?.imageUrl ?? null,
     links: {
