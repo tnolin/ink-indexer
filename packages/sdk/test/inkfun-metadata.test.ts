@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { ipfsCid, parseInkfunMetadata } from "../src/index"
+import { cleanText, ipfsCid, parseInkfunMetadata } from "../src/index"
 
 const GATEWAY = "https://gw.example"
 const knuckleCreek = JSON.parse(
@@ -77,5 +77,27 @@ describe("ipfsCid", () => {
     expect(ipfsCid("ipfs://bafy abc")).toBeNull()
     expect(ipfsCid("ipfs://bafy/%2e%2e/%2e%2e/x")).toBeNull()
     expect(ipfsCid("ipfs://bafy/%2E/x")).toBeNull()
+  })
+})
+
+describe("untrusted text", () => {
+  it("cleanText drops NUL characters and lone surrogates, which Postgres text and jsonb refuse", () => {
+    expect(cleanText("a\u0000b")).toBe("ab")
+    expect(cleanText("x\ud800y")).toBe("x\ufffdy")
+    expect(cleanText("plain")).toBe("plain")
+  })
+
+  it("metadata strings are cleaned and bounded", () => {
+    const m = parseInkfunMetadata(
+      {
+        description: `d\u0000${"x".repeat(10_000)}`,
+        extensions: { twitter: `x.com/\u0000a`, website: `https://a.example/${"p".repeat(5_000)}` },
+      },
+      GATEWAY,
+    )
+    expect(m?.description?.includes("\u0000")).toBe(false)
+    expect(m?.description?.length).toBe(4_000)
+    expect(m?.links.twitter).toBe("x.com/a")
+    expect(m?.links.website).toBeNull()
   })
 })

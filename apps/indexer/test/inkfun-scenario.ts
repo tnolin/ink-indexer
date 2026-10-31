@@ -45,6 +45,7 @@ export function inkfunLaunch(
     logIndex?: number
     creator?: Address
     factory?: Address
+    name?: string
   },
 ) {
   chain.add(
@@ -53,7 +54,7 @@ export function inkfunLaunch(
         token: tokenOf(a.n),
         curve: curveOf(a.n),
         creator: a.creator ?? CREATOR,
-        name: `Token ${a.n}`,
+        name: a.name ?? `Token ${a.n}`,
         symbol: `T${a.n}`,
       },
       {

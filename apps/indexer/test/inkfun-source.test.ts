@@ -158,6 +158,20 @@ describe("launches", () => {
     }
   })
 
+  it("a launch whose name holds a NUL is written, because Postgres refuses NUL in text and jsonb", async () => {
+    const t = await setup()
+    try {
+      inkfunLaunch(t.chain, { n: 1, block: B, name: "Bad\u0000Name", uri: null })
+      await t.ingest(B)
+      expect(await t.sql`select name from indexer.tokens`).toEqual([{ name: "BadName" }])
+      expect(await t.sql`select payload->>'name' as name from indexer.events`).toEqual([
+        { name: "BadName" },
+      ])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("a launch with no metadataURI fetches nothing", async () => {
     const calls: string[] = []
     const t = await setup({ fetch: metadataFetch({}, calls) })

@@ -16,7 +16,23 @@ export function ipfsCid(uri: string): string | null {
   return rest.split("/").some((part) => part === "." || part === "..") ? null : rest
 }
 
-const text = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null)
+const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
+const MAX_DESCRIPTION = 4_000
+const MAX_LINK = 2_048
+
+/** Text from a creator or an IPFS document made safe to store: Postgres refuses NUL in text and jsonb, and lone surrogates in jsonb. */
+export function cleanText(s: string): string {
+  return s.replaceAll("\u0000", "").replace(LONE_SURROGATE, "\ufffd")
+}
+
+/** A non-empty cleaned string of at most `max` characters; longer text is cut when `cut` is set and dropped otherwise. */
+const text = (v: unknown, max: number, cut: boolean): string | null => {
+  if (typeof v !== "string") return null
+  const s = cleanText(v)
+  if (s === "") return null
+  if (s.length <= max) return s
+  return cut ? cleanText(s.slice(0, max)) : null
+}
 
 /**
  * The description, image and links of a token's metadata JSON. The image is served through
@@ -32,8 +48,12 @@ export function parseInkfunMetadata(json: unknown, gateway: string): LaunchMetad
       : {}
   const image = typeof doc.image === "string" ? ipfsCid(doc.image) : null
   return {
-    description: text(doc.description),
+    description: text(doc.description, MAX_DESCRIPTION, true),
     imageUrl: image === null ? null : `${gateway}/ipfs/${image}`,
-    links: { telegram: text(ext.telegram), twitter: text(ext.twitter), website: text(ext.website) },
+    links: {
+      telegram: text(ext.telegram, MAX_LINK, false),
+      twitter: text(ext.twitter, MAX_LINK, false),
+      website: text(ext.website, MAX_LINK, false),
+    },
   }
 }

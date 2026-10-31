@@ -7,7 +7,7 @@ import { UNISWAP_V4_POOL_MANAGER } from "../v4/constants"
 import { INKFUN_HOOK } from "./constants"
 import { type InkfunCurve, inkfunCurveValue, inkfunPrice, inkfunProgressBps } from "./curve"
 import type { InkfunBought, InkfunLaunchCreated, InkfunMigrated, InkfunSold } from "./decode"
-import type { LaunchMetadataFields } from "./metadata"
+import { cleanText, type LaunchMetadataFields } from "./metadata"
 
 const WHOLE_TOKEN = 10n ** 18n
 
@@ -28,7 +28,7 @@ const base = (token: Address, launchId: Hash, m: LogMeta) => ({
   blockTimestamp: m.blockTimestamp,
 })
 
-const orNull = (s: string | undefined) => (s ? s : null)
+const orNull = (s: string) => (s ? cleanText(s) || null : null)
 
 export function inkfunLaunchEvent(
   created: InkfunLaunchCreated,

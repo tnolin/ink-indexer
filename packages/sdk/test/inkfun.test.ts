@@ -367,6 +367,23 @@ describe("builders", () => {
     })
   })
 
+  it("launch builder cleans a name or ticker that holds a NUL", () => {
+    const ev = inkfunLaunchEvent(
+      {
+        kind: "launchCreated",
+        token: TOKEN,
+        curve: CURVE_ADDR,
+        creator: CREATOR,
+        name: "Bad\u0000Name",
+        symbol: "T\u0000K",
+      },
+      { totalSupply: 1n, graduationTarget: 2n, metadata: null },
+      META,
+    )
+    expect(ev.name).toBe("BadName")
+    expect(ev.ticker).toBe("TK")
+  })
+
   it("bond builder carries the Uniswap PoolManager", () => {
     const poolId = pad("0xabcd", { size: 32 }) as Hash
     const ev = inkfunBondEvent(
