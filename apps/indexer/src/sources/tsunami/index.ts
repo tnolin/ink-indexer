@@ -330,7 +330,6 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
           const supply = await circulatingSupply(d.token, blockNumber)
           const before = curveRows.get(d.token)
           const marketCap = before?.marketCap ?? tsunamiMarketCap(d.state, known.supply)
-          known.supply = supply
           known.progressBps = 10_000
           const pool: PoolEntry = {
             poolId: poolIdOf(d.key),

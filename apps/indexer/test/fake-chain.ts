@@ -64,6 +64,8 @@ export class FakeChain implements Chain {
   /** Per Tsunami curve address, what `readTsunamiCurves` answers; a function gives it per block. A curve with no entry throws. */
   tsunamiCurves = new Map<string, TsunamiCurveState | ((block: bigint) => TsunamiCurveState)>()
   tsunamiCurveReads: { curves: Address[]; block: bigint }[] = []
+  /** Every readTotalSupplies call. */
+  supplyReads: { tokens: Address[]; block: bigint }[] = []
   /** Every getBlock call. */
   getBlockCalls: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
@@ -183,7 +185,8 @@ export class FakeChain implements Chain {
     })
   }
 
-  async readTotalSupplies(tokens: Address[]) {
+  async readTotalSupplies(tokens: Address[], block?: bigint) {
+    if (block !== undefined) this.supplyReads.push({ tokens, block })
     return tokens.map((t) => this.supplies.get(t) ?? 10n ** 27n)
   }
 

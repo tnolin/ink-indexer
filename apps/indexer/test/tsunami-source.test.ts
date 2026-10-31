@@ -281,6 +281,47 @@ describe("Tsunami launches", () => {
     }
   })
 
+  it("logs are processed in log order whatever order they arrive in", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      const launch = addFixture(t.chain, "tsunami-launch-gm")
+      const grad = addFixture(t.chain, "tsunami-graduation-gm")
+      const smoke = addFixture(t.chain, "tsunami-legacy-smoke")
+      const order = (b: {
+        events: { event: { type: string; logIndex: number; blockNumber: string } }[]
+      }) => b.events.map((e) => `${e.event.blockNumber}:${e.event.logIndex}:${e.event.type}`)
+      const logs = t.chain.logsIn(0n, grad.blockNumber)
+      const forward = await t.source.process([logs], { toBlock: grad.blockNumber, live: false })
+      const reversed = await t.source.process([[...logs].reverse()], {
+        toBlock: grad.blockNumber,
+        live: false,
+      })
+      expect(order(forward)).toEqual([
+        `${smoke.blockNumber}:7:launchpad.launch`,
+        `${smoke.blockNumber}:10:launchpad.trade`,
+        `${smoke.blockNumber}:17:launchpad.bond`,
+        `${launch.blockNumber}:10:launchpad.launch`,
+        `${launch.blockNumber}:14:launchpad.trade`,
+        `${grad.blockNumber}:13:launchpad.trade`,
+        `${grad.blockNumber}:21:launchpad.bond`,
+      ])
+      expect(order(reversed)).toEqual(order(forward))
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a missing transaction sender fails the span as not served", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      const f = addFixture(t.chain, "tsunami-launch-gm")
+      t.chain.senders.get(f.blockNumber)?.senders.delete(f.txHash)
+      await expect(t.batchOf(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("a launch whose metadata fetch fails is written text-only", async () => {
     const t = await setup({ fetch: metadataFetch({}) })
     try {
@@ -590,6 +631,44 @@ describe("Tsunami through the database", () => {
     }
   })
 
+  it("a span processed after a later one does not move curve state back", async () => {
+    const t = await setup()
+    try {
+      const a = addFixture(t.chain, "tsunami-launch-riptide")
+      await t.ingest(a.blockNumber)
+      const later = (a.blockNumber + 50n).toString()
+      await t.sql`update indexer.curve_state set progress_bps = 4000, curve_value = 1, market_cap = 2, updated_block = ${later}`
+      await t.ingest(a.blockNumber)
+      const [state] =
+        await t.sql`select progress_bps, curve_value::text, market_cap::text, updated_block from indexer.curve_state`
+      expect(state).toEqual({
+        progress_bps: 4000,
+        curve_value: "1",
+        market_cap: "2",
+        updated_block: a.blockNumber + 50n,
+      })
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("rollback at a block below a launch reads no supply, balance or curve", async () => {
+    const t = await setup({ fetch: metadataFetch({}) })
+    try {
+      const f = addFixture(t.chain, "tsunami-legacy-smoke")
+      await t.ingest(f.blockNumber)
+      expect((await t.sql`select phase from indexer.tokens`)[0]).toEqual({ phase: "bonded" })
+      t.chain.balanceReads.length = 0
+      t.chain.supplyReads.length = 0
+      await t.rollback(f.blockNumber - 1n)
+      expect(t.chain.tsunamiCurveReads).toEqual([])
+      expect(t.chain.supplyReads).toEqual([])
+      expect(t.chain.balanceReads).toEqual([])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("rollback restores curve state read at the fork", async () => {
     const t = await setup()
     try {
@@ -710,15 +789,28 @@ describe("Tsunami graduation", () => {
   it("the bond alone writes curve state at 10000 bps (synthetic)", async () => {
     const t = await setup()
     try {
-      const launch = addFixture(t.chain, "tsunami-launch-gm")
-      const grad = addFixture(t.chain, "tsunami-graduation-gm")
-      // Without the closing buy, only TokenMigrated can write the 10000.
-      t.chain.logs = t.chain.logs.filter(
-        (l) => l.topics[0] !== TSUNAMI_TOPICS.bought || l.blockNumber !== grad.blockNumber,
-      )
-      const batch = await t.batchOf(grad.blockNumber, launch.blockNumber)
+      const grad = loadTsunamiFixture("tsunami-graduation-gm")
+      const c = grad.curves[0]!
+      await seedToken(t.sql, { curve: c.curve, token: c.token })
+      await t.source.reload()
+      addFixture(t.chain, "tsunami-graduation-gm")
+      // Without the closing buy or an earlier trade in the span, only TokenMigrated writes the row.
+      t.chain.logs = t.chain.logs.filter((l) => l.topics[0] === TSUNAMI_TOPICS.migrated)
+      const batch = await t.batchOf(grad.blockNumber, grad.blockNumber)
       expect(batch.curve).toHaveLength(1)
-      expect(batch.curve[0]).toMatchObject({ progressBps: 10_000, updatedBlock: grad.blockNumber })
+      // Nothing earlier in the span wrote a market cap, so the migration prices the curve itself.
+      const migrated = decodeTsunamiLog(
+        grad.logs.find((l) => l.topics[0] === TSUNAMI_TOPICS.migrated)!,
+      )
+      if (migrated?.kind !== "migrated") throw new Error("no migration")
+      expect(batch.curve[0]).toEqual({
+        token: grad.curves[0]?.token,
+        progressBps: 10_000,
+        curveValue: migrated.state.realQuote,
+        target: 4_200_000_000_000_000_000n,
+        marketCap: tsunamiMarketCap(migrated.state, 10n ** 27n),
+        updatedBlock: grad.blockNumber,
+      })
     } finally {
       await t.sql.end()
     }
@@ -915,7 +1007,11 @@ describe("Tsunami pool moves", () => {
         type: "launchpad.swap",
         poolId: MOVE_DESTINATION_POOL,
         poolManager: CALAMARI_POOL_MANAGER,
+        supply: String(10n ** 27n),
       })
+      const moved = swaps.events[0]?.event
+      if (moved?.type !== "launchpad.swap") throw new Error("expected a swap")
+      expect(BigInt(moved.marketCap)).toBeGreaterThan(0n)
       expect(t.pools.byId(MOVE_SOURCE_POOL)).toBeDefined()
     } finally {
       await t.sql.end()
