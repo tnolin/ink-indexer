@@ -107,11 +107,11 @@ function burn(chain: FakeChain, a: { block: bigint; value: bigint; logIndex?: nu
   )
 }
 
-function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)]) {
+function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)], blockReads?: number) {
   const chain = new FakeChain(head)
   const pools = new PoolRegistry()
   for (const p of registered) pools.add(p, SUPPLY)
-  const source = v4Source({ sql: {} as Sql, chain, logger: () => {}, pools })
+  const source = v4Source({ sql: {} as Sql, chain, logger: () => {}, pools, blockReads })
   /** Processes [from, to] as a backfill span, or as the live tick's with `live`. */
   const run = (to: bigint, from = B - 100n, live = false) =>
     source.process(
@@ -712,5 +712,76 @@ describe("v4 source through the database", () => {
     } finally {
       await sql.end()
     }
+  })
+  describe("block sender reads", () => {
+    /** `count` swap blocks from B, reads finishing in reverse order. */
+    function manySwaps(chain: FakeChain, count: number) {
+      const blocks: bigint[] = []
+      for (let i = 0; i < count; i++) {
+        const block = B + BigInt(i)
+        blocks.push(block)
+        swap(chain, {
+          block,
+          sqrtPriceX96: Q96 + BigInt(i) * 10n ** 20n,
+          trader: tokenOf(100 + i),
+          tx: pad(toHex(0xabc000 + i), { size: 32 }) as Hash,
+        })
+      }
+      chain.sendersDelayMs = (n) => (count - Number(n - B)) * 2
+      return blocks
+    }
+
+    it("a backfill span reads each swap block's senders once, at most 8 at a time", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      const blocks = manySwaps(chain, 30)
+      await run(B + 30n)
+      expect(chain.getBlockSendersCalls).toBe(30)
+      expect(chain.maxSendersInFlight).toBe(8)
+      expect([...chain.sendersOrder].sort()).toEqual([...blocks].sort())
+    })
+
+    it("a backfill span gives the same batch with 8 reads in flight as with 1", async () => {
+      const make = async (blockReads?: number) => {
+        const { chain, pools, run } = setup(B + 20n, [entry(1)], blockReads)
+        pools.setDead(TOKEN, 0n, B - 50n)
+        manySwaps(chain, 12)
+        burn(chain, { block: B + 5n, value: 3n, logIndex: 4 })
+        const batch = await run(B + 12n)
+        return { batch, widest: chain.maxSendersInFlight }
+      }
+      const { batch: one, widest: widestOne } = await make(1)
+      const { batch: eight, widest: widestEight } = await make()
+      expect([widestOne, widestEight]).toEqual([1, 8])
+      expect(one.trades).toHaveLength(12)
+      expect(eight).toEqual(one)
+    })
+
+    it("the live tick reads swap blocks one at a time in block order", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      const blocks = manySwaps(chain, 10)
+      await run(B + 10n, B - 100n, true)
+      expect(chain.maxSendersInFlight).toBe(1)
+      expect(chain.sendersOrder).toEqual(blocks)
+    })
+
+    it("in a backfill span the first block not served fails the span at that block", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      const blocks = manySwaps(chain, 10)
+      chain.senders.delete(blocks[6]!)
+      chain.senders.delete(blocks[2]!)
+      await expect(run(B + 10n)).rejects.toEqual(new BlockNotServedError(blocks[2]!))
+    })
+
+    it("a burn-only block is not read in a backfill span", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      swap(chain, { block: B })
+      burn(chain, { block: B + 3n, value: 2n })
+      await run(B + 5n)
+      expect(chain.sendersOrder).toEqual([B])
+    })
   })
 })

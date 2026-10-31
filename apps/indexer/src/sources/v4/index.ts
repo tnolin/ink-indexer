@@ -18,7 +18,7 @@ import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
 import type { AthRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
-import { servedAt } from "../senders"
+import { blockSendersFor, servedAt } from "../senders"
 import { type EventRow, pick, type Source } from "../source"
 import { deadAbove, writeDead, writeRows } from "./store"
 
@@ -72,6 +72,8 @@ export function v4Source(deps: {
   chain: V4Chain
   logger: Logger
   pools: PoolRegistry
+  /** Block-sender reads a backfill span keeps in flight; tests lower it. */
+  blockReads?: number
 }): Source<V4Batch, DeadReads> {
   const { sql, chain, pools } = deps
   // The pool ids the last `filters` call asked for; null when the v4 group was not picked.
@@ -104,6 +106,8 @@ export function v4Source(deps: {
         chain,
         pools,
         readDeadAt: live ? toBlock : null,
+        live,
+        blockReads: deps.blockReads,
       })
     },
     write: writeRows,
@@ -160,6 +164,9 @@ export async function processLogs(
     pools: PoolRegistry
     /** The live tick passes the span's end, a block the endpoints already serve. */
     readDeadAt: bigint | null
+    /** The live tick reads each block's senders when it reaches it; a backfill span reads them up front. */
+    live: boolean
+    blockReads?: number
   },
 ): Promise<V4Batch> {
   const { chain, pools } = deps
@@ -202,13 +209,20 @@ export async function processLogs(
   }
   kept.sort(byPosition)
 
+  const grouped = groupByBlock(kept)
+  const swapBlocks = [...grouped]
+    .filter(([, items]) => items.some((i) => i.kind === "swap"))
+    .map(([blockNumber]) => blockNumber)
+  const senders = await blockSendersFor(chain, swapBlocks, {
+    live: deps.live,
+    limit: deps.blockReads,
+  })
+
   const athBefore = new Map<Address, bigint>()
-  for (const [blockNumber, items] of groupByBlock(kept)) {
+  for (const [blockNumber, items] of grouped) {
     const blockHash = items[0]!.log.blockHash
     batch.blocks.push({ number: blockNumber, hash: blockHash })
-    const block = items.some((i) => i.kind === "swap")
-      ? await servedAt(blockNumber, () => chain.getBlockSenders(blockNumber))
-      : null
+    const block = items.some((i) => i.kind === "swap") ? await senders(blockNumber) : null
     // The logs and the block can come from different endpoints on either side of a reorg.
     if (block && block.hash !== blockHash) throw new BlockNotServedError(blockNumber)
 

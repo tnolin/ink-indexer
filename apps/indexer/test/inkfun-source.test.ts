@@ -747,6 +747,7 @@ describe("migration into a Uniswap v4 pool", () => {
         chain: t.chain,
         pools: fresh,
         readDeadAt: B + 2n,
+        live: true,
       })
       const swap = batch.events[0]?.event
       if (swap?.type !== "launchpad.swap") throw new Error("expected a swap")
