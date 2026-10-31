@@ -396,9 +396,31 @@ describe("through the database", () => {
       const first = await t.ingest(B + 3n)
       expect(first.ath.length).toBeGreaterThan(0)
       const before = await rows(t.sql)
+      const top = first.ath.at(-1)!
+      expect(before.tokens[0]?.ath_market_cap).toBe(top.marketCap.toString())
+      expect(before.tokens[0]?.ath_block).toBe(top.block)
       const second = await t.ingest(B + 3n)
       expect(second.ath).toEqual([])
       expect(await rows(t.sql)).toEqual(before)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a span written after a later one does not move curve state back", async () => {
+    const t = await setup()
+    try {
+      inkfunLaunch(t.chain, { n: 1, block: B })
+      inkfunBuy(t.chain, { n: 1, block: B + 1n, sold: soldFor(10n ** 17n) })
+      inkfunBuy(t.chain, { n: 1, block: B + 6n, sold: soldFor(5n * 10n ** 17n) })
+      await t.ingest(B + 6n)
+      const later =
+        await t.sql`select progress_bps, curve_value::text, updated_block from indexer.curve_state`
+      await t.ingest(B + 1n)
+      expect(
+        await t.sql`select progress_bps, curve_value::text, updated_block from indexer.curve_state`,
+      ).toEqual(later)
+      expect(later[0]?.updated_block).toBe(B + 6n)
     } finally {
       await t.sql.end()
     }

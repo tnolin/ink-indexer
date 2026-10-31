@@ -65,6 +65,9 @@ describe("ipfsCid", () => {
     expect(ipfsCid("https://gw.example/ipfs/bafkreiabc")).toBeNull()
     expect(ipfsCid("data:application/json;base64,e30=")).toBeNull()
     expect(ipfsCid("")).toBeNull()
+    // Seven characters stand where "ipfs://" would be, so only the scheme check rejects these.
+    expect(ipfsCid("http://bafyabc")).toBeNull()
+    expect(ipfsCid("ipfs:/bafyabc")).toBeNull()
   })
 
   it("rejects an empty CID and paths that leave the CID", () => {

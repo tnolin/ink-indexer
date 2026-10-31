@@ -155,6 +155,28 @@ describe("readIpfsSettings", () => {
     expect(lines[0]?.fields?.variable).toBe("IPFS_GATEWAY")
   })
 
+  it("rejects an http origin even when it is otherwise bare", () => {
+    const { log, lines } = logger()
+    expect(readIpfsSettings({ IPFS_GATEWAY: "http://gw.example" }, log).gateway).toBe(
+      DEFAULT_IPFS_GATEWAY,
+    )
+    expect(lines).toHaveLength(1)
+  })
+
+  it("rejects an origin with a query, a fragment or credentials", () => {
+    for (const v of [
+      "https://gw.example/?a=1",
+      "https://gw.example?a=1",
+      "https://gw.example/#x",
+      "https://user:pw@gw.example",
+    ]) {
+      const { log, lines } = logger()
+      expect(readIpfsSettings({ IPFS_GATEWAY: v }, log).gateway, v).toBe(DEFAULT_IPFS_GATEWAY)
+      expect(lines, v).toHaveLength(1)
+      expect(JSON.stringify(lines)).not.toContain("pw@")
+    }
+  })
+
   it("rejects an origin with a path", () => {
     const { log, lines } = logger()
     expect(readIpfsSettings({ IPFS_GATEWAY: "https://gw.example/ipfs" }, log).gateway).toBe(

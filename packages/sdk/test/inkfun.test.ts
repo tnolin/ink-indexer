@@ -20,6 +20,7 @@ import {
   type InkfunCurve,
   type InkfunLog,
   inkfunBondEvent,
+  inkfunClosingSold,
   inkfunCurveValue,
   inkfunLaunchEvent,
   inkfunLaunchId,
@@ -200,6 +201,18 @@ describe("curve math", () => {
     expect(inkfunProgressBps(CURVE, sold)).toBe(10_000)
     // One wei short of the target the curve is still open.
     expect(inkfunProgressBps(CURVE, soldAt(CURVE.graduationTarget - 1n))).toBe(9_999)
+  })
+
+  it("progress is 10,000 bps when a curve sells out before its target is reached", () => {
+    const wide = {
+      virtualQuote: 1_400_000_000_000_000_000n,
+      virtualTokens: 2_000_000_000n * 10n ** 18n,
+      curveSupply: 800_000_000n * 10n ** 18n,
+      graduationTarget: 10_000_000_000_000_000_000n,
+    }
+    expect(inkfunClosingSold(wide)).toBeGreaterThan(wide.curveSupply)
+    expect(inkfunProgressBps(wide, wide.curveSupply - 1n)).toBeLessThan(10_000)
+    expect(inkfunProgressBps(wide, wide.curveSupply)).toBe(10_000)
   })
 
   it("progress is 0 for nothing sold", () => {
