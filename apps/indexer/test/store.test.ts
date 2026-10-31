@@ -249,10 +249,13 @@ describe("store", () => {
         (r) => `${r.kind}:${r.address}`,
       ),
     ).toEqual([
+      "tsunami:0x110aac8ee9cd4853fb2c12f4f73937996ecfa8cc",
       "native:0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
+      "tsunami:0x5dc5426a33c1d095b9fd0449ac16f6aaebeee8cc",
       "inkfun:0x735458d31dcf29dc204109430b1f7f96738568cc",
       `xstocks:${XHOOK_A}`,
       "native:0x893183da2411c7df81f103bfef09e4e46c326ac4",
+      "tsunami:0xba7286377d0369f566256770dbe2fc59d13128cc",
     ])
     expect(await sql`select type, block from indexer.events order by id`).toEqual([
       { type: "launchpad.launch", block: B },

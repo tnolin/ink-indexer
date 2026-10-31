@@ -23,6 +23,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "0014_nft_job_failures.sql",
     "0015_v4_pools.sql",
     "0016_inkfun.sql",
+    "0017_tsunami.sql",
   ])
   expect(await migrate(sql)).toEqual([])
   const tables = await sql<{ table_name: string }[]>`
@@ -189,4 +190,43 @@ it("seeds ath from the highest curve trade", async () => {
     ["900", 11n],
     [null, null],
   ])
+})
+
+const TSUNAMI_HOOKS = [
+  // Creation blocks of the three hooks Tsunami's Calamari pools use, from the explorer.
+  ["0x110aac8ee9cd4853fb2c12f4f73937996ecfa8cc", 54_686_019n],
+  ["0xba7286377d0369f566256770dbe2fc59d13128cc", 55_055_393n],
+  ["0x5dc5426a33c1d095b9fd0449ac16f6aaebeee8cc", 55_742_827n],
+] as const
+
+it("0017 seeds the three Tsunami hooks", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const rows =
+    await sql`select address, launchpad, kind, abi_family, quote_asset, quote_decimals, discovered_block
+    from indexer.hooks where launchpad = 'tsunami' order by discovered_block`
+  expect(rows).toEqual(
+    TSUNAMI_HOOKS.map(([address, discovered_block]) => ({
+      address,
+      launchpad: "tsunami",
+      kind: "tsunami",
+      abi_family: "tsunami",
+      quote_asset: "0x0000000000000000000000000000000000000000",
+      quote_decimals: 18,
+      discovered_block,
+    })),
+  )
+})
+
+it("a tsunami hook row is accepted and an unknown kind is still refused", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const hook = (address: string, kind: string) => sql`insert into indexer.hooks
+    (address, launchpad, kind, abi_family, quote_asset, quote_decimals, discovered_block)
+    values (${address}, 'tsunami', ${kind}, 'tsunami', ${"0x0000000000000000000000000000000000000000"}, 18, 1)`
+  await hook("0x00000000000000000000000000000000000000f2", "tsunami")
+  await expect(hook("0x00000000000000000000000000000000000000f3", "other")).rejects.toThrow()
+  expect(
+    await sql`select kind from indexer.hooks where address = '0x00000000000000000000000000000000000000f2'`,
+  ).toEqual([{ kind: "tsunami" }])
 })

@@ -1,16 +1,23 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
+  CALAMARI_POOL_MANAGER,
   DEAD_ADDRESS,
   decodeSwap,
   marketCap,
   NATIVE_QUOTE_ASSET,
+  quoteReserve,
+  SWAP_TOPIC,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
 import { type Address, type Hash, HttpRequestError, pad, toHex } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import { swapLog, transferLog } from "../../../packages/sdk/test/builders"
-import { loadV4Fixture } from "../../../packages/sdk/test/fixtures"
+import {
+  type CalamariFixtureName,
+  loadCalamariFixture,
+  loadV4Fixture,
+} from "../../../packages/sdk/test/fixtures"
 import { BlockNotServedError } from "../src/errors"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { type PoolEntry, PoolRegistry } from "../src/sources/pools"
@@ -393,6 +400,186 @@ describe("v4 source", () => {
     expect(batch.events.map((e) => e.event.type)).toEqual(["launchpad.swap"])
     expect(chain.getLogsCalls).toEqual([[B + 2n, B + 5n]])
   })
+})
+
+describe("v4 source in Calamari pools", () => {
+  const USDC = "0x2d270e6886d130d724215a266106e6832161eaed" as Address
+  const WNVDAX = "0xa8ddb5cd96b5222afe198316e9a57caa642850d5" as Address
+  const POOLS: Record<
+    CalamariFixtureName,
+    { token: Address; quote: Address; tokenIsCurrency0: boolean; quoteDecimals: number }
+  > = {
+    // The GM token is currency1 against native ETH (the zero address).
+    "calamari-swap-gm": {
+      token: "0x1d6a5f9e7f00f89b764262a776fcf27159a6a0cc",
+      quote: NATIVE_QUOTE_ASSET,
+      tokenIsCurrency0: false,
+      quoteDecimals: 18,
+    },
+    // USDC sorts below the token, so the token is currency1 and the quote has 6 decimals.
+    "calamari-swap-usdc": {
+      token: "0xb600d140dd47d92985304cb2fd061d70a8217bb4",
+      quote: USDC,
+      tokenIsCurrency0: false,
+      quoteDecimals: 6,
+    },
+    // The token sorts below its quote, so it is currency0.
+    "calamari-swap-wnvdax": {
+      token: "0x074ac2e3223b1ea149b8c0f5404b73612ad64179",
+      quote: WNVDAX,
+      tokenIsCurrency0: true,
+      quoteDecimals: 18,
+    },
+  }
+
+  /** The recorded transaction in a chain, with a registry holding the swap's pool on Calamari. */
+  function recorded(name: CalamariFixtureName, manager: Address = CALAMARI_POOL_MANAGER) {
+    const f = loadCalamariFixture(name)
+    const logs = f.logs.filter((l) => decodeSwap(l) !== null)
+    const decoded = decodeSwap(logs[0]!)!
+    const p = POOLS[name]
+    const { chain, pools, source, run } = setup(f.blockNumber + 10n, [
+      {
+        poolId: decoded.poolId,
+        poolManager: CALAMARI_POOL_MANAGER,
+        token: p.token,
+        launchId: pad(p.token, { size: 32 }),
+        launchpad: "tsunami",
+        quoteAsset: p.quote,
+        tokenIsCurrency0: p.tokenIsCurrency0,
+        createdBlock: f.blockNumber - 10n,
+      },
+    ])
+    for (const l of f.logs)
+      chain.add({ ...l, address: l.address === logs[0]!.address ? manager : l.address })
+    chain.senders.set(f.blockNumber, {
+      hash: chain.hashOf(f.blockNumber),
+      senders: new Map(Object.entries(f.senders) as [Hash, Address][]),
+    })
+    return { f, decoded, p, chain, pools, source, run: () => run(f.blockNumber, f.blockNumber) }
+  }
+
+  it("a Calamari swap in a registered Calamari pool is indexed", async () => {
+    const { f, decoded, p, run } = recorded("calamari-swap-gm")
+    const batch = await run()
+    expect(batch.events).toHaveLength(1)
+    expect(batch.events[0]?.event).toMatchObject({
+      type: "launchpad.swap",
+      launchpad: "tsunami",
+      token: p.token,
+      poolId: decoded.poolId,
+      poolManager: CALAMARI_POOL_MANAGER,
+      side: "buy",
+      trader: f.senders[f.txHash],
+      router: decoded.sender,
+      quoteAsset: NATIVE_QUOTE_ASSET,
+      // Recorded: 0.000495 ETH paid for 708.476731883691433815 GM.
+      quoteAmount: "495000000000000",
+      tokenAmount: "708476731883691433815",
+    })
+  })
+
+  it("a Calamari-shaped swap from the Uniswap PoolManager for a Calamari pool id is ignored (synthetic)", async () => {
+    // With a Uniswap pool registered too, the swap request covers the Uniswap PoolManager, so the
+    // re-addressed log is fetched and only the emitter check keeps it out.
+    const { f, chain, pools, source } = recorded("calamari-swap-gm", UNISWAP_V4_POOL_MANAGER)
+    pools.add(entry(1), SUPPLY)
+    const [swapRequest] = source.filters()
+    const batch = await source.process(
+      [chain.logsIn(f.blockNumber, f.blockNumber, swapRequest!), []],
+      { toBlock: f.blockNumber, live: false },
+    )
+    expect(batch.events).toEqual([])
+    expect(batch.trades).toEqual([])
+    expect(chain.getBlockSendersCalls).toBe(0)
+  })
+
+  it("a swap from another contract for a registered pool id is ignored (synthetic)", async () => {
+    const { f, chain, source } = recorded(
+      "calamari-swap-gm",
+      "0x00000000000000000000000000000000000000f9",
+    )
+    const batch = await source.process(
+      [chain.logsIn(f.blockNumber, f.blockNumber, { topics: [SWAP_TOPIC] }), []],
+      {
+        toBlock: f.blockNumber,
+        live: false,
+      },
+    )
+    expect(batch.events).toEqual([])
+  })
+
+  it("swaps in a Uniswap pool and a Calamari pool are both indexed in one span", async () => {
+    const { f, chain, pools, source } = recorded("calamari-swap-gm")
+    pools.add(entry(1), SUPPLY)
+    swap(chain, { block: B })
+    const batch = await source.process(
+      source.filters().map((flt) => (flt ? chain.logsIn(B - 100n, f.blockNumber, flt) : [])),
+      { toBlock: f.blockNumber, live: false },
+    )
+    expect(batch.events.map((e) => (e.event as { poolManager: string }).poolManager)).toEqual([
+      UNISWAP_V4_POOL_MANAGER,
+      CALAMARI_POOL_MANAGER,
+    ])
+  })
+
+  it("reads the swaps of a Calamari pool registered after the filters were built", async () => {
+    const { f, decoded, p, chain, pools } = recorded("calamari-swap-gm")
+    const entryOf = pools.byId(decoded.poolId)!
+    const late = setup(f.blockNumber + 10n, [])
+    for (const l of f.logs) late.chain.add(l)
+    late.chain.senders.set(f.blockNumber, chain.senders.get(f.blockNumber)!)
+    expect(late.source.filters()).toEqual([null, null])
+    late.pools.add({ ...entryOf, createdBlock: f.blockNumber - 1n }, SUPPLY)
+    const batch = await late.source.process([[], []], { toBlock: f.blockNumber, live: false })
+    expect(batch.events).toHaveLength(1)
+    expect(batch.events[0]?.event).toMatchObject({
+      token: p.token,
+      poolManager: CALAMARI_POOL_MANAGER,
+    })
+  })
+
+  it("the swap filter lists both PoolManagers in one request", () => {
+    const { pools, source } = recorded("calamari-swap-gm")
+    expect(source.filters()[0]).toMatchObject({ address: [CALAMARI_POOL_MANAGER] })
+    pools.add(entry(1), SUPPLY)
+    const swapRequests = source.filters().filter((flt) => flt?.topics[0] === SWAP_TOPIC)
+    expect(swapRequests).toHaveLength(1)
+    expect([swapRequests[0]?.address].flat().sort()).toEqual(
+      [UNISWAP_V4_POOL_MANAGER, CALAMARI_POOL_MANAGER].sort(),
+    )
+  })
+
+  it.each(["calamari-swap-usdc", "calamari-swap-wnvdax"] as const)(
+    "%s: market cap and liquidity are in the quote's base units, from the pool's price",
+    async (name) => {
+      const { decoded, p, run } = recorded(name)
+      const batch = await run()
+      const ev = batch.events[0]!.event as {
+        marketCap: string
+        quoteLiquidity: string
+        quoteAmount: string
+        tokenAmount: string
+        side: string
+        supply: string
+        price: string
+      }
+      expect(ev.supply).toBe(String(SUPPLY))
+      expect(ev.quoteLiquidity).toBe(
+        quoteReserve(decoded.liquidity, decoded.sqrtPriceX96, p.tokenIsCurrency0).toString(),
+      )
+      // The swap's average price is `supply × quote / tokens`. The pool price after a buy is above
+      // it and after a sell below it; a wrong decimal scale would put it orders of magnitude away.
+      const implied = (SUPPLY * BigInt(ev.quoteAmount)) / BigInt(ev.tokenAmount)
+      const cap = BigInt(ev.marketCap)
+      expect(ev.side).toBe(name === "calamari-swap-usdc" ? "sell" : "buy")
+      expect(ev.side === "buy" ? cap >= implied : cap <= implied).toBe(true)
+      expect(cap * 100n, `${p.quoteDecimals}-decimal cap ${cap} vs ${implied}`).toBeGreaterThan(
+        implied,
+      )
+      expect(cap).toBeLessThan(implied * 100n)
+    },
+  )
 })
 
 describe("v4 source through the database", () => {

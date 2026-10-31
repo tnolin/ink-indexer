@@ -1,6 +1,7 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
+  CALAMARI_POOL_MANAGER,
   CHIMERA_FACTORY,
   type ChainLog,
   DEAD_ADDRESS,
@@ -9,6 +10,7 @@ import {
   NFT_TOPICS,
   SEADROP_V1,
   SEAPORT_1_6,
+  SWAP_TOPIC,
   UNISWAP_V4_POOL_MANAGER,
   ZERO_TOPIC,
 } from "@ink-indexer/sdk"
@@ -55,6 +57,9 @@ const A1 = "0x00000000000000000000000000000000000000a1"
 /** A token with a registered v4 pool, and that pool's id. */
 const V4_TOKEN = "0x00000000000000000000000000000000000000a2"
 const V4_POOL = `0x${"a2".repeat(32)}` as Hash
+/** A token with a registered Calamari pool, and that pool's id. */
+const CALAMARI_TOKEN = "0x00000000000000000000000000000000000000a7"
+const CALAMARI_POOL = `0x${"a7".repeat(32)}` as Hash
 const FUN_TOKEN = "0x00000000000000000000000000000000000000a5" as const
 const FUN_CURVE = "0x00000000000000000000000000000000000000a6" as const
 const word = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash
@@ -134,6 +139,23 @@ function buildPool(): { logs: ChainLog[]; extra: ChainLog[] } {
         blockHash: word(Number(at(12))),
         transactionHash: word(0xbad101),
         logIndex: 9_101,
+      },
+    ),
+    swapLog(
+      {
+        poolId: CALAMARI_POOL,
+        sender: A1,
+        amount0: -1n,
+        amount1: 1n,
+        sqrtPriceX96: 1n << 96n,
+        liquidity: 1n,
+      },
+      {
+        address: CALAMARI_POOL_MANAGER,
+        blockNumber: at(12),
+        blockHash: word(Number(at(12))),
+        transactionHash: word(0xbad103),
+        logIndex: 9_103,
       },
     ),
     transferLog(
@@ -255,6 +277,19 @@ function sourcesFor(chain: Chain, sql: Sql) {
     },
     10n ** 27n,
   )
+  pools.add(
+    {
+      poolId: CALAMARI_POOL,
+      poolManager: CALAMARI_POOL_MANAGER,
+      token: CALAMARI_TOKEN,
+      launchId: CALAMARI_POOL,
+      launchpad: "tsunami",
+      quoteAsset: NATIVE_QUOTE_ASSET,
+      tokenIsCurrency0: false,
+      createdBlock: from,
+    },
+    10n ** 27n,
+  )
   return [
     inkypumpSource({ sql, chain, pools, logger: quiet }),
     inkfunSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
@@ -316,6 +351,21 @@ describe("merged eth_getLogs requests, per-filter path against merged path", () 
       to,
     )
     expect(chain.asked).toHaveLength(7)
+  })
+
+  it("the swap filter lists both PoolManagers in one request", async () => {
+    const chain = new PoolChain(pool)
+    await readLogs(
+      chain,
+      sources.map((s) => s.filters()),
+      from,
+      to,
+    )
+    const swaps = chain.asked.filter((f) => f.topics[0] === SWAP_TOPIC)
+    expect(swaps).toHaveLength(1)
+    expect([swaps[0]?.address].flat().sort()).toEqual(
+      [UNISWAP_V4_POOL_MANAGER, CALAMARI_POOL_MANAGER].sort(),
+    )
   })
 })
 

@@ -169,7 +169,9 @@ describe("the live tick with INDEXER_SOURCES", () => {
   it("inkypump alone reads its own and the two v4 filters and no NFT filter, in 3 requests", async () => {
     const asked = await liveFilters({ INDEXER_SOURCES: "inkypump" })
     expect(asked).toHaveLength(3)
-    expect(asked.filter((f) => f.address === UNISWAP_V4_POOL_MANAGER)).toHaveLength(1)
+    expect(
+      asked.filter((f) => JSON.stringify(f.address) === JSON.stringify([UNISWAP_V4_POOL_MANAGER])),
+    ).toHaveLength(1)
     expect(asked.filter((f) => JSON.stringify(f.address) === JSON.stringify([TOKEN]))).toHaveLength(
       1,
     )

@@ -9,7 +9,6 @@ import {
   swapEvent,
   swapLegs,
   TRANSFER_TOPIC,
-  UNISWAP_V4_POOL_MANAGER,
   type V4Swap,
 } from "@ink-indexer/sdk"
 import { type Address, type Hash, pad } from "viem"
@@ -43,10 +42,15 @@ type Kept =
 
 const DEAD_TOPIC = pad(DEAD_ADDRESS)
 
-const swapFilter = (poolIds: Hash[]): LogFilter => ({
-  address: UNISWAP_V4_POOL_MANAGER,
+/** One request for the swaps of `poolIds`, whichever PoolManager holds each pool. */
+const swapFilter = (managers: Address[], poolIds: Hash[]): LogFilter => ({
+  address: managers,
   topics: [SWAP_TOPIC, poolIds],
 })
+
+const managersOf = (pools: PoolRegistry, poolIds: Hash[]): Address[] => [
+  ...new Set(poolIds.map((id) => pools.byId(id)!.poolManager)),
+]
 
 const byPosition = (a: Kept, b: Kept) =>
   a.log.blockNumber === b.log.blockNumber
@@ -56,7 +60,7 @@ const byPosition = (a: Kept, b: Kept) =>
       : 1
 
 /**
- * Swaps in the Uniswap v4 pools of the shared registry, and transfers of their tokens to the dead
+ * Swaps in the Uniswap v4 pools of the shared registry (in Uniswap's or Calamari's PoolManager), and transfers of their tokens to the dead
  * address. Each swap becomes a `launchpad.swap` event and a pool trade, valued at the pool price
  * on the supply outside the dead address. The InkyPump source owns the registry's lifecycle: it
  * registers pools, rolls back pool trades and ath, and reloads the registry.
@@ -81,7 +85,9 @@ export function v4Source(deps: {
       // shortcut: no request is made while the registry is empty, so on a fresh database the swaps of the first bonded pool that fall in its bond's span are missed; a seeded database is unaffected. Always emit the filters once a pool can appear in the span to close the gap.
       // shortcut: the poolId list grows with every bonded token and is sent on every request. Split it into several requests if an endpoint rejects the list's length.
       return [
-        poolIds.length > 0 ? pick(only, "v4-swaps", swapFilter(poolIds)) : null,
+        poolIds.length > 0
+          ? pick(only, "v4-swaps", swapFilter(managersOf(pools, poolIds), poolIds))
+          : null,
         tokens.length > 0
           ? pick(only, "v4-swaps", {
               address: tokens,
@@ -125,7 +131,8 @@ export function v4Source(deps: {
       .map((id) => pools.byId(id)!)
       .filter((p) => !seen.has(p.poolId) && p.createdBlock <= toBlock)
     if (fresh.length === 0) return []
-    const filter = swapFilter(fresh.map((p) => p.poolId))
+    const freshIds = fresh.map((p) => p.poolId)
+    const filter = swapFilter(managersOf(pools, freshIds), freshIds)
     const logs: ChainLog[] = []
     let from = fresh.reduce((m, p) => (p.createdBlock < m ? p.createdBlock : m), toBlock)
     while (from <= toBlock) {
@@ -191,9 +198,10 @@ export async function processLogs(
 
   const kept: Kept[] = []
   for (const log of swapLogs) {
-    if (log.address.toLowerCase() !== UNISWAP_V4_POOL_MANAGER) continue
     const swap = decodeSwap(log)
     const pool = swap && pools.byId(swap.poolId)
+    // A pool's swaps count only when its own PoolManager emits them.
+    if (pool && log.address.toLowerCase() !== pool.poolManager) continue
     // A swap that moves no token is neither a buy nor a sell.
     if (swap && pool && swapLegs(swap, pool.tokenIsCurrency0).tokenAmount > 0n)
       kept.push({ kind: "swap", log, swap, pool })
