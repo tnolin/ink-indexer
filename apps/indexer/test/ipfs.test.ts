@@ -111,7 +111,7 @@ describe("fetchIpfsJson", () => {
   })
 
   it("does not follow a redirect, and does not retry it", async () => {
-    const seen: (RequestRedirect | undefined)[] = []
+    const seen: (string | undefined)[] = []
     let n = 0
     const fake = (async (_url: string, init?: RequestInit) => {
       n += 1
