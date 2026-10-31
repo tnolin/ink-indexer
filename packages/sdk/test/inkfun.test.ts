@@ -124,6 +124,12 @@ describe("decodeInkfunLog", () => {
     })
   })
 
+  it("returns null for a log with a known topic0 and a different layout", () => {
+    for (const topic0 of Object.values(INKFUN_TOPICS)) {
+      expect(decodeInkfunLog({ topics: [topic0], data: "0x1234" })).toBeNull()
+    }
+  })
+
   it("ignores a topic0 it does not know", () => {
     expect(decodeInkfunLog({ topics: [pad("0x1")], data: "0x" })).toBeNull()
     expect(decodeInkfunLog({ topics: [], data: "0x" })).toBeNull()

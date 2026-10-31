@@ -43,17 +43,26 @@ export type InkfunMigrated = {
 }
 export type InkfunLog = InkfunLaunchCreated | InkfunBought | InkfunSold | InkfunMigrated
 
+const decodeInkfun = (log: { topics: readonly Hex[]; data: Hex }) =>
+  decodeEventLog({
+    abi: inkfunEventsAbi,
+    topics: log.topics as [Hex, ...Hex[]],
+    data: log.data,
+  })
+
 const lower = (a: string) => a.toLowerCase() as Address
 
 /** Decodes one ink.fun log. Returns null for a topic0 it doesn't know. Does not check the emitter. */
 export function decodeInkfunLog(log: { topics: readonly Hex[]; data: Hex }): InkfunLog | null {
   const topic0 = log.topics[0]
   if (topic0 === undefined || !INKFUN_LOG_TOPICS.includes(topic0)) return null
-  const ev = decodeEventLog({
-    abi: inkfunEventsAbi,
-    topics: log.topics as [Hex, ...Hex[]],
-    data: log.data,
-  })
+  let ev: ReturnType<typeof decodeInkfun>
+  try {
+    ev = decodeInkfun(log)
+  } catch {
+    // A contract can emit the same topic0 with another layout.
+    return null
+  }
   switch (ev.eventName) {
     case "LaunchCreated":
       return {
