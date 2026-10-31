@@ -326,6 +326,10 @@ describe("Tsunami event builders", () => {
   it("trade builder: a buy's quoteAmount is the gross amount and its trader is the one passed in", () => {
     const { d, f } = one("tsunami-usdc-buy", "bought")
     const c = f.curves[0]!
+    // The raise target of that token's own launch, in USDC base units (10,429.419 USDC).
+    const launch = one("tsunami-launch-usdc-buyer", "launched").d
+    expect(launch.curve).toBe(c.curve)
+    expect(launch.targetRaise).toBe(10_429_419_000n)
     const trader = "0x00000000000000000000000000000000000000aa" as Address
     const ev = tsunamiTradeEvent(
       d,
@@ -333,7 +337,7 @@ describe("Tsunami event builders", () => {
         token: c.token,
         launchId: tsunamiLaunchId(c.curve),
         quote: "0x2d270e6886d130d724215a266106e6832161eaed",
-        targetRaise: 12_000_000n,
+        targetRaise: launch.targetRaise,
         supply: c.totalSupply,
         trader,
         progressBpsBefore: 0,
@@ -346,11 +350,36 @@ describe("Tsunami event builders", () => {
     expect(ev.quoteAmount).toBe(d.amount.toString())
     expect(ev.tokenAmount).toBe(d.amountOut.toString())
     expect(ev.curveValue).toBe(d.state.realQuote.toString())
-    expect(ev.target).toBe("12000000")
-    expect(ev.progressBpsAfter).toBe(ev.soldBps)
+    expect(ev.target).toBe("10429419000")
+    // 1.206419 USDC raised of 10,429.419 is 0.0116%: one basis point after flooring.
+    expect(ev.curveValue).toBe("1206419")
+    expect(ev.progressBpsAfter).toBe(1)
+    expect(ev.soldBps).toBe(1)
     expect(ev.price).toBe(tsunamiPrice(d.state).toString())
     expect(ev.marketCap).toBe(tsunamiMarketCap(d.state, c.totalSupply).toString())
     expect(ev.quoteAsset).toBe("0x2d270e6886d130d724215a266106e6832161eaed")
+  })
+
+  it("trade builder: the GM closing buy reports 10000 bps", () => {
+    const { d, f } = one("tsunami-graduation-gm", "bought")
+    const c = f.curves[0]!
+    const ev = tsunamiTradeEvent(
+      d,
+      {
+        token: c.token,
+        launchId: tsunamiLaunchId(c.curve),
+        quote: ETH,
+        targetRaise: 4_200_000_000_000_000_000n,
+        supply: c.totalSupply,
+        trader: f.sender,
+        progressBpsBefore: 9_000,
+        athMarketCap: 0n,
+      },
+      META,
+    )
+    expect(ev.progressBpsAfter).toBe(10_000)
+    expect(ev.soldBps).toBe(10_000)
+    expect(ev.progressBpsBefore).toBe(9_000)
   })
 
   it("trade builder: a sell's tokenAmount is the tokens in and quoteAmount the net quote out", () => {
