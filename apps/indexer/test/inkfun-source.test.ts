@@ -198,6 +198,27 @@ describe("launches", () => {
     }
   })
 
+  it("fetches at most four metadata documents at a time", async () => {
+    let active = 0
+    let peak = 0
+    const fake = (async () => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise((r) => setTimeout(r, 15))
+      active -= 1
+      return Response.json({})
+    }) as unknown as Fetch
+    const t = await setup({ fetch: fake })
+    try {
+      for (let n = 1; n <= 10; n++) inkfunLaunch(t.chain, { n, block: B })
+      const batch = await t.batchOf(B)
+      expect(batch.tokens).toHaveLength(10)
+      expect(peak).toBe(4)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("the seed buy in the launch transaction is a trade by the creator", async () => {
     const f = loadInkfunFixture("inkfun-launch-seed-buy")
     const t = await setup()

@@ -37,6 +37,8 @@ import { type EventRow, pick, type Source } from "../source"
 import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
 
 const WHOLE_TOKEN = 10n ** 18n
+/** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */
+const METADATA_CONCURRENCY = 4
 
 export type KnownCurve = {
   token: Address
@@ -159,16 +161,20 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
     launches: { token: Address; curve: Address; state: InkfunLaunchState }[],
   ): Promise<Map<Address, LaunchMetadataFields | null>> {
     const out = new Map<Address, LaunchMetadataFields | null>()
-    await Promise.all(
-      launches.map(async ({ token, curve, state }) => {
-        if (state.metadataURI === null) return out.set(curve, null)
-        const json = await fetchIpfsJson(state.metadataURI, {
-          ...deps.ipfs,
-          log: logger,
-          token,
-        })
+    const queue = [...launches]
+    const worker = async () => {
+      for (let next = queue.shift(); next; next = queue.shift()) {
+        const { token, curve, state } = next
+        if (state.metadataURI === null) {
+          out.set(curve, null)
+          continue
+        }
+        const json = await fetchIpfsJson(state.metadataURI, { ...deps.ipfs, log: logger, token })
         out.set(curve, json === null ? null : parseInkfunMetadata(json, deps.ipfs.gateway))
-      }),
+      }
+    }
+    await Promise.all(
+      Array.from({ length: Math.min(METADATA_CONCURRENCY, launches.length) }, worker),
     )
     return out
   }
@@ -272,6 +278,7 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
           known.progressBps = event.progressBpsAfter
           batch.trades.push(tradeRow(log, known.token, event, blockNumber))
           batch.events.push({ event, block: blockNumber, blockHash })
+          // shortcut: curve_state.market_cap is priced on the supply held in memory. A span re-run from a fresh process, after the token migrated, prices its pre-migration trades on the post-burn supply and overwrites the same-block row with it. Read the supply at each trade's block, or skip curve-state writes for bonded tokens, if a re-run over a migrated token matters.
           curveRows.set(known.token, {
             token: known.token,
             progressBps: event.progressBpsAfter,
