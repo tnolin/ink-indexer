@@ -27,8 +27,8 @@ import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
+import { servedAt } from "../senders"
 import { type EventRow, pick, type Source } from "../source"
-import { servedAt } from "../v4/index"
 import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
 
 /** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */

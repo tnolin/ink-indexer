@@ -15,9 +15,10 @@ import { type Address, type Hash, pad } from "viem"
 import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
-import { isTipRefusal, type LogFilter } from "../../rpc"
+import type { LogFilter } from "../../rpc"
 import type { AthRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
+import { servedAt } from "../senders"
 import { type EventRow, pick, type Source } from "../source"
 import { deadAbove, writeDead, writeRows } from "./store"
 
@@ -144,20 +145,6 @@ export function v4Source(deps: {
     }
     for (const p of fresh) seen.add(p.poolId)
     return logs
-  }
-}
-
-/**
- * A read at `block` that the endpoint answered with an RPC error, such as "header not found" from a
- * load-balanced node that does not have the block yet, fails the span as not served so the tick
- * retries it. Transport errors pass through unchanged.
- */
-export async function servedAt<T>(block: bigint, read: () => Promise<T>): Promise<T> {
-  try {
-    return await read()
-  } catch (err) {
-    if (isTipRefusal(err)) throw new BlockNotServedError(block)
-    throw err
   }
 }
 

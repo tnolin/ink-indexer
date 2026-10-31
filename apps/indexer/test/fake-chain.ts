@@ -51,6 +51,18 @@ export class FakeChain implements Chain {
   /** Per `token:holder`, the balance; a function gives it per block. A pair with no entry reads 0. */
   balances = new Map<string, bigint | ((block: bigint) => bigint)>()
   getBlockSendersCalls = 0
+  /** When set, a getBlockSenders call waits this many ms before answering. */
+  sendersDelayMs: ((n: bigint) => number) | undefined
+  /** Per block, an error getBlockSenders throws instead of answering. */
+  sendersErrors = new Map<bigint, Error>()
+  /** The block of every getBlockSenders call, in call order. */
+  sendersOrder: bigint[] = []
+  sendersInFlight = 0
+  maxSendersInFlight = 0
+  /** When set, a readTotalSupplies call at a block waits this many ms before answering. */
+  supplyDelayMs: ((block: bigint) => number) | undefined
+  supplyInFlight = 0
+  maxSupplyInFlight = 0
   readBalancesCalls = 0
   /** The block of every readBalances call. */
   balanceReads: bigint[] = []
@@ -126,6 +138,17 @@ export class FakeChain implements Chain {
 
   async getBlockSenders(n: bigint) {
     this.getBlockSendersCalls++
+    this.sendersOrder.push(n)
+    this.sendersInFlight++
+    this.maxSendersInFlight = Math.max(this.maxSendersInFlight, this.sendersInFlight)
+    try {
+      const wait = this.sendersDelayMs?.(n)
+      if (wait !== undefined) await new Promise((r) => setTimeout(r, wait))
+    } finally {
+      this.sendersInFlight--
+    }
+    const failure = this.sendersErrors.get(n)
+    if (failure) throw failure
     const s = this.senders.get(n)
     return s ? { hash: s.hash, timestamp: s.timestamp ?? Number(n), senders: s.senders } : null
   }
@@ -187,6 +210,16 @@ export class FakeChain implements Chain {
 
   async readTotalSupplies(tokens: Address[], block?: bigint) {
     if (block !== undefined) this.supplyReads.push({ tokens, block })
+    const wait = block === undefined ? undefined : this.supplyDelayMs?.(block)
+    if (wait !== undefined) {
+      this.supplyInFlight++
+      this.maxSupplyInFlight = Math.max(this.maxSupplyInFlight, this.supplyInFlight)
+      try {
+        await new Promise((r) => setTimeout(r, wait))
+      } finally {
+        this.supplyInFlight--
+      }
+    }
     return tokens.map((t) => this.supplies.get(t) ?? 10n ** 27n)
   }
 
