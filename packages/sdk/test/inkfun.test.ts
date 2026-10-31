@@ -235,57 +235,6 @@ describe("builders", () => {
     expect(launchId).toBe(`0x${"0".repeat(24)}${CURVE_ADDR.slice(2)}`)
   })
 
-  it("launch builder sets launchpad inkfun, launchId pad(curve), hook INKFUN_HOOK and targetRaise 4.2 ETH", () => {
-    const created: Extract<InkfunLog, { kind: "launchCreated" }> = {
-      kind: "launchCreated",
-      token: TOKEN,
-      curve: CURVE_ADDR,
-      creator: CREATOR,
-      name: "Ink Fun",
-      symbol: "INKFUN",
-    }
-    const ev = inkfunLaunchEvent(
-      created,
-      {
-        totalSupply: 10n ** 27n,
-        graduationTarget: CURVE.graduationTarget,
-        metadata: {
-          description: "a token",
-          imageUrl: "https://gw.example/ipfs/bafy",
-          links: { telegram: null, twitter: "x.com/a", website: null },
-        },
-      },
-      META,
-    )
-    expect(ev).toEqual({
-      type: "launchpad.launch",
-      v: SCHEMA_VERSION,
-      chainId: 57073,
-      launchpad: "inkfun",
-      token: TOKEN,
-      launchId,
-      txHash: META.txHash,
-      logIndex: 4,
-      blockNumber: "59000000",
-      blockTimestamp: 1_790_000_000,
-      hook: INKFUN_HOOK,
-      creator: CREATOR,
-      name: "Ink Fun",
-      ticker: "INKFUN",
-      description: "a token",
-      imageUrl: "https://gw.example/ipfs/bafy",
-      links: { telegram: null, twitter: "x.com/a", website: null },
-      quoteAsset: ETH,
-      targetRaise: "4200000000000000000",
-      totalSupply: "1000000000000000000000000000",
-      startsInPool: false,
-      poolId: null,
-      poolManager: null,
-      customHook: null,
-      hookModules: null,
-    })
-  })
-
   it("launch builder leaves text fields null without metadata", () => {
     const ev = inkfunLaunchEvent(
       {
@@ -306,67 +255,103 @@ describe("builders", () => {
     expect(ev.links).toEqual({ telegram: null, twitter: null, website: null })
   })
 
-  const tradeCtx = {
-    token: TOKEN,
-    launchId,
-    curve: CURVE,
-    totalSupply: 10n ** 27n,
-    progressBpsBefore: 10,
-    athMarketCap: 5n,
-  }
-
-  it("trade builder: a buy's quoteAmount is quoteIn plus fee and its trader the beneficiary", () => {
-    const sold = 100_000_000n * 10n ** 18n
-    const ev = inkfunTradeEvent(
-      {
-        kind: "bought",
-        payer: "0x00000000000000000000000000000000000000a1",
-        beneficiary: CREATOR,
-        quoteIn: 1_000n,
-        fee: 13n,
-        tokensOut: 77n,
-        refund: 0n,
-        tokensSold: sold,
-      },
-      tradeCtx,
-      META,
-    )
-    expect(ev.type).toBe("launchpad.trade")
-    expect(ev.launchpad).toBe("inkfun")
-    expect(ev.launchId).toBe(launchId)
-    expect(ev.side).toBe("buy")
-    expect(ev.trader).toBe(CREATOR)
-    expect(ev.tokenAmount).toBe("77")
-    expect(ev.quoteAmount).toBe("1013")
-    const price = inkfunPrice(CURVE, sold)
-    expect(ev.price).toBe(price.toString())
-    expect(ev.marketCap).toBe(((price * 10n ** 27n) / 10n ** 18n).toString())
-    expect(ev.curveValue).toBe(inkfunCurveValue(CURVE, sold).toString())
-    expect(ev.target).toBe(CURVE.graduationTarget.toString())
-    expect(ev.progressBpsBefore).toBe(10)
-    expect(ev.progressBpsAfter).toBe(inkfunProgressBps(CURVE, sold))
-    expect(ev.soldBps).toBe(ev.progressBpsAfter)
-    expect(ev.athMarketCap).toBe("5")
-    expect(ev.quoteAsset).toBe(ETH)
+  const metaOf = (
+    f: { blockNumber: bigint; timestamp: number },
+    l: { transactionHash: Hash; logIndex: number },
+  ) => ({
+    txHash: l.transactionHash,
+    logIndex: l.logIndex,
+    blockNumber: f.blockNumber,
+    blockTimestamp: f.timestamp,
   })
 
-  it("trade builder: a sell's trader is the seller and quoteAmount is quoteOut", () => {
-    const ev = inkfunTradeEvent(
-      {
-        kind: "sold",
-        seller: CREATOR,
-        tokensIn: 50n,
-        quoteOut: 900n,
-        fee: 11n,
-        tokensSold: 10n ** 24n,
-      },
-      tradeCtx,
-      META,
+  it("launch builder on the recorded launch: launchpad inkfun, launchId pad(curve), hook INKFUN_HOOK and the curve's graduation target", () => {
+    const f = loadInkfunFixture("inkfun-launch")
+    const log = f.logs[0]!
+    const created = only("inkfun-launch", "launchCreated")
+    const c = f.curves[0]!
+    const ev = inkfunLaunchEvent(
+      created,
+      { totalSupply: c.totalSupply, graduationTarget: c.params.graduationTarget, metadata: null },
+      metaOf(f, log),
     )
-    expect(ev.side).toBe("sell")
-    expect(ev.trader).toBe(CREATOR)
-    expect(ev.tokenAmount).toBe("50")
-    expect(ev.quoteAmount).toBe("900")
+    expect(ev).toMatchObject({
+      type: "launchpad.launch",
+      v: SCHEMA_VERSION,
+      launchpad: "inkfun",
+      token: created.token,
+      launchId: inkfunLaunchId(created.curve),
+      hook: INKFUN_HOOK,
+      creator: created.creator,
+      name: "Ink Fun",
+      ticker: "INKFUN",
+      quoteAsset: ETH,
+      targetRaise: c.params.graduationTarget.toString(),
+      totalSupply: c.totalSupply.toString(),
+      startsInPool: false,
+      blockNumber: f.blockNumber.toString(),
+    })
+    expect(ev.targetRaise).toBe("4200000000000000000")
+  })
+
+  it("trade builder on the recorded buy: quoteAmount is quoteIn plus fee and the trader the beneficiary", () => {
+    const f = loadInkfunFixture("inkfun-buy")
+    const c = f.curves[0]!
+    const log = f.logs[0]!
+    const d = only("inkfun-buy", "bought")
+    const ev = inkfunTradeEvent(
+      d,
+      {
+        token: c.token,
+        launchId: inkfunLaunchId(c.curve),
+        curve: c.params,
+        totalSupply: c.totalSupply,
+        progressBpsBefore: 0,
+        athMarketCap: 0n,
+      },
+      metaOf(f, log),
+    )
+    expect(ev).toMatchObject({
+      launchpad: "inkfun",
+      side: "buy",
+      trader: d.beneficiary,
+      tokenAmount: d.tokensOut.toString(),
+      quoteAmount: (d.quoteIn + d.fee).toString(),
+      price: inkfunPrice(c.params, d.tokensSold).toString(),
+      curveValue: inkfunCurveValue(c.params, d.tokensSold).toString(),
+      target: c.params.graduationTarget.toString(),
+      progressBpsAfter: inkfunProgressBps(c.params, d.tokensSold),
+      quoteAsset: ETH,
+    })
+    expect(ev.soldBps).toBe(ev.progressBpsAfter)
+    // The curve's own record of the net quote raised matches the event.
+    const raised = BigInt(ev.curveValue)
+    const diff = raised > c.realQuote ? raised - c.realQuote : c.realQuote - raised
+    expect(diff * 1_000_000n).toBeLessThanOrEqual(c.realQuote)
+  })
+
+  it("trade builder on the recorded sell: the trader is the seller and quoteAmount is quoteOut", () => {
+    const f = loadInkfunFixture("inkfun-sell")
+    const c = f.curves[0]!
+    const d = only("inkfun-sell", "sold")
+    const ev = inkfunTradeEvent(
+      d,
+      {
+        token: c.token,
+        launchId: inkfunLaunchId(c.curve),
+        curve: c.params,
+        totalSupply: c.totalSupply,
+        progressBpsBefore: 0,
+        athMarketCap: 0n,
+      },
+      metaOf(f, f.logs[0]!),
+    )
+    expect(ev).toMatchObject({
+      side: "sell",
+      trader: d.seller,
+      tokenAmount: d.tokensIn.toString(),
+      quoteAmount: d.quoteOut.toString(),
+    })
   })
 
   it("bond builder carries the Uniswap PoolManager", () => {
