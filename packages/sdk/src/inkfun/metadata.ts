@@ -6,7 +6,7 @@ export type LaunchMetadataFields = {
 }
 
 const IPFS_PREFIX = "ipfs://"
-const CID_AND_PATH = /^[A-Za-z0-9]+(\/[A-Za-z0-9._~%-]+)*$/
+const CID_AND_PATH = /^[A-Za-z0-9]+(\/[A-Za-z0-9._~-]+)*$/
 
 /** The CID and path of an `ipfs://<cid>[/path]` URI. Null for any other scheme or a malformed URI. */
 export function ipfsCid(uri: string): string | null {

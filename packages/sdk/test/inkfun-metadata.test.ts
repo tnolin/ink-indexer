@@ -72,5 +72,7 @@ describe("ipfsCid", () => {
     expect(ipfsCid("ipfs://bafy/../x")).toBeNull()
     expect(ipfsCid("ipfs://bafy?x=1")).toBeNull()
     expect(ipfsCid("ipfs://bafy abc")).toBeNull()
+    expect(ipfsCid("ipfs://bafy/%2e%2e/%2e%2e/x")).toBeNull()
+    expect(ipfsCid("ipfs://bafy/%2E/x")).toBeNull()
   })
 })
