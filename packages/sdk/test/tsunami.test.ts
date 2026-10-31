@@ -284,6 +284,9 @@ describe("Tsunami curve math", () => {
     const supply = f.curves[0]!.totalSupply
     const cap = tsunamiMarketCap(d.state, supply)
     // ~3,682 USDC of virtual quote: the cap is a few thousand USDC in base units, not 1e-9 of one.
+    // The curve's own on-chain state at that block, in USDC base units: 1.206419 USDC raised.
+    expect(d.state).toEqual(f.curves[0]?.state)
+    expect(d.state.realQuote).toBe(1_206_419n)
     expect(d.state.virtualQuote).toBe(3_682_282_488n)
     expect(cap).toBe((d.state.virtualQuote * supply) / d.state.virtualBase)
     expect(cap).toBeGreaterThan(d.state.virtualQuote / 2n)
@@ -294,6 +297,9 @@ describe("Tsunami curve math", () => {
     const { d, f } = one("tsunami-kbtc-buy", "bought")
     const supply = f.curves[0]!.totalSupply
     const cap = tsunamiMarketCap(d.state, supply)
+    // The curve's own on-chain state at that block, in kBTC base units: 57e-8 kBTC raised.
+    expect(d.state).toEqual(f.curves[0]?.state)
+    expect(d.state.realQuote).toBe(57n)
     expect(d.state.virtualQuote).toBe(4_794_649n)
     expect(cap).toBeGreaterThan(d.state.virtualQuote / 2n)
     expect(cap).toBeLessThan(d.state.virtualQuote)

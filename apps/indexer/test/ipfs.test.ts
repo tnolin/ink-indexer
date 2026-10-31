@@ -1,3 +1,4 @@
+import { parseTsunamiMetadata } from "@ink-indexer/sdk"
 import { describe, expect, it } from "vitest"
 import { DEFAULT_IPFS_GATEWAY, DEFAULT_TSUNAMI_IPFS_GATEWAY, fetchIpfsJson } from "../src/ipfs"
 import type { Level } from "../src/log"
@@ -113,12 +114,14 @@ describe("fetchIpfsJson", () => {
     expect(calls).toEqual([])
   })
 
-  it("a deeply nested body is a failure that does not throw", async () => {
+  it("a deeply nested body is parsed without throwing, and nothing reads into it", async () => {
+    const depth = 30_000
     const fake = (async () =>
-      new Response(`${"[".repeat(30_000)}${"]".repeat(30_000)}`)) as unknown as typeof fetch
-    await expect(
-      fetchIpfsJson(URI, { gateway: GATEWAY, fetch: fake, sleep: noSleep }),
-    ).resolves.toSatisfy((v) => v === null || Array.isArray(v))
+      new Response(`${"[".repeat(depth)}${"]".repeat(depth)}`)) as unknown as typeof fetch
+    const out = await fetchIpfsJson(URI, { gateway: GATEWAY, fetch: fake, sleep: noSleep })
+    // A JSON array of depth 30,000: V8 parses it, and it is not an object, so no launchpad keeps it.
+    expect(Array.isArray(out)).toBe(true)
+    expect(parseTsunamiMetadata(out, GATEWAY)).toBeNull()
   })
 
   it("retries a timeout and gives up after three attempts", async () => {
