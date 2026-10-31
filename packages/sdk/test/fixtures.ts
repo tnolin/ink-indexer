@@ -61,6 +61,45 @@ export function loadV4Fixture(name: V4FixtureName): V4Fixture {
   return readFixtureJson(name)
 }
 
+/** Transactions recorded with `capture-fixture.ts --topics inkfun`. */
+export const INKFUN_FIXTURES = [
+  "inkfun-launch",
+  "inkfun-launch-seed-buy",
+  "inkfun-buy",
+  "inkfun-sell",
+] as const
+export type InkfunFixtureName = (typeof INKFUN_FIXTURES)[number]
+
+export type InkfunFixture = {
+  name: InkfunFixtureName
+  txHash: Hash
+  blockNumber: bigint
+  blockHash: Hash
+  timestamp: number
+  logs: ChainLog[]
+  /** Every curve the transaction touches, read at the transaction's block. */
+  curves: {
+    curve: Address
+    token: Address
+    params: {
+      virtualQuote: bigint
+      virtualTokens: bigint
+      curveSupply: bigint
+      graduationTarget: bigint
+    }
+    lpSupply: bigint
+    totalSupply: bigint
+    metadataURI: string | null
+    sold: bigint
+    /** The curve's `realQuote()`: net quote raised. */
+    realQuote: bigint
+  }[]
+}
+
+export function loadInkfunFixture(name: InkfunFixtureName): InkfunFixture {
+  return readFixtureJson(name)
+}
+
 export const NFT_FIXTURES = [
   "hornet-mints",
   "inkverse-mints",

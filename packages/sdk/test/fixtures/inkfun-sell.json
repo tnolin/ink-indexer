@@ -1,0 +1,38 @@
+{
+  "name": "inkfun-sell",
+  "txHash": "0x88919d4301c36d1b32036ba9ecac1f1830a673459e6ea275d7a9a740e7761927",
+  "blockNumber": "58388182n",
+  "blockHash": "0x2e0f5ab21b60ca2ec1bcb5efd275a153b75b62afed34af17569c6fbed51ce052",
+  "timestamp": 1791886593,
+  "logs": [
+    {
+      "address": "0x3dd159efc16116c953307b014bcbb4077066d742",
+      "topics": [
+        "0x490fdc1c23c0f3a84bf80a0384eaadcb9188c9ef71b9430da391a0e4c4c39bf6",
+        "0x00000000000000000000000001aa2117a9db567c2a61681ab67d03a1aeb8c841"
+      ],
+      "data": "0x000000000000000000000000000000000000000000000107c62c0f67b9d3ca1c000000000000000000000000000000000000000000000000000005bc5a531b37000000000000000000000000000000000000000000000000000000129634e66b0000000000000000000000000000000000000000000000000000000000000000",
+      "blockNumber": "58388182n",
+      "blockHash": "0x2e0f5ab21b60ca2ec1bcb5efd275a153b75b62afed34af17569c6fbed51ce052",
+      "transactionHash": "0x88919d4301c36d1b32036ba9ecac1f1830a673459e6ea275d7a9a740e7761927",
+      "logIndex": 2
+    }
+  ],
+  "curves": [
+    {
+      "curve": "0x3dd159efc16116c953307b014bcbb4077066d742",
+      "token": "0x2d02e669d583028cfd2b3c0ee36518d2535852af",
+      "params": {
+        "virtualQuote": "1400000000000000000n",
+        "virtualTokens": "1066666666666666666666666666n",
+        "curveSupply": "800000000000000000000000000n",
+        "graduationTarget": "4200000000000000000n"
+      },
+      "lpSupply": "200000000000000000000000000n",
+      "totalSupply": "1000000000000000000000000000n",
+      "metadataURI": "ipfs://bafkreic4nenlg6gz2izk3ix3zim6ll362vttp6a4c44pvv72keycsdbxx4",
+      "sold": "0n",
+      "realQuote": "1n"
+    }
+  ]
+}
