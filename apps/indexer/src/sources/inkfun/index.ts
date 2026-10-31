@@ -169,7 +169,12 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
           out.set(curve, null)
           continue
         }
-        const json = await fetchIpfsJson(state.metadataURI, { ...deps.ipfs, log: logger, token })
+        const json = await fetchIpfsJson(state.metadataURI, {
+          ...deps.ipfs,
+          log: logger,
+          launchpad: "inkfun",
+          token,
+        })
         out.set(curve, json === null ? null : parseInkfunMetadata(json, deps.ipfs.gateway))
       }
     }

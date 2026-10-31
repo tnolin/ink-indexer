@@ -95,6 +95,7 @@ try {
     process.exit(0)
   }
   const pools = new PoolRegistry()
+  const ipfs = readIpfsSettings(process.env, log)
   indexer = new Indexer({
     chain,
     store,
@@ -103,7 +104,13 @@ try {
     tickMinIntervalMs,
     sources: [
       inkypumpSource({ sql, chain, logger: log, pools }),
-      inkfunSource({ sql, chain, logger: log, pools, ipfs: readIpfsSettings(process.env, log) }),
+      inkfunSource({
+        sql,
+        chain,
+        logger: log,
+        pools,
+        ipfs: { gateway: ipfs.inkfun },
+      }),
       // After InkyPump and ink.fun: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools }),
       nftSource({ sql, chain, logger: log }),

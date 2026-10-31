@@ -6,7 +6,7 @@ import {
   type Hex,
   keccak256,
 } from "viem"
-import { cleanText } from "../inkfun/metadata"
+import { cleanText } from "../metadata"
 import { tsunamiEventsAbi } from "./abi"
 import { TSUNAMI_LOG_TOPICS } from "./constants"
 
