@@ -1,6 +1,7 @@
 import type { Sql } from "@ink-indexer/db"
 import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Chain } from "./chain"
+import { DEFAULT_IPFS_GATEWAY } from "./ipfs"
 import type { Logger } from "./log"
 import {
   BLOCK_S,
@@ -162,6 +163,38 @@ export function readTickMinIntervalMs(env: Env, log: Logger): number {
     using: 0,
   })
   return 0
+}
+
+/**
+ * `IPFS_GATEWAY`: the HTTPS origin that serves ink.fun token metadata and images. Empty uses the
+ * default gateway. A value that is not an `https://` origin logs one warning, never the value, and
+ * uses the default.
+ */
+export function readIpfsSettings(env: Env, log: Logger): { gateway: string } {
+  const v = env.IPFS_GATEWAY?.trim()
+  if (!v) return { gateway: DEFAULT_IPFS_GATEWAY }
+  const origin = (() => {
+    try {
+      const u = new URL(v)
+      const bare =
+        u.protocol === "https:" &&
+        u.pathname === "/" &&
+        !u.search &&
+        !u.hash &&
+        !u.username &&
+        !u.password
+      return bare ? u.origin : null
+    } catch {
+      return null
+    }
+  })()
+  if (origin !== null) return { gateway: origin }
+  log("warn", "invalid setting ignored", {
+    variable: "IPFS_GATEWAY",
+    reason: "not an https:// origin",
+    using: DEFAULT_IPFS_GATEWAY,
+  })
+  return { gateway: DEFAULT_IPFS_GATEWAY }
 }
 
 /** The one line logged when the live loop is running. */

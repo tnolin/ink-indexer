@@ -1,0 +1,11 @@
+{
+  "name": "Knuckle Creek",
+  "symbol": "KC",
+  "description": "",
+  "image": "ipfs://bafkreidozgeqkam2pa7gkw6s3yeei6k3wkhzpp5ffjy7oqtuemteafya5y",
+  "external_url": "https://claymatic.games/",
+  "extensions": {
+    "website": "https://claymatic.games/",
+    "twitter": "https://x.com/ClaymaticGames"
+  }
+}
