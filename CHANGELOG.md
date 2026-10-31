@@ -15,6 +15,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Indexer: swaps are read from every PoolManager that holds a registered pool, not only Uniswap's, and a swap counts only when its pool's PoolManager emitted it.
 - Indexer: the warning for token metadata that could not be fetched names the launchpad and the token.
 - Indexer: an ink.fun or Tsunami event from an unknown contract warns for at most 1,000 addresses, then once that there are more.
+- Indexer: backfill reads block senders 8 at a time, and Tsunami launch supplies and metadata alongside them, so a busy range backfills several times faster. The live tick and the rows written are unchanged. See ADR 0037.
 
 ## [indexer-v0.5.0] - 2026-10-31
 
