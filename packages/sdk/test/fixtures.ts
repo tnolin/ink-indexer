@@ -165,6 +165,9 @@ export const TSUNAMI_FIXTURES = [
   "tsunami-usdc-graduation",
   "tsunami-wnvdax-graduation",
   "tsunami-pool-move",
+  "tsunami-launch-usdc",
+  "tsunami-launch-usdc-buyer",
+  "tsunami-launch-pool-moved",
 ] as const
 export type TsunamiFixtureName = (typeof TSUNAMI_FIXTURES)[number]
 

@@ -101,6 +101,16 @@ describe("decodeTsunamiLog", () => {
     })
   })
 
+  it("every address of the USDC launch is lowercase, and its quote is USDC", () => {
+    const { d, f } = one("tsunami-launch-usdc", "launched")
+    expect(d.quote).toBe("0x2d270e6886d130d724215a266106e6832161eaed")
+    expect(d.token).toBe("0xb600d140dd47d92985304cb2fd061d70a8217bb4")
+    expect(f.curves[0]?.curve).toBe(d.curve)
+    for (const a of [d.quote, d.curve, d.token, d.creator]) expect(a).toMatch(/^0x[0-9a-f]{40}$/)
+    const fee = one("tsunami-launch-riptide", "launched").d.feeShare
+    expect(fee).toMatch(/^0x[0-9a-f]{40}$/)
+  })
+
   it("the SHITCOIN seed buy's buyer is the factory", () => {
     const { d } = one("tsunami-launch-riptide", "bought")
     expect(d.buyer).toBe("0x5934a5c377309453746ee8aa5194f671930c09fa")
