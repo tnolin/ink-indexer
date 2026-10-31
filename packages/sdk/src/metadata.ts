@@ -1,5 +1,12 @@
 // Helpers shared by the launchpads that read token metadata from IPFS documents.
 
+/** Text and links of a launch, read from the token's metadata JSON. */
+export type LaunchMetadataFields = {
+  description: string | null
+  imageUrl: string | null
+  links: { telegram: string | null; twitter: string | null; website: string | null }
+}
+
 const IPFS_PREFIX = "ipfs://"
 const CID_AND_PATH = /^[A-Za-z0-9]+(\/[A-Za-z0-9._~-]+)*$/
 

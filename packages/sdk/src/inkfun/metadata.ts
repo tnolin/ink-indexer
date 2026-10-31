@@ -1,13 +1,13 @@
-import { cleanText, ipfsCid, MAX_DESCRIPTION, MAX_LINK, textField } from "../metadata"
+import {
+  cleanText,
+  ipfsCid,
+  type LaunchMetadataFields,
+  MAX_DESCRIPTION,
+  MAX_LINK,
+  textField,
+} from "../metadata"
 
-export { cleanText, ipfsCid }
-
-/** Text and links of a launch, read from the token's metadata JSON. */
-export type LaunchMetadataFields = {
-  description: string | null
-  imageUrl: string | null
-  links: { telegram: string | null; twitter: string | null; website: string | null }
-}
+export { cleanText, ipfsCid, type LaunchMetadataFields }
 
 /**
  * The description, image and links of a token's metadata JSON. The image is served through

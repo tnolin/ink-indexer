@@ -1,5 +1,10 @@
-import type { LaunchMetadataFields } from "../inkfun/metadata"
-import { ipfsCid, MAX_DESCRIPTION, MAX_LINK, textField } from "../metadata"
+import {
+  ipfsCid,
+  type LaunchMetadataFields,
+  MAX_DESCRIPTION,
+  MAX_LINK,
+  textField,
+} from "../metadata"
 
 const GATEWAY_URI = /^https:\/\/[^/?#@\s]+\/ipfs\/([^?#]*)/
 

@@ -33,6 +33,7 @@ export type TsunamiLog =
       /** True for the first `TokenLaunched` signature, which has no fee share. */
       legacy: boolean
       name: string
+      /** Empty when the creator's URI is over 2,048 characters. */
       uri: string
       symbol: string
       curve: Address
@@ -51,7 +52,6 @@ export type TsunamiLog =
       buyer: Address
       /** A buy: the tokens received. A sell: the net quote paid out. */
       amountOut: bigint
-      timestamp: number
       state: TsunamiCurveState
     }
   | {
@@ -61,7 +61,6 @@ export type TsunamiLog =
       key: PoolKey
       quoteRaised: bigint
       baseForPool: bigint
-      timestamp: number
       state: TsunamiCurveState
     }
   | { kind: "poolMoved"; source: Hash; destination: Hash }
@@ -69,6 +68,10 @@ export type TsunamiLog =
 
 const MAX_NAME = 100
 const MAX_SYMBOL = 32
+
+const MAX_URI = 2_048
+/** A URI cut short would name another document, so one over the limit is dropped whole. */
+const boundedUri = (uri: string) => (uri.length > MAX_URI ? "" : cleanText(uri))
 
 const lower = (a: string) => a.toLowerCase() as Address
 const bounded = (s: string, max: number) => cleanText(cleanText(s).slice(0, max))
@@ -125,7 +128,7 @@ export function decodeTsunamiLog(log: { topics: readonly Hex[]; data: Hex }): Ts
         kind: "launched",
         legacy: a.feeShare === undefined,
         name: bounded(a.name, MAX_NAME),
-        uri: a.uri,
+        uri: boundedUri(a.uri),
         symbol: bounded(a.symbol, MAX_SYMBOL),
         curve: lower(a.curve),
         token: lower(a.token),
@@ -143,7 +146,6 @@ export function decodeTsunamiLog(log: { topics: readonly Hex[]; data: Hex }): Ts
         amount: ev.args.amount,
         buyer: lower(ev.args.buyer),
         amountOut: ev.args.amountOut,
-        timestamp: Number(ev.args.timestamp),
         state: stateOf(ev.args.curve),
       }
     case "TokenMigrated":
@@ -160,7 +162,6 @@ export function decodeTsunamiLog(log: { topics: readonly Hex[]; data: Hex }): Ts
         },
         quoteRaised: ev.args.quoteRaised,
         baseForPool: ev.args.baseForPool,
-        timestamp: Number(ev.args.timestamp),
         state: stateOf(ev.args.curve),
       }
     case "CreatorPoolMigrated":

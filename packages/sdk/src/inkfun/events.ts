@@ -32,7 +32,7 @@ const MAX_NAME = 100
 const MAX_TICKER = 32
 
 /** Cleaned text cut to `max` characters; null when nothing is left. */
-export const orNull = (s: string, max: number) => cleanText(cleanText(s).slice(0, max)) || null
+const orNull = (s: string, max: number) => cleanText(cleanText(s).slice(0, max)) || null
 
 export function inkfunLaunchEvent(
   created: InkfunLaunchCreated,

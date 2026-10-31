@@ -1,7 +1,6 @@
 import type { BondEvent, LaunchEvent, TradeEvent } from "@ink-indexer/events"
 import { SCHEMA_VERSION } from "@ink-indexer/events"
 import { type Address, type Hash, pad } from "viem"
-import { orNull } from "../inkfun/events"
 import type { LaunchMetadataFields } from "../inkfun/metadata"
 import type { LogMeta } from "../inkypump/events"
 import { CALAMARI_POOL_MANAGER } from "./constants"
@@ -9,9 +8,6 @@ import { tsunamiMarketCap, tsunamiPrice, tsunamiProgressBps } from "./curve"
 import { poolIdOf, type TsunamiLog } from "./decode"
 
 type Of<K extends TsunamiLog["kind"]> = Extract<TsunamiLog, { kind: K }>
-
-const MAX_NAME = 100
-const MAX_TICKER = 32
 
 /** A launch is identified by its curve address, left-padded to 32 bytes. */
 export function tsunamiLaunchId(curve: Address): Hash {
@@ -40,8 +36,9 @@ export function tsunamiLaunchEvent(
     ...base(d.token, tsunamiLaunchId(d.curve), m),
     hook: ctx.hook,
     creator: d.creator,
-    name: orNull(d.name, MAX_NAME),
-    ticker: orNull(d.symbol, MAX_TICKER),
+    // The decoder has already cleaned and bounded the text.
+    name: d.name || null,
+    ticker: d.symbol || null,
     description: ctx.metadata?.description ?? null,
     imageUrl: ctx.metadata?.imageUrl ?? null,
     links: {

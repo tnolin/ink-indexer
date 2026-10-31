@@ -118,7 +118,6 @@ describe("decodeTsunamiLog", () => {
 
   it("decodes TokenSold with amount as tokens in and amountOut as net quote", () => {
     const { d, f } = one("tsunami-sell", "sold")
-    expect(d.timestamp).toBe(f.timestamp)
     // The curve holds the net quote the seller was paid out of: realQuote fell to 4 wei.
     expect(d.state).toEqual(f.curves[0]!.state)
     expect(d.amount).toBeGreaterThan(d.amountOut)
@@ -182,18 +181,17 @@ describe("decodeTsunamiLog", () => {
     expect(decodeTsunamiLog({ topics: [], data: "0x" })).toBeNull()
   })
 
-  it("bounds and cleans name and symbol: 300 characters with a NUL and a lone surrogate (synthetic)", () => {
-    // SMOKE's recorded legacy TokenLaunched, its data re-encoded with a hostile name and symbol.
+  /** SMOKE's recorded legacy TokenLaunched, its data re-encoded with the given text fields. */
+  const reencodedSmoke = (a: { name: string; uri: string; symbol: string }) => {
     const { d, log } = one("tsunami-legacy-smoke", "launched")
-    const hostile = `A\u0000${"x".repeat(150)}\ud800${"y".repeat(150)}`
     const data = encodeAbiParameters(
       parseAbiParameters(
         "string, string, string, uint256, address, address, (uint256, uint256, uint256, uint256)",
       ),
       [
-        hostile,
-        d.uri,
-        hostile,
+        a.name,
+        a.uri,
+        a.symbol,
         d.targetRaise,
         d.quote,
         d.creator,
@@ -202,12 +200,27 @@ describe("decodeTsunamiLog", () => {
     )
     const out = decodeTsunamiLog({ topics: log.topics, data })
     if (out?.kind !== "launched") throw new Error("not decoded")
+    return { out, smoke: d }
+  }
+
+  it("bounds and cleans name and symbol: 300 characters with a NUL and a lone surrogate (synthetic)", () => {
+    const hostile = `A\u0000${"x".repeat(150)}\ud800${"y".repeat(150)}`
+    const { out } = reencodedSmoke({ name: hostile, uri: "ipfs://bafy", symbol: hostile })
     for (const text of [out.name, out.symbol]) expect(text).not.toContain("\u0000")
     expect(out.name).toHaveLength(100)
     expect(out.symbol).toHaveLength(32)
     expect(out.name.startsWith("Ax")).toBe(true)
     // A lone surrogate cannot survive UTF-8, so the string reaches the decoder as U+FFFD.
     expect(`${out.name}${out.symbol}`).not.toMatch(/[\ud800-\udfff]/)
+  })
+
+  it("a uri over 2,048 characters is dropped, and NUL is removed from one that is kept (synthetic)", () => {
+    const long = reencodedSmoke({ name: "n", uri: `ipfs://${"a".repeat(3_000)}`, symbol: "S" })
+    expect(long.out.uri).toBe("")
+    const nul = reencodedSmoke({ name: "n", uri: "ipfs://ba\u0000fy", symbol: "S" })
+    expect(nul.out.uri).toBe("ipfs://bafy")
+    const edge = `ipfs://${"a".repeat(2_048 - 7)}`
+    expect(reencodedSmoke({ name: "n", uri: edge, symbol: "S" }).out.uri).toBe(edge)
   })
 })
 
