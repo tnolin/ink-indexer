@@ -2,12 +2,15 @@ import {
   type ChainLog,
   type CodeReader,
   hasCodeAt,
+  type InkfunLaunchState,
   type LaunchKey,
   type LaunchState,
   type NftReader,
   readBalances,
+  readCurveSold,
   readErc20Meta,
   readErc20Names,
+  readInkfunLaunches,
   readLaunchStates,
   readMaxSupply,
   readMintStats,
@@ -47,6 +50,13 @@ export type Chain = {
   readBalances(pairs: { token: Address; holder: Address }[], block: bigint): Promise<bigint[]>
   readLaunchStates(keys: LaunchKey[], block: bigint): Promise<LaunchState[]>
   readTotalSupplies(tokens: Address[], block: bigint): Promise<bigint[]>
+  /** Curve parameters, token supply and metadata URI of ink.fun launches at a block, in the order given. */
+  readInkfunLaunches(
+    launches: { token: Address; curve: Address }[],
+    block: bigint,
+  ): Promise<InkfunLaunchState[]>
+  /** `tokensSold()` of each ink.fun curve at a block, in the order given. */
+  readCurveSold(curves: Address[], block: bigint): Promise<bigint[]>
   readErc20Meta(token: Address): Promise<{ decimals: number; symbol: string }>
   /** `symbol()` and `name()` of each token at a block, in the order given. A call that reverts gives null. */
   readErc20Names(
@@ -166,6 +176,10 @@ export function viemChain(
       retry("readLaunchStates", () => readLaunchStates(client, keys, block)),
     readTotalSupplies: (tokens, block) =>
       retry("readTotalSupplies", () => readTotalSupplies(client, tokens, block)),
+    readInkfunLaunches: (launches, block) =>
+      retry("readInkfunLaunches", () => readInkfunLaunches(client, launches, block)),
+    readCurveSold: (curves, block) =>
+      retry("readCurveSold", () => readCurveSold(client, curves, block)),
     readErc20Meta: (token) => retry("readErc20Meta", () => readErc20Meta(client, token)),
     readErc20Names: (tokens, block) =>
       retry("readErc20Names", () => readErc20Names(client, tokens, block)),

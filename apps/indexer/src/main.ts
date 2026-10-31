@@ -7,6 +7,7 @@ import { applyMark } from "./mark-cli"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
+import { inkfunSource } from "./sources/inkfun/index"
 import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { createCollectionsFromSales } from "./sources/nft/write"
@@ -17,6 +18,7 @@ import { createStore } from "./store"
 import {
   createNftVerdictJob,
   logStarted,
+  readIpfsSettings,
   readNftSettings,
   readSources,
   readTickMinIntervalMs,
@@ -101,7 +103,8 @@ try {
     tickMinIntervalMs,
     sources: [
       inkypumpSource({ sql, chain, logger: log, pools }),
-      // After InkyPump: a pool it registers at bond is known when this span's swaps are processed.
+      inkfunSource({ sql, chain, logger: log, pools, ipfs: readIpfsSettings(process.env, log) }),
+      // After InkyPump and ink.fun: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools }),
       nftSource({ sql, chain, logger: log }),
     ],

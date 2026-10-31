@@ -22,6 +22,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "0013_nft_gate1_links.sql",
     "0014_nft_job_failures.sql",
     "0015_v4_pools.sql",
+    "0016_inkfun.sql",
   ])
   expect(await migrate(sql)).toEqual([])
   const tables = await sql<{ table_name: string }[]>`
@@ -31,6 +32,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "curve_state",
     "events",
     "hooks",
+    "inkfun_curves",
     "migrations",
     "nft_accounts",
     "nft_burns",
@@ -54,6 +56,54 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "tokens",
     "trades",
   ])
+})
+
+const INKFUN_HOOK = "0x735458d31dcf29dc204109430b1f7f96738568cc"
+
+it("0016 seeds the ink.fun hook", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const rows =
+    await sql`select launchpad, kind, abi_family, quote_asset, quote_decimals, discovered_block
+    from indexer.hooks where address = ${INKFUN_HOOK}`
+  expect(rows).toEqual([
+    {
+      launchpad: "inkfun",
+      kind: "inkfun",
+      abi_family: "inkfun",
+      quote_asset: "0x0000000000000000000000000000000000000000",
+      quote_decimals: 18,
+      discovered_block: 57_611_992n,
+    },
+  ])
+})
+
+it("an inkfun hook row is accepted and an unknown kind is refused", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const hook = (address: string, kind: string) => sql`
+    insert into indexer.hooks (address, launchpad, kind, abi_family, quote_asset, quote_decimals, discovered_block)
+    values (${address}, 'inkfun', ${kind}, 'inkfun', ${"0x0000000000000000000000000000000000000000"}, 18, 1)`
+  await hook("0x00000000000000000000000000000000000000f1", "inkfun")
+  await expect(hook("0x00000000000000000000000000000000000000f2", "bogus")).rejects.toThrow(
+    /hooks_kind_check/,
+  )
+})
+
+it("0016 lets a token have no gain_bps and keeps one curve per token", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const token = tokenAt(1)
+  await sql`insert into indexer.tokens (address, launchpad, hook, launch_id, creator, created_block, created_at,
+      quote_asset, total_supply, target_raise, sale_supply, gain_bps)
+    values (${token}, 'inkfun', ${INKFUN_HOOK}, ${tokenAt(2)}, ${HOOK}, 1, now(), ${NATIVE}, 1000, 1, 1, null)`
+  const curve = (n: number) => sql`insert into indexer.inkfun_curves
+    (token, curve, virtual_quote, virtual_tokens, curve_supply, lp_supply, graduation_target)
+    values (${token}, ${tokenAt(n)}, 1, 2, 3, 4, 5)`
+  await curve(2)
+  await expect(curve(3)).rejects.toThrow(/duplicate key/)
+  await sql`delete from indexer.tokens where address = ${token}`
+  expect(await sql`select token from indexer.inkfun_curves`).toEqual([])
 })
 
 it("0003 allows two events per log with different sub", async () => {

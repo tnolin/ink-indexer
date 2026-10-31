@@ -4,6 +4,12 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ## Unreleased
 
+### Added
+
+- Indexer: ink.fun launches with their name, image, description and links read from IPFS, curve trades, the migration into a Uniswap v4 pool and the pool's swaps, backfilled from the factory's deploy block. The platform and backfill name is `inkfun`; it also turns on `v4-swaps`, and it is part of the default `INDEXER_SOURCES`. ink.fun shares one `eth_getLogs` request with InkyPump, so a tick makes no extra request. `IPFS_GATEWAY` sets the gateway for metadata and images. See ADR 0035.
+- SDK: ink.fun decoding, curve math (value, price, progress), event builders and state reads, and IPFS metadata parsing.
+- DB: migration 0016 adds `indexer.inkfun_curves`, an `inkfun` hook kind and its seeded hook row, and lets `tokens.gain_bps` be null.
+
 ## [indexer-v0.4.0] - 2026-10-29
 
 ### Added

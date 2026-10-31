@@ -1,4 +1,4 @@
-import type { ChainLog, LaunchKey, LaunchState } from "@ink-indexer/sdk"
+import type { ChainLog, InkfunLaunchState, LaunchKey, LaunchState } from "@ink-indexer/sdk"
 import { type Address, type Hash, pad, toHex } from "viem"
 import type { Chain } from "../src/chain"
 import type { LogFilter } from "../src/rpc"
@@ -49,6 +49,14 @@ export class FakeChain implements Chain {
   /** The block of every readBalances call. */
   balanceReads: bigint[] = []
   stateReads: bigint[] = []
+  /** Per ink.fun curve address, what `readInkfunLaunches` answers. A curve with no entry throws. */
+  inkfunLaunches = new Map<string, InkfunLaunchState>()
+  inkfunLaunchReads: { curves: Address[]; block: bigint }[] = []
+  /** Per ink.fun curve address, its `tokensSold()`; a function gives it per block. A curve with no entry throws. */
+  curveSold = new Map<string, bigint | ((block: bigint) => bigint)>()
+  curveSoldReads: { curves: Address[]; block: bigint }[] = []
+  /** Every getBlock call. */
+  getBlockCalls: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
   getBlockNumberCalls = 0
   /** When set, getBlockNumber answers this instead of `head`: a provider stuck on an old block. */
@@ -100,6 +108,7 @@ export class FakeChain implements Chain {
   }
 
   async getBlock(n: bigint) {
+    this.getBlockCalls.push(n)
     if (this.nullOnce.delete(n)) return null
     return n > this.head ? null : { hash: this.hashOf(n), timestamp: n }
   }
@@ -132,6 +141,24 @@ export class FakeChain implements Chain {
       const s = this.states.get(`${k.hook}:${k.launchId}`)
       if (!s) throw new Error(`no fake state for ${k.hook}:${k.launchId}`)
       return s
+    })
+  }
+
+  async readInkfunLaunches(launches: { token: Address; curve: Address }[], block: bigint) {
+    this.inkfunLaunchReads.push({ curves: launches.map((l) => l.curve), block })
+    return launches.map((l) => {
+      const s = this.inkfunLaunches.get(l.curve)
+      if (!s) throw new Error(`no fake ink.fun launch for ${l.curve}`)
+      return s
+    })
+  }
+
+  async readCurveSold(curves: Address[], block: bigint) {
+    this.curveSoldReads.push({ curves, block })
+    return curves.map((c) => {
+      const v = this.curveSold.get(c)
+      if (v === undefined) throw new Error(`no fake tokensSold for ${c}`)
+      return typeof v === "function" ? v(block) : v
     })
   }
 

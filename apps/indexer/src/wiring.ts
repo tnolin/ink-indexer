@@ -1,6 +1,7 @@
 import type { Sql } from "@ink-indexer/db"
 import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Chain } from "./chain"
+import { DEFAULT_IPFS_GATEWAY } from "./ipfs"
 import type { Logger } from "./log"
 import {
   BLOCK_S,
@@ -38,6 +39,7 @@ const PLATFORMS = {
   inkypump: { groups: ["inkypump", "v4-swaps"], openSea: false },
   opensea: { groups: ["nft-mints", "nft-sales"], openSea: true },
   chimera: { groups: ["nft-launches"], openSea: false },
+  inkfun: { groups: ["inkfun", "v4-swaps"], openSea: false },
 } as const satisfies Record<string, { groups: readonly BackfillSource[]; openSea: boolean }>
 type Platform = keyof typeof PLATFORMS
 
@@ -70,7 +72,7 @@ export function readSources(env: Env, log: Logger): SourceSelection {
   log("info", "sources", { running: names })
   return {
     names,
-    groups: names.flatMap((n) => PLATFORMS[n].groups),
+    groups: [...new Set(names.flatMap((n) => PLATFORMS[n].groups))],
     openSea: names.some((n) => PLATFORMS[n].openSea),
   }
 }
@@ -162,6 +164,38 @@ export function readTickMinIntervalMs(env: Env, log: Logger): number {
     using: 0,
   })
   return 0
+}
+
+/**
+ * `IPFS_GATEWAY`: the HTTPS origin that serves ink.fun token metadata and images. Empty uses the
+ * default gateway. A value that is not an `https://` origin logs one warning, never the value, and
+ * uses the default.
+ */
+export function readIpfsSettings(env: Env, log: Logger): { gateway: string } {
+  const v = env.IPFS_GATEWAY?.trim()
+  if (!v) return { gateway: DEFAULT_IPFS_GATEWAY }
+  const origin = (() => {
+    try {
+      const u = new URL(v)
+      const bare =
+        u.protocol === "https:" &&
+        u.pathname === "/" &&
+        !u.search &&
+        !u.hash &&
+        !u.username &&
+        !u.password
+      return bare ? u.origin : null
+    } catch {
+      return null
+    }
+  })()
+  if (origin !== null) return { gateway: origin }
+  log("warn", "invalid setting ignored", {
+    variable: "IPFS_GATEWAY",
+    reason: "not an https:// origin",
+    using: DEFAULT_IPFS_GATEWAY,
+  })
+  return { gateway: DEFAULT_IPFS_GATEWAY }
 }
 
 /** The one line logged when the live loop is running. */

@@ -7,6 +7,8 @@ import {
   pad,
   parseAbiParameters,
 } from "viem"
+import { inkfunEventsAbi } from "../src/inkfun/abi"
+import { INKFUN_FACTORY, INKFUN_MIGRATION } from "../src/inkfun/constants"
 import { hookEventsAbi, XSTOCKS_HOOK_CREATED_TOPIC } from "../src/inkypump/abi"
 import type { ChainLog } from "../src/types"
 import { SWAP_TOPIC, TRANSFER_TOPIC } from "../src/v4/constants"
@@ -173,4 +175,81 @@ export function transferLog(
     [TRANSFER_TOPIC, pad(a.from), pad(a.to)],
     encodeAbiParameters(parseAbiParameters("uint256"), [a.value]),
   )
+}
+
+/** ink.fun `LaunchCreated`, emitted by the factory unless `m.address` says otherwise. */
+export function inkfunLaunchCreatedLog(
+  a: { token: Address; curve: Address; creator: Address; name: string; symbol: string },
+  m: Meta = {},
+): ChainLog {
+  const { topics, data } = encodeInkfun("LaunchCreated", a)
+  return withMeta({ address: INKFUN_FACTORY, ...m }, topics, data)
+}
+
+/** ink.fun `Bought`; `m.address` is the curve. */
+export function inkfunBoughtLog(
+  a: {
+    payer: Address
+    beneficiary: Address
+    quoteIn: bigint
+    fee: bigint
+    tokensOut: bigint
+    refund?: bigint
+    tokensSold: bigint
+  },
+  m: Meta = {},
+): ChainLog {
+  const { topics, data } = encodeInkfun("Bought", { refund: 0n, ...a })
+  return withMeta(m, topics, data)
+}
+
+/** ink.fun `Sold`; `m.address` is the curve. */
+export function inkfunSoldLog(
+  a: { seller: Address; tokensIn: bigint; quoteOut: bigint; fee: bigint; tokensSold: bigint },
+  m: Meta = {},
+): ChainLog {
+  const { topics, data } = encodeInkfun("Sold", a)
+  return withMeta(m, topics, data)
+}
+
+/** ink.fun `Migrated`, emitted by the migration module unless `m.address` says otherwise. */
+export function inkfunMigratedLog(
+  a: {
+    poolId: Hash
+    launchToken: Address
+    tokenAmount: bigint
+    quoteAmount: bigint
+    tokenId?: bigint
+    sqrtPriceX96?: bigint
+  },
+  m: Meta = {},
+): ChainLog {
+  const { topics, data } = encodeInkfun("Migrated", {
+    tokenId: 1n,
+    sqrtPriceX96: 1n << 96n,
+    ...a,
+  })
+  return withMeta({ address: INKFUN_MIGRATION, ...m }, topics, data)
+}
+
+const INKFUN_DATA = {
+  LaunchCreated: parseAbiParameters("string name, string symbol"),
+  Bought: parseAbiParameters(
+    "uint256 quoteIn, uint256 fee, uint256 tokensOut, uint256 refund, uint256 tokensSold",
+  ),
+  Sold: parseAbiParameters("uint256 tokensIn, uint256 quoteOut, uint256 fee, uint256 tokensSold"),
+  Migrated: parseAbiParameters(
+    "uint256 tokenAmount, uint256 quoteAmount, uint256 tokenId, uint160 sqrtPriceX96",
+  ),
+} as const
+
+function encodeInkfun(eventName: keyof typeof INKFUN_DATA, a: Record<string, unknown>) {
+  const topics = encodeEventTopics({
+    abi: inkfunEventsAbi,
+    eventName,
+    args: a as never,
+  })
+  const params = INKFUN_DATA[eventName]
+  const data = encodeAbiParameters(params, params.map((p) => a[p.name as string]) as never)
+  return { topics, data }
 }

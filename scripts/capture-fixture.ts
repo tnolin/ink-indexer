@@ -1,15 +1,21 @@
 // Records a transaction's InkyPump logs, plus launch state and token supply at its block, as a test fixture.
 // With --topics v4 it records the transaction's InkyPump, Uniswap v4 Swap and ERC-20 Transfer logs, the
 // transaction's sender, and the StateView slot0 and liquidity of each pool a LaunchFinalized log names.
-// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4]
+// With --topics inkfun it records the transaction's ink.fun logs and, for every curve it touches, the curve
+// parameters, token supply, metadata URI, tokensSold and realQuote at the transaction's block.
+// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun]
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   type ChainLog,
+  decodeInkfunLog,
   decodeLog,
+  INKFUN_LOG_TOPICS,
   type LaunchKey,
   type LaunchState,
   LOG_TOPICS,
+  readCurveSold,
+  readInkfunLaunches,
   readLaunchStates,
   readTotalSupplies,
   SWAP_TOPIC,
@@ -21,13 +27,19 @@ import { ink } from "viem/chains"
 const argv = process.argv.slice(2)
 const topicsAt = argv.indexOf("--topics")
 const mode = topicsAt === -1 ? "inkypump" : argv.splice(topicsAt, 2)[1]
-if (mode !== "inkypump" && mode !== "v4") throw new Error(`unknown --topics ${mode}`)
+if (mode !== "inkypump" && mode !== "v4" && mode !== "inkfun")
+  throw new Error(`unknown --topics ${mode}`)
 const [name, txHash, url = "https://rpc-gel.inkonchain.com"] = argv
 if (!name || !txHash)
-  throw new Error("usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4]")
+  throw new Error("usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun]")
 const client = createPublicClient({ chain: ink, transport: http(url, { retryCount: 5 }) })
 
-const kept: Hex[] = mode === "v4" ? [...LOG_TOPICS, SWAP_TOPIC, TRANSFER_TOPIC] : [...LOG_TOPICS]
+const kept: Hex[] =
+  mode === "inkfun"
+    ? [...INKFUN_LOG_TOPICS]
+    : mode === "v4"
+      ? [...LOG_TOPICS, SWAP_TOPIC, TRANSFER_TOPIC]
+      : [...LOG_TOPICS]
 const receipt = await client.getTransactionReceipt({ hash: txHash as Hash })
 const block = await client.getBlock({ blockNumber: receipt.blockNumber })
 const logs: ChainLog[] = receipt.logs
@@ -48,6 +60,60 @@ const save = (fixture: object, summary: string) => {
   const json = JSON.stringify(fixture, (_k, v) => (typeof v === "bigint" ? `${v}n` : v), 2)
   writeFileSync(join(dir, `${name}.json`), `${json}\n`)
   console.log(`wrote ${name}.json: ${summary}`)
+}
+
+if (mode === "inkfun") {
+  const curveAbi = parseAbi([
+    "function token() view returns (address)",
+    "function realQuote() view returns (uint256)",
+  ])
+  const curves = [
+    ...new Set(
+      logs.flatMap((l) => {
+        const d = decodeInkfunLog(l)
+        return d?.kind === "launchCreated" ? [d.curve] : d ? [l.address] : []
+      }),
+    ),
+  ]
+  const tokens = await client.multicall({
+    allowFailure: false,
+    blockNumber: block.number,
+    contracts: curves.map((c) => ({ address: c, abi: curveAbi, functionName: "token" }) as const),
+  })
+  const pairs = curves.map((curve, i) => ({
+    curve,
+    token: (tokens[i] as Address).toLowerCase() as Address,
+  }))
+  const states = await readInkfunLaunches(client, pairs, block.number)
+  const sold = await readCurveSold(client, curves, block.number)
+  const realQuotes = await client.multicall({
+    allowFailure: false,
+    blockNumber: block.number,
+    contracts: curves.map(
+      (c) => ({ address: c, abi: curveAbi, functionName: "realQuote" }) as const,
+    ),
+  })
+  save(
+    {
+      name,
+      txHash: receipt.transactionHash,
+      blockNumber: block.number,
+      blockHash: block.hash,
+      timestamp: Number(block.timestamp),
+      logs,
+      curves: pairs.map((p, i) => ({
+        ...p,
+        params: states[i]?.curve,
+        lpSupply: states[i]?.lpSupply,
+        totalSupply: states[i]?.totalSupply,
+        metadataURI: states[i]?.metadataURI,
+        sold: sold[i],
+        realQuote: realQuotes[i],
+      })),
+    },
+    `${logs.length} logs, ${curves.length} curves`,
+  )
+  process.exit(0)
 }
 
 if (mode === "v4") {

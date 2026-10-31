@@ -98,6 +98,10 @@ A swap in the Uniswap v4 pool of a token that has bonded.
 - `quoteLiquidity` is the pool's quote side after the swap, computed from the pool's in-range liquidity and price. It is exact for a full-range position and approximate when other positions exist.
 - `athMarketCap` covers the token's whole history, curve and pool.
 
+## Per launchpad
+
+For `inkfun`, `launchId` is the curve contract's address left-padded to 32 bytes, and `hook` is the pool hook the token graduates into. On its trades, `curveValue` is the net quote the curve holds, `soldBps` and `progressBpsAfter` are both the net quote over `target`, and a buy's `quoteAmount` includes the curve fee. After graduation the `launchpad.bond` event carries the pool, and `launchpad.swap` events carry `supply`, the total supply after the graduation burn minus the dead address's balance.
+
 ## Version 1 rows
 
 Rows written before schema version 2 keep their original payloads with `"v": 1`. Version 2 added:

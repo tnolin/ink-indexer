@@ -1,6 +1,11 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import { NATIVE_QUOTE_ASSET, UNISWAP_V4_POOL_MANAGER } from "@ink-indexer/sdk"
+import {
+  INKFUN_HOOK,
+  inkfunLaunchId,
+  NATIVE_QUOTE_ASSET,
+  UNISWAP_V4_POOL_MANAGER,
+} from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import { tradeLog } from "../../../packages/sdk/test/builders"
@@ -8,6 +13,7 @@ import { BlockNotServedError } from "../src/errors"
 import type { Logger } from "../src/log"
 import { HookRegistry, nativeHookRows } from "../src/sources/inkypump/hooks"
 import { inkypumpSource, type KnownLaunch, processLogs } from "../src/sources/inkypump/index"
+import { loadHooks } from "../src/sources/inkypump/store"
 import { PoolRegistry } from "../src/sources/pools"
 import { createStore } from "../src/store"
 import { FakeChain } from "./fake-chain"
@@ -346,6 +352,38 @@ describe("pools and ath through the database", () => {
         { ath: String(mc(2000n)), ath_block: B + 3n },
       ])
       expect(pools.marks(tokenOf(1))).toMatchObject({ ath: mc(2000n), athBlock: B + 3n })
+    } finally {
+      await sql.end()
+    }
+  })
+})
+
+describe("ink.fun rows beside InkyPump", () => {
+  it("loadHooks ignores the ink.fun hook", async () => {
+    const sql: Sql = await resetDb(inject("databaseUrl"))
+    try {
+      const stored = await sql`select address from indexer.hooks where kind = 'inkfun'`
+      expect(stored).toHaveLength(1)
+      expect((await loadHooks(sql)).map((h) => h.address)).not.toContain(INKFUN_HOOK)
+    } finally {
+      await sql.end()
+    }
+  })
+
+  it("rollback does not read InkyPump launch state for an ink.fun token", async () => {
+    const sql: Sql = await resetDb(inject("databaseUrl"))
+    try {
+      const chain = new FakeChain(B + 10n)
+      const source = inkypumpSource({ sql, chain, logger: () => {}, pools: new PoolRegistry() })
+      const curve = tokenOf(9)
+      await sql`insert into indexer.tokens (address, launchpad, hook, launch_id, creator, created_block,
+          created_at, quote_asset, total_supply, target_raise, sale_supply, gain_bps)
+        values (${tokenOf(8)}, 'inkfun', ${INKFUN_HOOK}, ${inkfunLaunchId(curve)}, ${CREATOR}, ${String(B)},
+          now(), ${NATIVE_QUOTE_ASSET}, 1000, 1, 1, null)`
+      await sql`insert into indexer.curve_state (token, progress_bps, curve_value, target, market_cap, updated_block)
+        values (${tokenOf(8)}, 10, 1, 1, 1, ${String(B + 5n)})`
+      expect(await source.prepareRollback(B + 2n)).toEqual([])
+      expect(chain.stateReads).toEqual([])
     } finally {
       await sql.end()
     }

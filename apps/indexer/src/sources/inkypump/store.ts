@@ -8,7 +8,7 @@ import type { AthRow, Batch, CurveRow, KnownLaunch } from "./index"
 // InkyPump's tables: reads for processing and rollback, and writes inside the loop's transaction.
 
 const LAUNCHPAD = "inkypump"
-const s = (x: bigint) => x.toString()
+export const s = (x: bigint) => x.toString()
 /** Rows per multi-row insert: Postgres allows 65,534 parameters per statement, so 1,000 rows leaves room for 65 columns. */
 const CHUNK = 1_000
 export function* chunks<T>(rows: T[]): Generator<T[]> {
@@ -49,7 +49,7 @@ const hookRecord = (r: HookRow) => ({
   discovered_block: s(r.discoveredBlock),
 })
 
-const curveRecord = (c: CurveRow) => ({
+export const curveRecord = (c: CurveRow) => ({
   token: c.token,
   progress_bps: c.progressBps,
   curve_value: s(c.curveValue),
@@ -78,7 +78,7 @@ export async function seedHooks(sql: Sql, rows: HookRow[]) {
 }
 
 export async function loadHooks(sql: Sql): Promise<HookRow[]> {
-  const rows = await sql<HookRecord[]>`select * from indexer.hooks`
+  const rows = await sql<HookRecord[]>`select * from indexer.hooks where launchpad = 'inkypump'`
   return rows.map((r) => ({
     address: r.address,
     kind: r.kind,
@@ -107,7 +107,7 @@ export async function launchesToRefresh(sql: Sql, fork: bigint): Promise<KnownLa
     select t.address, t.hook, t.launch_id, t.quote_asset, t.total_supply, t.target_raise, t.sale_supply,
            t.gain_bps, c.progress_bps
     from indexer.tokens t join indexer.curve_state c on c.token = t.address
-    where t.created_block <= ${s(fork)} and c.updated_block > ${s(fork)}`
+    where t.launchpad = 'inkypump' and t.created_block <= ${s(fork)} and c.updated_block > ${s(fork)}`
   return rows.map(toKnownLaunch)
 }
 

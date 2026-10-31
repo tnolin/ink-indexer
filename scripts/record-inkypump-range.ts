@@ -120,6 +120,8 @@ const recording: Chain = {
   },
   // Only the NFT source, its verdict job and the stats job read mint stats, supplies, contract
   // code and token names, and the recording runs without them.
+  readInkfunLaunches: (launches, block) => live.readInkfunLaunches(launches, block),
+  readCurveSold: (curves, block) => live.readCurveSold(curves, block),
   readErc20Names: (tokens, block) => live.readErc20Names(tokens, block),
   readMintStats: (contract, minter, block) => live.readMintStats(contract, minter, block),
   readMaxSupply: (contract, block) => live.readMaxSupply(contract, block),
