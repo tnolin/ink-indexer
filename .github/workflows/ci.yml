@@ -82,3 +82,11 @@ jobs:
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           category: /language:javascript-typescript
+          output: sarif-results
+      # The analyze step reports alerts to code scanning but does not fail on them; this does.
+      - name: Fail on error-severity alerts
+        run: |
+          count=$(jq '[.runs[] as $run | $run.results[]
+            | select((.level // (if .ruleIndex == null then null else $run.tool.driver.rules[.ruleIndex].defaultConfiguration.level end) // "warning") == "error")] | length' sarif-results/*.sarif)
+          echo "error-severity alerts: $count"
+          test "$count" -eq 0
