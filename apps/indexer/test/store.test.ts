@@ -250,6 +250,7 @@ describe("store", () => {
       ),
     ).toEqual([
       "native:0x4cc8f6d5b7ce150ccc0a9b7664532b1283b96ac4",
+      "inkfun:0x735458d31dcf29dc204109430b1f7f96738568cc",
       `xstocks:${XHOOK_A}`,
       "native:0x893183da2411c7df81f103bfef09e4e46c326ac4",
     ])

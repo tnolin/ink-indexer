@@ -78,7 +78,7 @@ export async function seedHooks(sql: Sql, rows: HookRow[]) {
 }
 
 export async function loadHooks(sql: Sql): Promise<HookRow[]> {
-  const rows = await sql<HookRecord[]>`select * from indexer.hooks`
+  const rows = await sql<HookRecord[]>`select * from indexer.hooks where launchpad = 'inkypump'`
   return rows.map((r) => ({
     address: r.address,
     kind: r.kind,
@@ -107,7 +107,7 @@ export async function launchesToRefresh(sql: Sql, fork: bigint): Promise<KnownLa
     select t.address, t.hook, t.launch_id, t.quote_asset, t.total_supply, t.target_raise, t.sale_supply,
            t.gain_bps, c.progress_bps
     from indexer.tokens t join indexer.curve_state c on c.token = t.address
-    where t.created_block <= ${s(fork)} and c.updated_block > ${s(fork)}`
+    where t.launchpad = 'inkypump' and t.created_block <= ${s(fork)} and c.updated_block > ${s(fork)}`
   return rows.map(toKnownLaunch)
 }
 
