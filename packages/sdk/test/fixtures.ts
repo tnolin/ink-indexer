@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Address, Hash } from "viem"
-import type { ChainLog, LaunchState } from "../src/index"
+import type { ChainLog, LaunchState, TsunamiCurveState } from "../src/index"
 
 export const FIXTURES = [
   "legacy-launch",
@@ -151,4 +151,63 @@ export function loadChimeraCampaigns(): ChainLog[] {
     ...l,
     blockNumber: BigInt(l.blockNumber),
   }))
+}
+
+/** Transactions recorded with `capture-fixture.ts --topics tsunami`. */
+export const TSUNAMI_FIXTURES = [
+  "tsunami-launch-riptide",
+  "tsunami-launch-gm",
+  "tsunami-graduation-gm",
+  "tsunami-legacy-smoke",
+  "tsunami-sell",
+  "tsunami-usdc-buy",
+  "tsunami-kbtc-buy",
+  "tsunami-usdc-graduation",
+  "tsunami-wnvdax-graduation",
+  "tsunami-pool-move",
+] as const
+export type TsunamiFixtureName = (typeof TSUNAMI_FIXTURES)[number]
+
+export type TsunamiFixture = {
+  name: TsunamiFixtureName
+  txHash: Hash
+  blockNumber: bigint
+  blockHash: Hash
+  timestamp: number
+  logs: ChainLog[]
+  /** The transaction's `from`. */
+  sender: Address
+  /** The chain head when the fixture was recorded. */
+  headBlock: bigint
+  /** Every curve the transaction touches. */
+  curves: {
+    curve: Address
+    token: Address
+    /** `curve()` at the transaction's block. */
+    state: TsunamiCurveState
+    /** `totalSupply()` and the Riptide vault's balance at the transaction's block. */
+    totalSupply: bigint
+    vaultBalance: bigint
+    /** `curve()` and `totalSupply()` at `headBlock`. */
+    stateAtHead: TsunamiCurveState
+    totalSupplyAtHead: bigint
+  }[]
+}
+
+export function loadTsunamiFixture(name: TsunamiFixtureName): TsunamiFixture {
+  return readFixtureJson(name)
+}
+
+/** Calamari swaps recorded with `capture-fixture.ts --topics v4`. */
+export const CALAMARI_FIXTURES = [
+  "calamari-swap-usdc",
+  "calamari-swap-gm",
+  "calamari-swap-wnvdax",
+] as const
+export type CalamariFixtureName = (typeof CALAMARI_FIXTURES)[number]
+
+export function loadCalamariFixture(name: CalamariFixtureName): Omit<V4Fixture, "name"> & {
+  name: CalamariFixtureName
+} {
+  return readFixtureJson(name)
 }

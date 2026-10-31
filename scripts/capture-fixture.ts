@@ -3,7 +3,10 @@
 // transaction's sender, and the StateView slot0 and liquidity of each pool a LaunchFinalized log names.
 // With --topics inkfun it records the transaction's ink.fun logs and, for every curve it touches, the curve
 // parameters, token supply, metadata URI, tokensSold and realQuote at the transaction's block.
-// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun]
+// With --topics tsunami it records the transaction's Tsunami logs, the transaction's sender and, for every curve
+// it touches, the token, the curve state, and the token's total supply and Riptide vault balance at the
+// transaction's block, plus the curve state at the chain head when the fixture was recorded.
+// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami]
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
@@ -14,12 +17,18 @@ import {
   type LaunchKey,
   type LaunchState,
   LOG_TOPICS,
+  RIPTIDE_VAULT,
+  readBalances,
   readCurveSold,
   readInkfunLaunches,
   readLaunchStates,
   readTotalSupplies,
+  readTsunamiCurves,
   SWAP_TOPIC,
   TRANSFER_TOPIC,
+  TSUNAMI_LOG_TOPICS,
+  TSUNAMI_TOPICS,
+  tsunamiCurveAbi,
 } from "@ink-indexer/sdk"
 import { type Address, createPublicClient, type Hash, type Hex, http, parseAbi } from "viem"
 import { ink } from "viem/chains"
@@ -27,19 +36,23 @@ import { ink } from "viem/chains"
 const argv = process.argv.slice(2)
 const topicsAt = argv.indexOf("--topics")
 const mode = topicsAt === -1 ? "inkypump" : argv.splice(topicsAt, 2)[1]
-if (mode !== "inkypump" && mode !== "v4" && mode !== "inkfun")
+if (mode !== "inkypump" && mode !== "v4" && mode !== "inkfun" && mode !== "tsunami")
   throw new Error(`unknown --topics ${mode}`)
 const [name, txHash, url = "https://rpc-gel.inkonchain.com"] = argv
 if (!name || !txHash)
-  throw new Error("usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun]")
+  throw new Error(
+    "usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami]",
+  )
 const client = createPublicClient({ chain: ink, transport: http(url, { retryCount: 5 }) })
 
 const kept: Hex[] =
   mode === "inkfun"
     ? [...INKFUN_LOG_TOPICS]
-    : mode === "v4"
-      ? [...LOG_TOPICS, SWAP_TOPIC, TRANSFER_TOPIC]
-      : [...LOG_TOPICS]
+    : mode === "tsunami"
+      ? [...TSUNAMI_LOG_TOPICS]
+      : mode === "v4"
+        ? [...LOG_TOPICS, SWAP_TOPIC, TRANSFER_TOPIC]
+        : [...LOG_TOPICS]
 const receipt = await client.getTransactionReceipt({ hash: txHash as Hash })
 const block = await client.getBlock({ blockNumber: receipt.blockNumber })
 const logs: ChainLog[] = receipt.logs
@@ -109,6 +122,76 @@ if (mode === "inkfun") {
         metadataURI: states[i]?.metadataURI,
         sold: sold[i],
         realQuote: realQuotes[i],
+      })),
+    },
+    `${logs.length} logs, ${curves.length} curves`,
+  )
+  process.exit(0)
+}
+
+if (mode === "tsunami") {
+  const emitted = new Set<string>([
+    TSUNAMI_TOPICS.bought,
+    TSUNAMI_TOPICS.sold,
+    TSUNAMI_TOPICS.migrated,
+  ])
+  const launched = new Set<string>([TSUNAMI_TOPICS.launched, TSUNAMI_TOPICS.launchedLegacy])
+  const curves = [
+    ...new Set(
+      logs.flatMap((l) => {
+        const t0 = l.topics[0] ?? ""
+        if (emitted.has(t0)) return [l.address]
+        if (launched.has(t0) && l.topics[1]) return [`0x${l.topics[1].slice(26)}` as Address]
+        return []
+      }),
+    ),
+  ]
+  const tokens = (await client.multicall({
+    allowFailure: false,
+    blockNumber: block.number,
+    contracts: curves.map(
+      (c) => ({ address: c, abi: tsunamiCurveAbi, functionName: "token" }) as const,
+    ),
+  })) as Address[]
+  const pairs = curves.map((curve, i) => ({
+    curve,
+    token: (tokens[i] as Address).toLowerCase() as Address,
+  }))
+  const at = await readTsunamiCurves(client, curves, block.number)
+  const head = await client.getBlockNumber()
+  const atHead = await readTsunamiCurves(client, curves, head)
+  const supplies = await readTotalSupplies(
+    client,
+    pairs.map((p) => p.token),
+    block.number,
+  )
+  const vault = await readBalances(
+    client,
+    pairs.map((p) => ({ token: p.token, holder: RIPTIDE_VAULT })),
+    block.number,
+  )
+  const supplyNow = await readTotalSupplies(
+    client,
+    pairs.map((p) => p.token),
+    head,
+  )
+  save(
+    {
+      name,
+      txHash: receipt.transactionHash,
+      blockNumber: block.number,
+      blockHash: block.hash,
+      timestamp: Number(block.timestamp),
+      logs,
+      sender: receipt.from.toLowerCase(),
+      headBlock: head,
+      curves: pairs.map((p, i) => ({
+        ...p,
+        state: at[i],
+        totalSupply: supplies[i],
+        vaultBalance: vault[i],
+        stateAtHead: atHead[i],
+        totalSupplyAtHead: supplyNow[i],
       })),
     },
     `${logs.length} logs, ${curves.length} curves`,
