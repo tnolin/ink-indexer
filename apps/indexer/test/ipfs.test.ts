@@ -110,6 +110,29 @@ describe("fetchIpfsJson", () => {
     expect(n).toBe(1)
   })
 
+  it("does not follow a redirect, and does not retry it", async () => {
+    const seen: (RequestRedirect | undefined)[] = []
+    let n = 0
+    const fake = (async (_url: string, init?: RequestInit) => {
+      n += 1
+      seen.push(init?.redirect)
+      return new Response(null, { status: 302, headers: { location: "http://169.254.169.254/" } })
+    }) as unknown as typeof fetch
+    const { log, lines } = logger()
+    expect(
+      await fetchIpfsJson(URI, {
+        gateway: GATEWAY,
+        fetch: fake,
+        sleep: noSleep,
+        log,
+        token: TOKEN,
+      }),
+    ).toBeNull()
+    expect(n).toBe(1)
+    expect(seen).toEqual(["manual"])
+    expect(lines.filter((l) => l.level === "warn")).toHaveLength(1)
+  })
+
   it("cancels the body of a non-200 answer before retrying", async () => {
     let cancelled = 0
     const fake = (async () => {
