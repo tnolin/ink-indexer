@@ -2,6 +2,7 @@
 
 Date: 2026-10-02
 Status: Accepted
+Amended by [0036](0036-tsunami-source.md): graduated tokens are read by the shared Uniswap v4 pool source, which asks every PoolManager in the pool registry.
 
 ## Context
 

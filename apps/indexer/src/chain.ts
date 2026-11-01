@@ -16,7 +16,9 @@ import {
   readMintStats,
   readNftTotalSupply,
   readTotalSupplies,
+  readTsunamiCurves,
   type StateReader,
+  type TsunamiCurveState,
 } from "@ink-indexer/sdk"
 import { type Address, BlockNotFoundError, type Hash } from "viem"
 import { type Logger, log } from "./log"
@@ -55,6 +57,8 @@ export type Chain = {
     launches: { token: Address; curve: Address }[],
     block: bigint,
   ): Promise<InkfunLaunchState[]>
+  /** `curve()` of each Tsunami curve at a block, in the order given. */
+  readTsunamiCurves(curves: Address[], block: bigint): Promise<TsunamiCurveState[]>
   /** `tokensSold()` of each ink.fun curve at a block, in the order given. */
   readCurveSold(curves: Address[], block: bigint): Promise<bigint[]>
   readErc20Meta(token: Address): Promise<{ decimals: number; symbol: string }>
@@ -178,6 +182,8 @@ export function viemChain(
       retry("readTotalSupplies", () => readTotalSupplies(client, tokens, block)),
     readInkfunLaunches: (launches, block) =>
       retry("readInkfunLaunches", () => readInkfunLaunches(client, launches, block)),
+    readTsunamiCurves: (curves, block) =>
+      retry("readTsunamiCurves", () => readTsunamiCurves(client, curves, block)),
     readCurveSold: (curves, block) =>
       retry("readCurveSold", () => readCurveSold(client, curves, block)),
     readErc20Meta: (token) => retry("readErc20Meta", () => readErc20Meta(client, token)),

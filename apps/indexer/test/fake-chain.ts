@@ -1,4 +1,10 @@
-import type { ChainLog, InkfunLaunchState, LaunchKey, LaunchState } from "@ink-indexer/sdk"
+import type {
+  ChainLog,
+  InkfunLaunchState,
+  LaunchKey,
+  LaunchState,
+  TsunamiCurveState,
+} from "@ink-indexer/sdk"
 import { type Address, type Hash, pad, toHex } from "viem"
 import type { Chain } from "../src/chain"
 import type { LogFilter } from "../src/rpc"
@@ -40,11 +46,23 @@ export class FakeChain implements Chain {
   /** Per token, what `symbol()` and `name()` answer; null is a revert. A token with no entry reverts on both. */
   erc20Names = new Map<string, { symbol: string | null; name: string | null }>()
   nameReads: { tokens: Address[]; block: bigint }[] = []
-  /** Per block, its hash and each transaction's sender. A block with no entry is not served (null). */
-  senders = new Map<bigint, { hash: Hash; senders: Map<Hash, Address> }>()
-  /** Per `token:holder`, the balance. A pair with no entry reads 0. */
-  balances = new Map<string, bigint>()
+  /** Per block, its hash, each transaction's sender and, when given, its timestamp (else the block number). A block with no entry is not served (null). */
+  senders = new Map<bigint, { hash: Hash; senders: Map<Hash, Address>; timestamp?: number }>()
+  /** Per `token:holder`, the balance; a function gives it per block. A pair with no entry reads 0. */
+  balances = new Map<string, bigint | ((block: bigint) => bigint)>()
   getBlockSendersCalls = 0
+  /** When set, a getBlockSenders call waits this many ms before answering. */
+  sendersDelayMs: ((n: bigint) => number) | undefined
+  /** Per block, an error getBlockSenders throws instead of answering. */
+  sendersErrors = new Map<bigint, Error>()
+  /** The block of every getBlockSenders call, in call order. */
+  sendersOrder: bigint[] = []
+  sendersInFlight = 0
+  maxSendersInFlight = 0
+  /** When set, a readTotalSupplies call at a block waits this many ms before answering. */
+  supplyDelayMs: ((block: bigint) => number) | undefined
+  supplyInFlight = 0
+  maxSupplyInFlight = 0
   readBalancesCalls = 0
   /** The block of every readBalances call. */
   balanceReads: bigint[] = []
@@ -55,6 +73,11 @@ export class FakeChain implements Chain {
   /** Per ink.fun curve address, its `tokensSold()`; a function gives it per block. A curve with no entry throws. */
   curveSold = new Map<string, bigint | ((block: bigint) => bigint)>()
   curveSoldReads: { curves: Address[]; block: bigint }[] = []
+  /** Per Tsunami curve address, what `readTsunamiCurves` answers; a function gives it per block. A curve with no entry throws. */
+  tsunamiCurves = new Map<string, TsunamiCurveState | ((block: bigint) => TsunamiCurveState)>()
+  tsunamiCurveReads: { curves: Address[]; block: bigint }[] = []
+  /** Every readTotalSupplies call. */
+  supplyReads: { tokens: Address[]; block: bigint }[] = []
   /** Every getBlock call. */
   getBlockCalls: bigint[] = []
   getLogsCalls: [bigint, bigint][] = []
@@ -115,14 +138,28 @@ export class FakeChain implements Chain {
 
   async getBlockSenders(n: bigint) {
     this.getBlockSendersCalls++
+    this.sendersOrder.push(n)
+    this.sendersInFlight++
+    this.maxSendersInFlight = Math.max(this.maxSendersInFlight, this.sendersInFlight)
+    try {
+      const wait = this.sendersDelayMs?.(n)
+      if (wait !== undefined) await new Promise((r) => setTimeout(r, wait))
+    } finally {
+      this.sendersInFlight--
+    }
+    const failure = this.sendersErrors.get(n)
+    if (failure) throw failure
     const s = this.senders.get(n)
-    return s ? { hash: s.hash, timestamp: Number(n), senders: s.senders } : null
+    return s ? { hash: s.hash, timestamp: s.timestamp ?? Number(n), senders: s.senders } : null
   }
 
   async readBalances(pairs: { token: Address; holder: Address }[], block: bigint) {
     this.readBalancesCalls++
     this.balanceReads.push(block)
-    return pairs.map((p) => this.balances.get(`${p.token}:${p.holder}`) ?? 0n)
+    return pairs.map((p) => {
+      const v = this.balances.get(`${p.token}:${p.holder}`) ?? 0n
+      return typeof v === "function" ? v(block) : v
+    })
   }
 
   async getLogs(from: bigint, to: bigint, filter: LogFilter) {
@@ -162,7 +199,27 @@ export class FakeChain implements Chain {
     })
   }
 
-  async readTotalSupplies(tokens: Address[]) {
+  async readTsunamiCurves(curves: Address[], block: bigint) {
+    this.tsunamiCurveReads.push({ curves, block })
+    return curves.map((c) => {
+      const v = this.tsunamiCurves.get(c)
+      if (v === undefined) throw new Error(`no fake Tsunami curve for ${c}`)
+      return typeof v === "function" ? v(block) : v
+    })
+  }
+
+  async readTotalSupplies(tokens: Address[], block?: bigint) {
+    if (block !== undefined) this.supplyReads.push({ tokens, block })
+    const wait = block === undefined ? undefined : this.supplyDelayMs?.(block)
+    if (wait !== undefined) {
+      this.supplyInFlight++
+      this.maxSupplyInFlight = Math.max(this.maxSupplyInFlight, this.supplyInFlight)
+      try {
+        await new Promise((r) => setTimeout(r, wait))
+      } finally {
+        this.supplyInFlight--
+      }
+    }
     return tokens.map((t) => this.supplies.get(t) ?? 10n ** 27n)
   }
 

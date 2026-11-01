@@ -1,9 +1,12 @@
-import { ipfsCid } from "@ink-indexer/sdk"
+import { gatewayCid, ipfsCid } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import type { Logger } from "./log"
 
 /** The IPFS gateway ink.fun's site uses for token metadata and images. */
 export const DEFAULT_IPFS_GATEWAY = "https://cracker.mypinata.cloud"
+
+/** A gateway that serves Tsunami's metadata CIDs. */
+export const DEFAULT_TSUNAMI_IPFS_GATEWAY = "https://burning-aqua-planarian.myfilebase.com"
 
 const MAX_BODY_BYTES = 64 * 1024
 const RETRY_DELAY_MS = 500
@@ -18,6 +21,7 @@ export type IpfsDeps = {
   sleep?: (ms: number) => Promise<void>
   log?: Logger
   /** Named in the warning when every attempt fails. */
+  launchpad?: string
   token?: Address
 }
 
@@ -43,13 +47,14 @@ async function readBounded(res: Response): Promise<string | null> {
 }
 
 /**
- * The JSON behind an `ipfs://` URI, fetched through the gateway. Other schemes are never fetched.
+ * The JSON behind an `ipfs://` URI, or behind an `https://<host>/ipfs/<cid>` gateway URI, fetched
+ * through the configured gateway: the URI's own host is never contacted. Other URIs are never fetched.
  * Makes up to `attempts` (3) tries, each bounded by `timeoutMs`; a non-200 answer, a timeout or a
  * body over 64 KB is retried, and a redirect or a body that is not JSON ends the attempts. Null after the last
  * failure, with one warning that names the token and never the gateway URL.
  */
 export async function fetchIpfsJson(uri: string, deps: IpfsDeps): Promise<unknown | null> {
-  const cid = ipfsCid(uri)
+  const cid = ipfsCid(uri) ?? gatewayCid(uri)
   if (cid === null) return null
   const doFetch = deps.fetch ?? fetch
   const sleep = deps.sleep ?? wait
@@ -82,6 +87,9 @@ export async function fetchIpfsJson(uri: string, deps: IpfsDeps): Promise<unknow
     }
     if (attempt < attempts) await sleep(RETRY_DELAY_MS)
   }
-  deps.log?.("warn", "ink.fun metadata not fetched", { token: deps.token })
+  deps.log?.("warn", "token metadata not fetched", {
+    launchpad: deps.launchpad,
+    token: deps.token,
+  })
   return null
 }

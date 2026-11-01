@@ -39,6 +39,8 @@ import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } fro
 const WHOLE_TOKEN = 10n ** 18n
 /** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */
 const METADATA_CONCURRENCY = 4
+/** Unknown emitters named in a warning; past this one warning says there are more. */
+const MAX_WARNED = 1_000
 
 export type KnownCurve = {
   token: Address
@@ -110,6 +112,7 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
   const curves = new Map<Address, KnownCurve>()
   const byToken = new Map<Address, KnownCurve>()
   const warned = new Set<Address>()
+  let warnedTooMany = false
 
   const remember = (c: KnownCurve) => {
     curves.set(c.curve, c)
@@ -117,6 +120,13 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
   }
   const warnUnknown = (log: ChainLog) => {
     if (warned.has(log.address)) return
+    if (warned.size >= MAX_WARNED) {
+      if (!warnedTooMany) {
+        warnedTooMany = true
+        logger("warn", "too many unknown emitters", { limit: MAX_WARNED })
+      }
+      return
+    }
     warned.add(log.address)
     logger("warn", "ignoring ink.fun-shaped event from an unknown contract", {
       address: log.address,
@@ -169,7 +179,12 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
           out.set(curve, null)
           continue
         }
-        const json = await fetchIpfsJson(state.metadataURI, { ...deps.ipfs, log: logger, token })
+        const json = await fetchIpfsJson(state.metadataURI, {
+          ...deps.ipfs,
+          log: logger,
+          launchpad: "inkfun",
+          token,
+        })
         out.set(curve, json === null ? null : parseInkfunMetadata(json, deps.ipfs.gateway))
       }
     }

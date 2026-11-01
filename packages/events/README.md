@@ -102,6 +102,8 @@ A swap in the Uniswap v4 pool of a token that has bonded.
 
 For `inkfun`, `launchId` is the curve contract's address left-padded to 32 bytes, and `hook` is the pool hook the token graduates into. On its trades, `curveValue` is the net quote the curve holds, `soldBps` and `progressBpsAfter` are both the net quote over `target`, and a buy's `quoteAmount` includes the curve fee. After graduation the `launchpad.bond` event carries the pool, and `launchpad.swap` events carry `supply`, the total supply after the graduation burn minus the dead address's balance.
 
+For `tsunami`, `launchId` is the curve contract's address left-padded to 32 bytes, and `hook` is the pool's hook. On its trades, `curveValue` is the net quote raised, `soldBps` and `progressBpsAfter` are the net quote raised over `target` (10,000 at the closing trade), and a buy's `quoteAmount` is the gross amount spent. Every amount, price, market cap and liquidity is in the quote currency's own base units, which can be 6, 8 or 18 decimals. `totalSupply` and the `supply` on swaps leave out any inventory the Riptide vault holds for a Riptide launch. After graduation the `launchpad.bond` event carries the pool in Calamari's PoolManager, and a pool that Tsunami later moves keeps indexing under the same token.
+
 ## Version 1 rows
 
 Rows written before schema version 2 keep their original payloads with `"v": 1`. Version 2 added:

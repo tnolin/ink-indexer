@@ -1,7 +1,7 @@
 import type { Sql } from "@ink-indexer/db"
 import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Chain } from "./chain"
-import { DEFAULT_IPFS_GATEWAY } from "./ipfs"
+import { DEFAULT_IPFS_GATEWAY, DEFAULT_TSUNAMI_IPFS_GATEWAY } from "./ipfs"
 import type { Logger } from "./log"
 import {
   BLOCK_S,
@@ -40,6 +40,7 @@ const PLATFORMS = {
   opensea: { groups: ["nft-mints", "nft-sales"], openSea: true },
   chimera: { groups: ["nft-launches"], openSea: false },
   inkfun: { groups: ["inkfun", "v4-swaps"], openSea: false },
+  tsunami: { groups: ["tsunami", "v4-swaps"], openSea: false },
 } as const satisfies Record<string, { groups: readonly BackfillSource[]; openSea: boolean }>
 type Platform = keyof typeof PLATFORMS
 
@@ -166,36 +167,45 @@ export function readTickMinIntervalMs(env: Env, log: Logger): number {
   return 0
 }
 
+/** The HTTPS origin in `value`, or null when it is not a bare `https://` origin. */
+function httpsOrigin(value: string): string | null {
+  try {
+    const u = new URL(value)
+    const bare =
+      u.protocol === "https:" &&
+      u.pathname === "/" &&
+      !u.search &&
+      !u.hash &&
+      !u.username &&
+      !u.password
+    return bare ? u.origin : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * `IPFS_GATEWAY`: the HTTPS origin that serves ink.fun token metadata and images. Empty uses the
- * default gateway. A value that is not an `https://` origin logs one warning, never the value, and
- * uses the default.
+ * `IPFS_GATEWAY` and `TSUNAMI_IPFS_GATEWAY`: the HTTPS origins that serve ink.fun and Tsunami token
+ * metadata and images. Empty uses the default gateway. A value that is not an `https://` origin logs
+ * one warning, never the value, and uses the default.
  */
-export function readIpfsSettings(env: Env, log: Logger): { gateway: string } {
-  const v = env.IPFS_GATEWAY?.trim()
-  if (!v) return { gateway: DEFAULT_IPFS_GATEWAY }
-  const origin = (() => {
-    try {
-      const u = new URL(v)
-      const bare =
-        u.protocol === "https:" &&
-        u.pathname === "/" &&
-        !u.search &&
-        !u.hash &&
-        !u.username &&
-        !u.password
-      return bare ? u.origin : null
-    } catch {
-      return null
-    }
-  })()
-  if (origin !== null) return { gateway: origin }
-  log("warn", "invalid setting ignored", {
-    variable: "IPFS_GATEWAY",
-    reason: "not an https:// origin",
-    using: DEFAULT_IPFS_GATEWAY,
-  })
-  return { gateway: DEFAULT_IPFS_GATEWAY }
+export function readIpfsSettings(env: Env, log: Logger): { inkfun: string; tsunami: string } {
+  const read = (variable: "IPFS_GATEWAY" | "TSUNAMI_IPFS_GATEWAY", fallback: string): string => {
+    const v = env[variable]?.trim()
+    if (!v) return fallback
+    const origin = httpsOrigin(v)
+    if (origin !== null) return origin
+    log("warn", "invalid setting ignored", {
+      variable,
+      reason: "not an https:// origin",
+      using: fallback,
+    })
+    return fallback
+  }
+  return {
+    inkfun: read("IPFS_GATEWAY", DEFAULT_IPFS_GATEWAY),
+    tsunami: read("TSUNAMI_IPFS_GATEWAY", DEFAULT_TSUNAMI_IPFS_GATEWAY),
+  }
 }
 
 /** The one line logged when the live loop is running. */

@@ -440,3 +440,34 @@ describe("viemChain ink.fun reads", () => {
     expect(sleeps).toEqual([1_000, 1_000])
   })
 })
+
+describe("viemChain Tsunami reads", () => {
+  it("readTsunamiCurves retries a transport error and reads curve() at the block", async () => {
+    const curve = "0x00000000000000000000000000000000000000c1"
+    let calls = 0
+    const seen: unknown[] = []
+    const client = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => {
+        throw new Error("not used")
+      },
+      multicall: async (args: { blockNumber: bigint; contracts: { functionName: string }[] }) => {
+        if (++calls % 2 === 1) throw socketError()
+        seen.push([args.blockNumber, args.contracts.map((c) => c.functionName)])
+        return [[1n, 2n, 3n, 4n]]
+      },
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const sleeps: number[] = []
+    const chain = viemChain(client, {} as LogRouter, {
+      logger: () => {},
+      sleep: async (ms) => {
+        sleeps.push(ms)
+      },
+    })
+    expect(await chain.readTsunamiCurves([curve], 10n)).toEqual([
+      { realBase: 1n, realQuote: 2n, virtualBase: 3n, virtualQuote: 4n },
+    ])
+    expect(seen).toEqual([[10n, ["curve"]]])
+    expect(sleeps).toEqual([1_000])
+  })
+})

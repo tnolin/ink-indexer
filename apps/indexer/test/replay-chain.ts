@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { ChainLog, InkfunLaunchState, LaunchKey, LaunchState } from "@ink-indexer/sdk"
+import type {
+  ChainLog,
+  InkfunLaunchState,
+  LaunchKey,
+  LaunchState,
+  TsunamiCurveState,
+} from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Chain } from "../src/chain"
 import type { LogFilter } from "../src/rpc"
@@ -139,6 +145,10 @@ export class ReplayChain implements Chain {
 
   async readInkfunLaunches(launches: { token: Address; curve: Address }[], block: bigint) {
     return this.answer<InkfunLaunchState[]>("readInkfunLaunches", [launches, block])
+  }
+
+  async readTsunamiCurves(curves: Address[], block: bigint) {
+    return this.answer<TsunamiCurveState[]>("readTsunamiCurves", [curves, block])
   }
 
   async readCurveSold(curves: Address[], block: bigint) {

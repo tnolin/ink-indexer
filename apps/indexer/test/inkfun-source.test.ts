@@ -330,6 +330,28 @@ describe("curve trades", () => {
     }
   })
 
+  it("warns for at most 1,000 unknown emitters, then once that there are too many", async () => {
+    const t = await setup()
+    try {
+      for (let i = 0; i < 1_100; i++) {
+        inkfunBuy(t.chain, {
+          n: 1,
+          block: B + 1n,
+          sold: 5n,
+          logIndex: i,
+          address: `0x${(0x5000 + i).toString(16).padStart(40, "0")}`,
+        })
+      }
+      await t.batchOf(B + 1n)
+      expect(unknownContractWarnings(t.warnings)).toHaveLength(1_000)
+      expect(t.warnings.filter((w) => w.msg === "too many unknown emitters")).toHaveLength(1)
+      await t.batchOf(B + 1n)
+      expect(t.warnings.filter((w) => w.msg === "too many unknown emitters")).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("a LaunchCreated not from the factory is ignored", async () => {
     const t = await setup()
     try {
@@ -725,6 +747,7 @@ describe("migration into a Uniswap v4 pool", () => {
         chain: t.chain,
         pools: fresh,
         readDeadAt: B + 2n,
+        live: true,
       })
       const swap = batch.events[0]?.event
       if (swap?.type !== "launchpad.swap") throw new Error("expected a swap")

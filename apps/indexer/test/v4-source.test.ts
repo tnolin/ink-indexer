@@ -1,16 +1,23 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
+  CALAMARI_POOL_MANAGER,
   DEAD_ADDRESS,
   decodeSwap,
   marketCap,
   NATIVE_QUOTE_ASSET,
+  poolMarketCap,
+  SWAP_TOPIC,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
 import { type Address, type Hash, HttpRequestError, pad, toHex } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import { swapLog, transferLog } from "../../../packages/sdk/test/builders"
-import { loadV4Fixture } from "../../../packages/sdk/test/fixtures"
+import {
+  type CalamariFixtureName,
+  loadCalamariFixture,
+  loadV4Fixture,
+} from "../../../packages/sdk/test/fixtures"
 import { BlockNotServedError } from "../src/errors"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { type PoolEntry, PoolRegistry } from "../src/sources/pools"
@@ -100,11 +107,11 @@ function burn(chain: FakeChain, a: { block: bigint; value: bigint; logIndex?: nu
   )
 }
 
-function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)]) {
+function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)], blockReads?: number) {
   const chain = new FakeChain(head)
   const pools = new PoolRegistry()
   for (const p of registered) pools.add(p, SUPPLY)
-  const source = v4Source({ sql: {} as Sql, chain, logger: () => {}, pools })
+  const source = v4Source({ sql: {} as Sql, chain, logger: () => {}, pools, blockReads })
   /** Processes [from, to] as a backfill span, or as the live tick's with `live`. */
   const run = (to: bigint, from = B - 100n, live = false) =>
     source.process(
@@ -395,6 +402,215 @@ describe("v4 source", () => {
   })
 })
 
+describe("v4 source in Calamari pools", () => {
+  const USDC = "0x2d270e6886d130d724215a266106e6832161eaed" as Address
+  const WNVDAX = "0xa8ddb5cd96b5222afe198316e9a57caa642850d5" as Address
+  const POOLS: Record<
+    CalamariFixtureName,
+    { token: Address; quote: Address; tokenIsCurrency0: boolean; quoteDecimals: number }
+  > = {
+    // The GM token is currency1 against native ETH (the zero address).
+    "calamari-swap-gm": {
+      token: "0x1d6a5f9e7f00f89b764262a776fcf27159a6a0cc",
+      quote: NATIVE_QUOTE_ASSET,
+      tokenIsCurrency0: false,
+      quoteDecimals: 18,
+    },
+    "calamari-swap-gm-first": {
+      token: "0x1d6a5f9e7f00f89b764262a776fcf27159a6a0cc",
+      quote: NATIVE_QUOTE_ASSET,
+      tokenIsCurrency0: false,
+      quoteDecimals: 18,
+    },
+    "calamari-swap-moved": {
+      token: "0x9ea7eecd0cddcdd0d287cd37f6c6ad6e320d9c9d",
+      quote: NATIVE_QUOTE_ASSET,
+      tokenIsCurrency0: false,
+      quoteDecimals: 18,
+    },
+    // USDC sorts below the token, so the token is currency1 and the quote has 6 decimals.
+    "calamari-swap-usdc": {
+      token: "0xb600d140dd47d92985304cb2fd061d70a8217bb4",
+      quote: USDC,
+      tokenIsCurrency0: false,
+      quoteDecimals: 6,
+    },
+    // The token sorts below its quote, so it is currency0.
+    "calamari-swap-wnvdax": {
+      token: "0x074ac2e3223b1ea149b8c0f5404b73612ad64179",
+      quote: WNVDAX,
+      tokenIsCurrency0: true,
+      quoteDecimals: 18,
+    },
+  }
+
+  /** The recorded transaction in a chain, with a registry holding the swap's pool on Calamari. */
+  function recorded(name: CalamariFixtureName, manager: Address = CALAMARI_POOL_MANAGER) {
+    const f = loadCalamariFixture(name)
+    const logs = f.logs.filter((l) => decodeSwap(l) !== null)
+    const decoded = decodeSwap(logs[0]!)!
+    const p = POOLS[name]
+    const { chain, pools, source, run } = setup(f.blockNumber + 10n, [
+      {
+        poolId: decoded.poolId,
+        poolManager: CALAMARI_POOL_MANAGER,
+        token: p.token,
+        launchId: pad(p.token, { size: 32 }),
+        launchpad: "tsunami",
+        quoteAsset: p.quote,
+        tokenIsCurrency0: p.tokenIsCurrency0,
+        createdBlock: f.blockNumber - 10n,
+      },
+    ])
+    for (const l of f.logs)
+      chain.add({ ...l, address: l.address === logs[0]!.address ? manager : l.address })
+    chain.senders.set(f.blockNumber, {
+      hash: chain.hashOf(f.blockNumber),
+      senders: new Map(Object.entries(f.senders) as [Hash, Address][]),
+    })
+    return { f, decoded, p, chain, pools, source, run: () => run(f.blockNumber, f.blockNumber) }
+  }
+
+  it("a Calamari swap in a registered Calamari pool is indexed", async () => {
+    const { f, decoded, p, run } = recorded("calamari-swap-gm")
+    const batch = await run()
+    expect(batch.events).toHaveLength(1)
+    expect(batch.events[0]?.event).toMatchObject({
+      type: "launchpad.swap",
+      launchpad: "tsunami",
+      token: p.token,
+      poolId: decoded.poolId,
+      poolManager: CALAMARI_POOL_MANAGER,
+      side: "buy",
+      trader: f.senders[f.txHash],
+      router: decoded.sender,
+      quoteAsset: NATIVE_QUOTE_ASSET,
+      // Recorded: 0.000495 ETH paid for 708.476731883691433815 GM.
+      quoteAmount: "495000000000000",
+      tokenAmount: "708476731883691433815",
+    })
+  })
+
+  it("a Calamari-shaped swap from the Uniswap PoolManager for a Calamari pool id is ignored (synthetic)", async () => {
+    // With a Uniswap pool registered too, the swap request covers the Uniswap PoolManager, so the
+    // re-addressed log is fetched and only the emitter check keeps it out.
+    const { f, chain, pools, source } = recorded("calamari-swap-gm", UNISWAP_V4_POOL_MANAGER)
+    pools.add(entry(1), SUPPLY)
+    const [swapRequest] = source.filters()
+    const batch = await source.process(
+      [chain.logsIn(f.blockNumber, f.blockNumber, swapRequest!), []],
+      { toBlock: f.blockNumber, live: false },
+    )
+    expect(batch.events).toEqual([])
+    expect(batch.trades).toEqual([])
+    expect(chain.getBlockSendersCalls).toBe(0)
+  })
+
+  it("a swap from another contract for a registered pool id is ignored (synthetic)", async () => {
+    const { f, chain, source } = recorded(
+      "calamari-swap-gm",
+      "0x00000000000000000000000000000000000000f9",
+    )
+    const batch = await source.process(
+      [chain.logsIn(f.blockNumber, f.blockNumber, { topics: [SWAP_TOPIC] }), []],
+      {
+        toBlock: f.blockNumber,
+        live: false,
+      },
+    )
+    expect(batch.events).toEqual([])
+  })
+
+  it("swaps in a Uniswap pool and a Calamari pool are both indexed in one span", async () => {
+    const { f, chain, pools, source } = recorded("calamari-swap-gm")
+    pools.add(entry(1), SUPPLY)
+    swap(chain, { block: B })
+    const batch = await source.process(
+      source.filters().map((flt) => (flt ? chain.logsIn(B - 100n, f.blockNumber, flt) : [])),
+      { toBlock: f.blockNumber, live: false },
+    )
+    expect(batch.events.map((e) => (e.event as { poolManager: string }).poolManager)).toEqual([
+      UNISWAP_V4_POOL_MANAGER,
+      CALAMARI_POOL_MANAGER,
+    ])
+  })
+
+  it("reads the swaps of a Calamari pool registered after the filters were built", async () => {
+    const { f, decoded, p, chain, pools } = recorded("calamari-swap-gm")
+    const entryOf = pools.byId(decoded.poolId)!
+    const late = setup(f.blockNumber + 10n, [])
+    for (const l of f.logs) late.chain.add(l)
+    late.chain.senders.set(f.blockNumber, chain.senders.get(f.blockNumber)!)
+    expect(late.source.filters()).toEqual([null, null])
+    late.pools.add({ ...entryOf, createdBlock: f.blockNumber - 1n }, SUPPLY)
+    const batch = await late.source.process([[], []], { toBlock: f.blockNumber, live: false })
+    expect(batch.events).toHaveLength(1)
+    expect(batch.events[0]?.event).toMatchObject({
+      token: p.token,
+      poolManager: CALAMARI_POOL_MANAGER,
+    })
+  })
+
+  it("the swap filter lists both PoolManagers in one request", () => {
+    const { pools, source } = recorded("calamari-swap-gm")
+    expect(source.filters()[0]).toMatchObject({ address: [CALAMARI_POOL_MANAGER] })
+    pools.add(entry(1), SUPPLY)
+    const swapRequests = source.filters().filter((flt) => flt?.topics[0] === SWAP_TOPIC)
+    expect(swapRequests).toHaveLength(1)
+    expect([swapRequests[0]?.address].flat().sort()).toEqual(
+      [UNISWAP_V4_POOL_MANAGER, CALAMARI_POOL_MANAGER].sort(),
+    )
+  })
+
+  const QUOTE_LIQUIDITY = {
+    // Post-swap liquidity 49,827,707,290,221,572 at √P 1.587e39 (USDC is currency0): 2.48684 USDC.
+    "calamari-swap-usdc": "2486840",
+    // Liquidity 102,124,144,697,556,272,531,684 at √P 4.125e25 (the token is currency0): 53.17 wNVDAx.
+    "calamari-swap-wnvdax": "53173809750392932681",
+  } as const
+
+  it.each(["calamari-swap-usdc", "calamari-swap-wnvdax"] as const)(
+    "%s: market cap and liquidity are in the quote's base units, from the pool's price",
+    async (name) => {
+      const { f, decoded, p, run } = recorded(name)
+      const batch = await run()
+      const ev = batch.events[0]!.event as {
+        marketCap: string
+        quoteLiquidity: string
+        quoteAmount: string
+        tokenAmount: string
+        side: string
+        supply: string
+      }
+      expect(ev.supply).toBe(String(SUPPLY))
+      expect(ev.quoteLiquidity).toBe(QUOTE_LIQUIDITY[name])
+      expect(ev.side).toBe(name === "calamari-swap-usdc" ? "sell" : "buy")
+
+      // The price the swap executed at lies between the pool's price before and after it. Dollars
+      // and tokens are in different decimals, so a wrong scale puts the cap orders of magnitude away.
+      // The swap's amounts include the pool fee on the input side (hundredths of a basis point).
+      const after = BigInt(ev.marketCap)
+      const before = poolMarketCap(f.before.sqrtPriceX96, p.tokenIsCurrency0, SUPPLY)
+      const fee = BigInt(decoded.fee)
+      const quote = BigInt(ev.quoteAmount)
+      const tokens = BigInt(ev.tokenAmount)
+      const executed =
+        ev.side === "buy"
+          ? (SUPPLY * quote * (1_000_000n - fee)) / (tokens * 1_000_000n)
+          : (SUPPLY * quote * 1_000_000n) / (tokens * (1_000_000n - fee))
+      const [low, high] = before < after ? [before, after] : [after, before]
+      expect(
+        executed >= low && executed <= high,
+        `${before} before, ${executed} executed, ${after} after`,
+      ).toBe(true)
+      // The cap after a buy is above the cap before it, and after a sell below.
+      expect(ev.side === "buy" ? after > before : after < before).toBe(true)
+      expect(after * 100n).toBeGreaterThan(executed)
+      expect(after).toBeLessThan(executed * 100n)
+    },
+  )
+})
+
 describe("v4 source through the database", () => {
   /** The InkyPump and v4 sources sharing one registry, in the order `main.ts` runs them. */
   async function db() {
@@ -496,5 +712,76 @@ describe("v4 source through the database", () => {
     } finally {
       await sql.end()
     }
+  })
+  describe("block sender reads", () => {
+    /** `count` swap blocks from B, reads finishing in reverse order. */
+    function manySwaps(chain: FakeChain, count: number) {
+      const blocks: bigint[] = []
+      for (let i = 0; i < count; i++) {
+        const block = B + BigInt(i)
+        blocks.push(block)
+        swap(chain, {
+          block,
+          sqrtPriceX96: Q96 + BigInt(i) * 10n ** 20n,
+          trader: tokenOf(100 + i),
+          tx: pad(toHex(0xabc000 + i), { size: 32 }) as Hash,
+        })
+      }
+      chain.sendersDelayMs = (n) => (count - Number(n - B)) * 2
+      return blocks
+    }
+
+    it("a backfill span reads each swap block's senders once, at most 8 at a time", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      const blocks = manySwaps(chain, 30)
+      await run(B + 30n)
+      expect(chain.getBlockSendersCalls).toBe(30)
+      expect(chain.maxSendersInFlight).toBe(8)
+      expect([...chain.sendersOrder].sort()).toEqual([...blocks].sort())
+    })
+
+    it("a backfill span gives the same batch with 8 reads in flight as with 1", async () => {
+      const make = async (blockReads?: number) => {
+        const { chain, pools, run } = setup(B + 20n, [entry(1)], blockReads)
+        pools.setDead(TOKEN, 0n, B - 50n)
+        manySwaps(chain, 12)
+        burn(chain, { block: B + 5n, value: 3n, logIndex: 4 })
+        const batch = await run(B + 12n)
+        return { batch, widest: chain.maxSendersInFlight }
+      }
+      const { batch: one, widest: widestOne } = await make(1)
+      const { batch: eight, widest: widestEight } = await make()
+      expect([widestOne, widestEight]).toEqual([1, 8])
+      expect(one.trades).toHaveLength(12)
+      expect(eight).toEqual(one)
+    })
+
+    it("the live tick reads swap blocks one at a time in block order", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      const blocks = manySwaps(chain, 10)
+      await run(B + 10n, B - 100n, true)
+      expect(chain.maxSendersInFlight).toBe(1)
+      expect(chain.sendersOrder).toEqual(blocks)
+    })
+
+    it("in a backfill span the first block not served fails the span at that block", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      const blocks = manySwaps(chain, 10)
+      chain.senders.delete(blocks[6]!)
+      chain.senders.delete(blocks[2]!)
+      await expect(run(B + 10n)).rejects.toEqual(new BlockNotServedError(blocks[2]!))
+    })
+
+    it("a burn-only block is not read in a backfill span", async () => {
+      const { chain, pools, run } = setup()
+      pools.setDead(TOKEN, 0n, B - 50n)
+      swap(chain, { block: B })
+      burn(chain, { block: B + 3n, value: 2n })
+      await run(B + 5n)
+      expect(chain.sendersOrder).toEqual([B])
+    })
   })
 })
