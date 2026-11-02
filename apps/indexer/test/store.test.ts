@@ -397,7 +397,7 @@ describe("store writes without the cursor", () => {
     expect(await orderViolations()).toEqual([])
   })
 
-  it("rolls back when a row it cannot confirm stays below its own confirmed rows", async () => {
+  it("rolls back before its writers run when a row it cannot confirm is below its own confirmed rows", async () => {
     await store.writeBatch([only(await rowAt(B + 10n, 1))], [], {
       cursor: { block: B + 10n, hash: pad(toHex(1), { size: 32 }) as Hash },
       head: B + 10n,
@@ -414,7 +414,8 @@ describe("store writes without the cursor", () => {
         { cursor: null, head: B + 10n },
       ),
     ).rejects.toBeInstanceOf(UnconfirmedAboveHeadError)
-    expect(ran).toBe(true)
+    // It stops before the writers run, so a write that cannot commit does not hold the lock.
+    expect(ran).toBe(false)
     expect(await flags()).toEqual([{ block: B + 10n, confirmed: false }])
   })
 

@@ -87,6 +87,26 @@ export function createStore(sql: Sql) {
         // Confirm older rows in the same commit that adds newer confirmed ones, so a reader of
         // `confirmed and id > $1` can never pass an unconfirmed row that is old enough to confirm.
         await tx`update indexer.events set confirmed = true where not confirmed and block <= ${s(opts.head - 1n)}`
+        // A backfill's new confirmed rows cannot go above a row still unconfirmed after the sweep.
+        // Stop before the writers and inserts, so a write that cannot commit does not hold the lock
+        // through them. The check after the inserts stays as the final guard.
+        if (!opts.cursor) {
+          const fresh = batches.flatMap((b) => b.events).filter((e) => e.block <= opts.head - 1n)
+          if (fresh.length > 0) {
+            const [row] = await tx<{ doomed: boolean }[]>`
+              select exists (select 1 from indexer.events where not confirmed)
+                and exists (
+                  select 1
+                  from unnest(${fresh.map((e) => e.event.txHash)}::text[],
+                              ${fresh.map((e) => e.event.logIndex)}::int[],
+                              ${fresh.map((e) => e.sub ?? "")}::text[]) as k (h, i, sub)
+                  where not exists (
+                    select 1 from indexer.events x
+                    where x.tx_hash = k.h and x.log_index = k.i and x.sub = k.sub)
+                ) as doomed`
+            if (row?.doomed) throw new UnconfirmedAboveHeadError(opts.head)
+          }
+        }
         for (const write of writers) await write(tx)
         // Chain order across sources (the sort is stable), so ids never put a confirmed row after an unconfirmed one.
         const events = batches
