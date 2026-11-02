@@ -3,6 +3,8 @@
 Date: 2026-10-31
 Status: Accepted
 
+Amended by [0038](0038-backfill-beside-start.md) (2026-11-02): a backfill may run beside `start`, so the consequence that it still runs with `start` stopped no longer applies; the number of block reads in flight is set with `--block-reads` (default 8).
+
 ## Context
 
 The Tsunami and v4 swap sources need the sender of every transaction that holds one of their logs, which takes one block read per block with logs. Tsunami also reads each launch block's token supplies and fetches each launch's metadata. A backfill span in a busy range held hundreds of such blocks, and reading them one after another took about 1.8 seconds per block against public Ink endpoints, so a span of 10,000 blocks took over half an hour.
