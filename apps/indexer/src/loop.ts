@@ -11,7 +11,6 @@ import type { Cursor, Store, TxStep } from "./store"
 const WRITE_RETRY_MS = 1_000
 /** A backfill write that has waited this long logs one warning. */
 const WRITE_WARN_MS = 30_000
-
 /** A condition warns at most once in this long, and its stretch ends after this long without it. */
 const QUIET_MS = 10 * 60_000
 
@@ -256,9 +255,11 @@ export class Indexer {
   }
 
   /**
-   * Re-scans [from, to] idempotently without moving the live cursor. Stop `start` before running it.
-   * `only` limits it to some sources' filters (see `Source.filters`); a source with none of its
-   * filters picked is left out.
+   * Re-scans [from, to] idempotently without moving the live cursor. `only` limits it to some
+   * sources' filters (see `Source.filters`); a source with none of its filters picked is left out.
+   *
+   * It may run beside `start` (see ADR 0038): its writes wait for rows the live tick has not
+   * confirmed yet.
    */
   async backfill(from: bigint, to?: bigint, only?: readonly BackfillSource[]) {
     const end = to ?? (await this.deps.chain.getBlockNumber())
@@ -290,8 +291,9 @@ export class Indexer {
     let events = 0
     try {
       const batches: SourceBatch[] = []
+      const readStateAt = moveCursor ? toBlock : await this.backfillReadBlock(toBlock)
       for (const [i, source] of sources.entries())
-        batches.push(await source.process(logs[i]!, { toBlock, live: moveCursor }))
+        batches.push(await source.process(logs[i]!, { toBlock, live: moveCursor, readStateAt }))
       let cursor: Cursor | null = null
       if (moveCursor) {
         const end = await chain.getBlock(toBlock)
@@ -400,5 +402,14 @@ export class Indexer {
 
   private async reloadSources() {
     for (const source of this.deps.sources) await source.reload()
+  }
+
+  /**
+   * The block a backfill span reads unattached state at: the live cursor's block when a live
+   * process has gone at least as far as the span, a block the endpoints serve. Null reads at the head.
+   */
+  private async backfillReadBlock(toBlock: bigint): Promise<bigint | null> {
+    const cursor = await this.deps.store.getCursor()
+    return cursor && cursor.block >= toBlock ? cursor.block : null
   }
 }

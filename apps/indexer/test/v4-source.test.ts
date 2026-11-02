@@ -2,7 +2,6 @@ import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
   CALAMARI_POOL_MANAGER,
-  DEAD_ADDRESS,
   decodeSwap,
   marketCap,
   NATIVE_QUOTE_ASSET,
@@ -25,87 +24,21 @@ import { v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
 import { FakeChain } from "./fake-chain"
 import { bond, launch, launchIdOf, tokenOf, trade } from "./scenario"
-
-const B = 45_300_000n
-const Q96 = 1n << 96n
-const SUPPLY = 10n ** 27n
-const TOKEN = tokenOf(1)
-const POOL = launchIdOf(1)
-const ROUTER: Address = "0x00000000000000000000000000000000000000f1"
-const BUYER: Address = "0x00000000000000000000000000000000000000b1"
-const DEAD_KEY = `${TOKEN}:${DEAD_ADDRESS}`
-
-const entry = (n: number): PoolEntry => ({
-  poolId: launchIdOf(n),
-  poolManager: UNISWAP_V4_POOL_MANAGER,
-  token: tokenOf(n),
-  launchId: launchIdOf(n),
-  launchpad: "inkypump",
-  quoteAsset: NATIVE_QUOTE_ASSET,
-  // The native quote is the zero address, so the token is always currency1.
-  tokenIsCurrency0: false,
-  createdBlock: B - 10n,
-})
-
-let txCounter = 0
-const nextTx = () => pad(toHex(0xc0ffee000 + ++txCounter), { size: 32 }) as Hash
-
-/** Records `trader` as the sender of `tx` in `block`, with the block's own hash. */
-function sender(chain: FakeChain, block: bigint, tx: Hash, trader: Address) {
-  const s = chain.senders.get(block) ?? { hash: chain.hashOf(block), senders: new Map() }
-  s.senders.set(tx, trader)
-  chain.senders.set(block, s)
-}
-
-/**
- * A buy in `poolId` (default the registered pool). With the token as currency1, a √P of 2⁹⁶
- * values the token at one quote unit, so the market cap equals the supply; half that √P is four
- * times the market cap.
- */
-function swap(
-  chain: FakeChain,
-  a: {
-    block: bigint
-    sqrtPriceX96?: bigint
-    logIndex?: number
-    tx?: Hash
-    poolId?: Hash
-    trader?: Address
-    side?: "buy" | "sell"
-  },
-): Hash {
-  const tx = a.tx ?? nextTx()
-  const buy = (a.side ?? "buy") === "buy"
-  chain.add(
-    swapLog(
-      {
-        poolId: a.poolId ?? POOL,
-        sender: ROUTER,
-        amount0: buy ? -(10n ** 15n) : 10n ** 15n,
-        amount1: buy ? 10n ** 20n : -(10n ** 20n),
-        sqrtPriceX96: a.sqrtPriceX96 ?? Q96,
-        liquidity: 10n ** 21n,
-      },
-      { blockNumber: a.block, transactionHash: tx, logIndex: a.logIndex ?? 0 },
-    ),
-  )
-  sender(chain, a.block, tx, a.trader ?? BUYER)
-  return tx
-}
-
-function burn(chain: FakeChain, a: { block: bigint; value: bigint; logIndex?: number }) {
-  chain.add(
-    transferLog(
-      { from: BUYER, to: DEAD_ADDRESS, value: a.value },
-      {
-        address: TOKEN,
-        blockNumber: a.block,
-        transactionHash: nextTx(),
-        logIndex: a.logIndex ?? 0,
-      },
-    ),
-  )
-}
+import {
+  B,
+  BUYER,
+  burn,
+  DEAD_KEY,
+  entry,
+  nextTx,
+  POOL,
+  Q96,
+  ROUTER,
+  SUPPLY,
+  sender,
+  swap,
+  TOKEN,
+} from "./v4-scenario"
 
 function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)], blockReads?: number) {
   const chain = new FakeChain(head)
@@ -113,10 +46,10 @@ function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)], blockReads?
   for (const p of registered) pools.add(p, SUPPLY)
   const source = v4Source({ sql: {} as Sql, chain, logger: () => {}, pools, blockReads })
   /** Processes [from, to] as a backfill span, or as the live tick's with `live`. */
-  const run = (to: bigint, from = B - 100n, live = false) =>
+  const run = (to: bigint, from = B - 100n, live = false, readStateAt?: bigint | null) =>
     source.process(
       source.filters().map((f) => (f ? chain.logsIn(from, to, f) : [])),
-      { toBlock: to, live },
+      { toBlock: to, live, readStateAt },
     )
   return { chain, pools, source, run }
 }
@@ -289,6 +222,22 @@ describe("v4 source", () => {
     expect(second.dead).toEqual([])
     expect(pools.marks(TOKEN)).toMatchObject({ deadBalance: 100n, deadBalanceBlock: B + 120n })
     expect(chain.balanceReads).toEqual([B + 120n])
+  })
+
+  it("a backfill span reads unread dead balances at the block it is given, not at the chain head", async () => {
+    const { chain, pools, run } = setup(B + 120n)
+    chain.balances.set(DEAD_KEY, 100n)
+    // The head is a block the endpoints may not serve yet; the block it is given is.
+    const read = chain.readBalances.bind(chain)
+    chain.readBalances = async (pairs, block) => {
+      if (block > B + 95n) throw Object.assign(new Error("header not found"), { code: -32000 })
+      return read(pairs, block)
+    }
+    swap(chain, { block: B })
+    const batch = await run(B + 100n, B - 100n, false, B + 90n)
+    expect(batch.dead).toEqual([{ token: TOKEN, balance: 100n, block: B + 90n }])
+    expect(pools.marks(TOKEN)).toMatchObject({ deadBalance: 100n, deadBalanceBlock: B + 90n })
+    expect(chain.getBlockNumberCalls).toBe(0)
   })
 
   it("in the live tick, the first dead balance is read at the span's end and stamped there", async () => {
@@ -654,6 +603,34 @@ describe("v4 source through the database", () => {
     }
     return { sql, chain, pools, v4, ingest, rollback, bonded }
   }
+
+  it("a dead balance never moves back to an older block", async () => {
+    const { sql, v4, bonded } = await db()
+    try {
+      await bonded()
+      const write = (balance: bigint, block: bigint) =>
+        sql.begin((tx) =>
+          v4.write(tx, {
+            trades: [],
+            events: [],
+            ath: [],
+            dead: [{ token: TOKEN, balance, block }],
+            blocks: [],
+          }),
+        )
+      const dead = () =>
+        sql`select dead_balance::text as balance, dead_balance_block as block from indexer.tokens`
+      await write(50n, B + 200n)
+      await write(20n, B + 150n)
+      expect(await dead()).toEqual([{ balance: "50", block: B + 200n }])
+      await write(55n, B + 200n)
+      expect(await dead()).toEqual([{ balance: "55", block: B + 200n }])
+      await write(70n, B + 210n)
+      expect(await dead()).toEqual([{ balance: "70", block: B + 210n }])
+    } finally {
+      await sql.end()
+    }
+  })
 
   it("writing a pool trade twice keeps one row", async () => {
     const { sql, chain, v4, ingest, bonded } = await db()

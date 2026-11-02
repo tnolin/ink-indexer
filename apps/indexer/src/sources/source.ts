@@ -26,9 +26,14 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
   filters(only?: readonly BackfillSource[]): (LogFilter | null)[]
   /**
    * One log array per filter, same order. Network reads allowed; no DB writes. `live` is true for
-   * the live tick's spans and false for a backfill's.
+   * the live tick's spans and false for a backfill's. `readStateAt` is the block to read state
+   * that is not tied to a log at, a block the endpoints serve: the span's end for the live tick,
+   * the live cursor's block for a backfill running beside it; null or absent reads at the head.
    */
-  process(logs: ChainLog[][], ctx: { toBlock: bigint; live: boolean }): Promise<B>
+  process(
+    logs: ChainLog[][],
+    ctx: { toBlock: bigint; live: boolean; readStateAt?: bigint | null },
+  ): Promise<B>
   write(tx: Tx, batch: B): Promise<void>
   /** Network reads before the rollback transaction. */
   prepareRollback(fork: bigint): Promise<R>
