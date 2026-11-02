@@ -9,7 +9,7 @@ import { v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
 import { FakeChain } from "./fake-chain"
 import { bond, launch, trade } from "./scenario"
-import { B, DEAD_KEY, Q96, swap } from "./v4-scenario"
+import { B, burn, DEAD_KEY, Q96, swap } from "./v4-scenario"
 
 let sql: Sql
 beforeEach(async () => {
@@ -150,5 +150,36 @@ describe("backfill values and reads", () => {
     await idx.init()
     await idx.backfill(B, B + 9n)
     expect(chain.balanceReads).toEqual([B + 20n])
+  })
+
+  it("a live process that starts following a token after a reload re-reads its dead balance instead of trusting the stored one", async () => {
+    const chain = chainWithSwaps()
+    chain.head = B + 14n
+    // The balance at a block: a burn at B+12 and another at B+16.
+    chain.balances.set(DEAD_KEY, (block) => (block >= B + 16n ? 45n : block >= B + 12n ? 40n : 0n))
+    burn(chain, { block: B + 12n, value: 40n })
+    const store = createStore(sql)
+    await store.writeBatch([], [], {
+      cursor: { block: B + 10n, hash: chain.hashOf(B + 10n) },
+      head: B + 10n,
+    })
+    // The live process starts before the token has a pool, so nothing follows it.
+    const live = indexerOn(sql, chain)
+    await live.init()
+    // A backfill registers the pool and reads the balance at the live cursor's block.
+    const backfill = indexerOn(sql, chain)
+    await backfill.init()
+    await backfill.backfill(B, B + 9n)
+    const dead = () =>
+      sql`select dead_balance::text as balance, dead_balance_block as block from indexer.tokens`
+    expect(await dead()).toEqual([{ balance: "0", block: B + 10n }])
+    await live.trigger()
+
+    // The live process reloads and now follows the token; the next burn is the first it sees.
+    burn(chain, { block: B + 16n, value: 5n })
+    chain.head = B + 18n
+    await live.init()
+    await live.trigger()
+    expect(await dead()).toEqual([{ balance: "45", block: B + 18n }])
   })
 })
