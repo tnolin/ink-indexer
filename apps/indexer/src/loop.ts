@@ -1,11 +1,16 @@
 import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import type { Chain } from "./chain"
-import { BlockNotServedError } from "./errors"
+import { BlockNotServedError, UnconfirmedAboveHeadError } from "./errors"
 import type { Level, Logger } from "./log"
 import { readLogs } from "./log-plan"
 import type { BackfillSource, Source, SourceBatch } from "./sources/source"
-import type { Cursor, Store } from "./store"
+import type { Cursor, Store, TxStep } from "./store"
+
+/** How long a backfill write waits between two tries when a row it cannot confirm is below it. */
+const WRITE_RETRY_MS = 1_000
+/** A backfill write that has waited this long logs one warning. */
+const WRITE_WARN_MS = 30_000
 
 /** A condition warns at most once in this long, and its stretch ends after this long without it. */
 const QUIET_MS = 10 * 60_000
@@ -120,6 +125,9 @@ export class Indexer {
       mergeRequests?: boolean
       /** The least time between the starts of two live ticks; 0 or unset starts one on every trigger. */
       tickMinIntervalMs?: number
+      /** Waits and clock of a backfill that retries; tests replace them. */
+      sleep?: (ms: number) => Promise<void>
+      now?: () => number
     },
   ) {
     this.staleHead = new Condition("stale head", deps.logger)
@@ -300,11 +308,13 @@ export class Indexer {
           throw new BlockNotServedError(newest.number)
         cursor = { block: toBlock, hash: end.hash }
       }
-      await store.writeBatch(
-        batches,
-        sources.map((source, i) => (tx) => source.write(tx, batches[i]!)),
-        { cursor, head },
+      const writers = sources.map(
+        (source, i): TxStep =>
+          (tx) =>
+            source.write(tx, batches[i]!),
       )
+      if (moveCursor) await store.writeBatch(batches, writers, { cursor, head })
+      else await this.writeBackfill(batches, writers)
       if (cursor) this.cursorBlock = cursor.block
       events = batches.reduce((n, b) => n + b.events.length, 0)
     } catch (err) {
@@ -314,6 +324,40 @@ export class Indexer {
     }
     if (events > 0) logger("info", "ingested", { from, to: toBlock, events })
     return toBlock
+  }
+
+  private timing() {
+    return {
+      sleep: this.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))),
+      now: this.deps.now ?? Date.now,
+    }
+  }
+
+  /**
+   * A backfill write confirms the rows below a head it has just read. When a row it cannot confirm
+   * yet is below its own (the live tick's head block, or an off-chain row at the cursor), the store
+   * refuses it; this reads a newer head and writes the same batches again, without reading the
+   * chain again.
+   */
+  private async writeBackfill(batches: SourceBatch[], writers: TxStep[]) {
+    const { chain, store, logger } = this.deps
+    const { sleep, now } = this.timing()
+    const started = now()
+    let warned = false
+    for (;;) {
+      const head = await chain.getBlockNumber()
+      try {
+        await store.writeBatch(batches, writers, { cursor: null, head })
+        return
+      } catch (err) {
+        if (!(err instanceof UnconfirmedAboveHeadError)) throw err
+        if (!warned && now() - started >= WRITE_WARN_MS) {
+          warned = true
+          logger("warn", "backfill write waiting for newer rows to confirm", { head })
+        }
+        await sleep(WRITE_RETRY_MS)
+      }
+    }
   }
 
   private async checkReorg() {

@@ -683,3 +683,108 @@ describe("Indexer over several sources", () => {
     expect(await store.getCursor()).toEqual({ block: S + 20n, hash: chain.hashOf(S + 20n) })
   })
 })
+
+describe("Indexer.backfill beside the live tick", () => {
+  async function orderViolations() {
+    return sql`
+      select u.id as unconfirmed_id, c.id as confirmed_id
+      from indexer.events u join indexer.events c on c.id > u.id and c.confirmed
+      where not u.confirmed`
+  }
+
+  /** A chain with a launch at S+10 and a trade in every block to S+140, and a live process at S+99. */
+  async function liveBeside(
+    sleep: (ms: number) => Promise<void>,
+    opts: { now?: () => number; logger?: Logger } = {},
+  ) {
+    const chain = new FakeChain(S + 99n)
+    launch(chain, { n: 1, block: S + 10n })
+    for (let b = 11n; b <= 140n; b++) trade(chain, { n: 1, block: S + b, sold: b })
+    const seed = pumpIndexer(chain, createStore(sql))
+    await seed.init()
+    await seed.backfill(S, S + 12n)
+    await store.writeBatch([], [], {
+      cursor: { block: S + 99n, hash: chain.hashOf(S + 99n) },
+      head: S + 99n,
+    })
+    const process = { calls: 0 }
+    const source = inkypumpSource({ sql, chain, pools: new PoolRegistry(), logger: () => {} })
+    const inner = source.process.bind(source)
+    source.process = async (logs, ctx) => {
+      process.calls++
+      return inner(logs, ctx)
+    }
+    const backfiller = new Indexer({
+      chain,
+      store: createStore(sql),
+      logger: opts.logger ?? (() => {}),
+      sources: [source],
+      sleep,
+      now: opts.now,
+    })
+    await backfiller.init()
+    const live = pumpIndexer(chain, createStore(sql))
+    await live.init()
+    return { chain, live, backfiller, process }
+  }
+
+  it("a backfill write waits for the head to pass an unconfirmed live row, then commits without reading the logs again", async () => {
+    const waits: number[] = []
+    const ctx = { chain: undefined as FakeChain | undefined }
+    const { chain, live, backfiller, process } = await liveBeside(async (ms) => {
+      waits.push(ms)
+      if (waits.length === 2) ctx.chain!.head += 1n // the head passes the live row on the second wait
+    })
+    ctx.chain = chain
+    chain.head = S + 100n
+    await live.trigger() // the live row at S+100 stays unconfirmed
+    expect(await sql`select count(*)::int as n from indexer.events where not confirmed`).toEqual([
+      { n: 1 },
+    ])
+
+    await backfiller.backfill(S + 40n, S + 60n)
+    expect(waits).toEqual([1_000, 1_000])
+    expect(process.calls).toBe(1)
+    expect(await orderViolations()).toEqual([])
+    expect((await sql`select count(*)::int as n from indexer.events`)[0]!.n).toBeGreaterThan(5)
+  })
+
+  it("a backfill write that has waited 30 s logs one warning", async () => {
+    const warnings: string[] = []
+    const ctx = { chain: undefined as FakeChain | undefined, clock: 0 }
+    const { chain, live, backfiller } = await liveBeside(
+      async () => {
+        ctx.clock += 20_000
+        if (ctx.clock >= 100_000) ctx.chain!.head += 1n
+      },
+      {
+        now: () => ctx.clock,
+        logger: (level, msg) => {
+          if (level === "warn") warnings.push(msg)
+        },
+      },
+    )
+    ctx.chain = chain
+    chain.head = S + 100n
+    await live.trigger()
+    await backfiller.backfill(S + 40n, S + 60n)
+    expect(warnings).toEqual(["backfill write waiting for newer rows to confirm"])
+  })
+
+  it("alternating live ticks and backfill spans never leaves a confirmed row above an unconfirmed one", async () => {
+    const ctx = { chain: undefined as FakeChain | undefined }
+    const { chain, live, backfiller } = await liveBeside(async () => {
+      ctx.chain!.head += 1n
+    })
+    ctx.chain = chain
+    for (let i = 0; i < 10; i++) {
+      chain.head += 1n
+      await live.trigger()
+      expect(await orderViolations()).toEqual([])
+      const from = S + 13n + BigInt(i) * 8n
+      await backfiller.backfill(from, from + 7n)
+      expect(await orderViolations()).toEqual([])
+    }
+    expect((await sql`select count(*)::int as n from indexer.events`)[0]!.n).toBeGreaterThan(20)
+  })
+})

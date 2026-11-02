@@ -9,3 +9,14 @@ export class BlockNotServedError extends Error {
     this.name = "BlockNotServedError"
   }
 }
+
+/**
+ * A write without the chain cursor (a backfill) would put a confirmed event above one it cannot
+ * confirm yet. The transaction rolls back; the caller reads a newer head and writes again.
+ */
+export class UnconfirmedAboveHeadError extends Error {
+  constructor(readonly head: bigint) {
+    super(`unconfirmed events remain below this write at head ${head}`)
+    this.name = "UnconfirmedAboveHeadError"
+  }
+}
