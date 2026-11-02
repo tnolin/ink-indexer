@@ -78,8 +78,10 @@ export function v4Source(deps: {
   const { sql, chain, pools } = deps
   // The pool ids the last `filters` call asked for; null when the v4 group was not picked.
   let asked: Set<Hash> | null = null
-  // Tokens whose stored dead balance this process has not followed itself: every token after a
-  // reload. Burns between the stored block and the span were not seen, so the balance is read again.
+  // Tokens this process started following at a reload. Burns between their stored balance's block
+  // and the first span it sees were not seen, so the balance is read again. A reload that leaves the
+  // registry as it was adds none.
+  const followed = new Set<Address>()
   const refresh = new Set<Address>()
   return {
     name: "v4",
@@ -127,8 +129,12 @@ export function v4Source(deps: {
     rollback: (tx, _fork, reads) => resetDead(tx, reads),
     // The InkyPump source's reload loads the registry, dead balances included.
     async reload() {
-      refresh.clear()
-      for (const t of pools.tokens()) if (pools.marks(t)?.deadBalance != null) refresh.add(t)
+      const now = new Set(pools.tokens())
+      for (const t of now)
+        if (!followed.has(t) && pools.marks(t)?.deadBalance != null) refresh.add(t)
+      for (const t of [...refresh]) if (!now.has(t)) refresh.delete(t)
+      followed.clear()
+      for (const t of now) followed.add(t)
     },
   }
 

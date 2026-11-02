@@ -240,6 +240,19 @@ describe("v4 source", () => {
     expect(chain.getBlockNumberCalls).toBe(0)
   })
 
+  it("a reload with an unchanged registry reads no dead balance again", async () => {
+    const { chain, pools, source, run } = setup(B + 120n)
+    pools.setDead(TOKEN, 0n, B - 50n)
+    // The first reload follows the token for the first time, so it is read once.
+    await source.reload()
+    await run(B + 100n)
+    expect(chain.balanceReads).toHaveLength(1)
+    await source.reload()
+    await source.reload()
+    await run(B + 110n, B + 101n)
+    expect(chain.balanceReads).toHaveLength(1)
+  })
+
   it("in the live tick, the first dead balance is read at the span's end and stamped there", async () => {
     const { chain, pools, run } = setup(B + 120n)
     chain.balances.set(DEAD_KEY, 100n)
