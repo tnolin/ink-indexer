@@ -38,8 +38,12 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
   /** Network reads before the rollback transaction. */
   prepareRollback(fork: bigint): Promise<R>
   rollback(tx: Tx, fork: bigint, prepared: R): Promise<void>
-  /** Rebuilds in-memory state after a failed batch or a rollback. */
-  reload(): Promise<void>
+  /**
+   * Rebuilds in-memory state after a failed batch or a rollback. With `athAsOf`, a backfill asks
+   * for the all-time highs as they stood at that block, so its rows do not depend on what was
+   * written above its range.
+   */
+  reload(opts?: { athAsOf?: bigint }): Promise<void>
 }
 
 /**

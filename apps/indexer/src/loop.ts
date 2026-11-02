@@ -265,12 +265,14 @@ export class Indexer {
    * sources' filters (see `Source.filters`); a source with none of its filters picked is left out.
    *
    * It may run beside `start` (see ADR 0038). Its writes wait for rows the live tick has not
-   * confirmed yet. A block the endpoint has not served yet is retried with a growing wait; after
-   * ten minutes on one block it throws, naming the block to resume from.
+   * confirmed yet, and it starts from the ath as it stood before `from`, so its rows do not depend
+   * on what was written above its range. A block the endpoint has not served yet is retried with a
+   * growing wait; after ten minutes on one block it throws, naming the block to resume from.
    */
   async backfill(from: bigint, to?: bigint, only?: readonly BackfillSource[]) {
     const end = to ?? (await this.deps.chain.getBlockNumber())
     const { sleep, now } = this.timing()
+    await this.reloadSources({ athAsOf: from - 1n })
     let stuck = null as { next: bigint; since: number; waitMs: number } | null
     for (let next = from; next <= end; ) {
       try {
@@ -357,7 +359,8 @@ export class Indexer {
       events = batches.reduce((n, b) => n + b.events.length, 0)
     } catch (err) {
       // Sources may hold in-memory state (new hooks) for rows that were never written; drop it.
-      await this.reloadSources()
+      // A backfill reloads its all-time highs as of the span it is retrying.
+      await this.reloadSources(moveCursor ? undefined : { athAsOf: from - 1n })
       throw err
     }
     if (events > 0) logger("info", "ingested", { from, to: toBlock, events })
@@ -436,8 +439,8 @@ export class Indexer {
     logger("warn", "reorg: rolled back to fork block", { fork })
   }
 
-  private async reloadSources() {
-    for (const source of this.deps.sources) await source.reload()
+  private async reloadSources(opts?: { athAsOf?: bigint }) {
+    for (const source of this.deps.sources) await source.reload(opts)
   }
 
   /**

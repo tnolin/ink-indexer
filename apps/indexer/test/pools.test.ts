@@ -105,4 +105,29 @@ describe("PoolRegistry.load", () => {
     })
     expect(r.tokens()).toEqual([T1])
   })
+
+  it("with athAsOf, takes each token's ath from trades and swaps at or below that block", async () => {
+    const p = entry(T1)
+    await sql`insert into indexer.pools (pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0, created_block)
+      values (${p.poolId}, ${p.poolManager}, ${p.token}, ${p.launchpad}, ${p.quoteAsset}, ${p.tokenIsCurrency0}, ${p.createdBlock})`
+    const event = (n: number, type: string, token: Address, block: number, marketCap: string) =>
+      sql`insert into indexer.events (type, entity, payload, block, block_hash, tx_hash, log_index, confirmed)
+        values (${type}, ${token}, ${sql.json({ marketCap })}, ${block}, ${`0x${"0".repeat(63)}1`}, ${`0x${n.toString(16).padStart(64, "0")}`}, 0, true)`
+    await event(1, "launchpad.trade", T1, 100, "5")
+    await event(2, "launchpad.swap", T1, 150, "3")
+    await event(3, "launchpad.swap", T1, 300, "9")
+    await event(4, "launchpad.swap", T2, 250, "40")
+    await sql`update indexer.tokens set ath_market_cap = 9, ath_block = 300 where address = ${T1}`
+    await sql`update indexer.tokens set ath_market_cap = 40, ath_block = 250 where address = ${T2}`
+
+    const asOf = new PoolRegistry()
+    await asOf.load(sql, { athAsOf: 200n })
+    expect(asOf.marks(T1)).toMatchObject({ ath: 5n, athBlock: 100n })
+    expect(asOf.marks(T2)).toMatchObject({ ath: 0n, athBlock: null })
+
+    const now = new PoolRegistry()
+    await now.load(sql)
+    expect(now.marks(T1)).toMatchObject({ ath: 9n, athBlock: 300n })
+    expect(now.marks(T2)).toMatchObject({ ath: 40n, athBlock: 250n })
+  })
 })

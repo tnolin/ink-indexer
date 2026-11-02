@@ -59,6 +59,32 @@ const rows = async (db: Sql) => ({
 })
 
 describe("backfill values and reads", () => {
+  it("values a pool's swaps against the ath before its range, whatever was written above the range", async () => {
+    const chain = chainWithSwaps()
+    const sequential = indexerOn(sql, chain)
+    await sequential.init()
+    await sequential.backfill(B, B + 9n)
+    const expected = await rows(sql)
+    const swaps = expected.events.filter((e) => e.type === "launchpad.swap")
+    expect(swaps).toHaveLength(2)
+    // The second swap raises the ath, so the first swap is told apart from the final ath.
+    expect(swaps[0]!.payload.athMarketCap).not.toBe(swaps[1]!.payload.athMarketCap)
+
+    await sql.end()
+    sql = await resetDb(inject("databaseUrl"))
+    const early = indexerOn(sql, chain)
+    await early.init()
+    await early.backfill(B, B + 3n)
+    const above = indexerOn(sql, chain)
+    await above.init()
+    await above.backfill(B + 8n, B + 9n)
+    // Started after the swap above its range was written: its registry begins at the final ath.
+    const middle = indexerOn(sql, chain)
+    await middle.init()
+    await middle.backfill(B + 4n, B + 7n)
+    expect(await rows(sql)).toEqual(expected)
+  })
+
   it("retries a span whose block is not served yet and finishes with the same rows", async () => {
     const chain = chainWithSwaps()
     const reference = indexerOn(sql, chain)
