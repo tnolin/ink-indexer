@@ -10,6 +10,7 @@ import {
 } from "@ink-indexer/events"
 import { type Address, type Hash, pad, toHex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
+import { UnconfirmedAboveHeadError } from "../src/errors"
 import type { EventRow } from "../src/sources/source"
 import { type Cursor, createStore, type Store } from "../src/store"
 
@@ -201,6 +202,24 @@ describe("store.writeOffchain", () => {
     expect((await rows()).map((r) => r.confirmed)).toEqual([true, false, false])
     await store.confirm(B + 11n)
     expect((await rows()).map((r) => r.confirmed)).toEqual([true, true, true])
+  })
+
+  it("a write without the cursor above an off-chain row confirms it with its own rows, and one at its block waits", async () => {
+    await chainSpan([sale(B + 9n)], cursorAt(B + 10n), B + 10n)
+    await offchain([listing(1), stats(1)])
+    // Its head is the cursor block, so the off-chain rows stay unconfirmed below its confirmed row.
+    await expect(
+      store.writeBatch([{ events: [sale(B + 3n, 1)], blocks: [] }], [], {
+        cursor: null,
+        head: B + 10n,
+      }),
+    ).rejects.toBeInstanceOf(UnconfirmedAboveHeadError)
+
+    await store.writeBatch([{ events: [sale(B + 3n, 1)], blocks: [] }], [], {
+      cursor: null,
+      head: B + 11n,
+    })
+    expect((await rows()).map((r) => r.confirmed)).toEqual([true, true, true, true])
   })
 
   it("keeps sub, ignores a repeated synthetic id and runs extra in the same transaction", async () => {

@@ -1,11 +1,21 @@
 import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import type { Chain } from "./chain"
-import { BlockNotServedError } from "./errors"
+import { BlockNotServedError, UnconfirmedAboveHeadError } from "./errors"
 import type { Level, Logger } from "./log"
 import { readLogs } from "./log-plan"
 import type { BackfillSource, Source, SourceBatch } from "./sources/source"
-import type { Cursor, Store } from "./store"
+import type { Cursor, Store, TxStep } from "./store"
+
+/** How long a backfill write waits between two tries when a row it cannot confirm is below it. */
+const WRITE_RETRY_MS = 1_000
+/** A backfill write that has waited this long logs one warning. */
+const WRITE_WARN_MS = 30_000
+/** A backfill waits this long, doubling up to the cap, before it reads a block the endpoint has not served yet again. */
+const SERVED_RETRY_MS = 1_000
+const SERVED_RETRY_MAX_MS = 30_000
+/** A backfill that has been refused one block this long stops, so a stuck endpoint is noticed. */
+const SERVED_GIVE_UP_MS = 10 * 60_000
 
 /** A condition warns at most once in this long, and its stretch ends after this long without it. */
 const QUIET_MS = 10 * 60_000
@@ -120,6 +130,9 @@ export class Indexer {
       mergeRequests?: boolean
       /** The least time between the starts of two live ticks; 0 or unset starts one on every trigger. */
       tickMinIntervalMs?: number
+      /** Waits and clock of a backfill that retries; tests replace them. */
+      sleep?: (ms: number) => Promise<void>
+      now?: () => number
     },
   ) {
     this.staleHead = new Condition("stale head", deps.logger)
@@ -248,14 +261,57 @@ export class Indexer {
   }
 
   /**
-   * Re-scans [from, to] idempotently without moving the live cursor. Stop `start` before running it.
-   * `only` limits it to some sources' filters (see `Source.filters`); a source with none of its
-   * filters picked is left out.
+   * Re-scans [from, to] idempotently without moving the live cursor. `only` limits it to some
+   * sources' filters (see `Source.filters`); a source with none of its filters picked is left out.
+   *
+   * It may run beside `start` (see ADR 0038). Its writes wait for rows the live tick has not
+   * confirmed yet, and it starts from the ath as it stood before `from`, so its rows do not depend
+   * on what was written above its range. A block the endpoint has not served yet is retried with a
+   * growing wait; after ten minutes on one block it throws, naming the block to resume from.
    */
   async backfill(from: bigint, to?: bigint, only?: readonly BackfillSource[]) {
     const end = to ?? (await this.deps.chain.getBlockNumber())
-    for (let next = from; next <= end; )
-      next = (await this.ingest(next, end, end, false, only)) + 1n
+    const { sleep, now } = this.timing()
+    await this.reloadSources({ athAsOf: from - 1n })
+    const resume = (n: bigint) =>
+      `--from ${n} --to ${end}${only ? ` --sources ${only.join(",")}` : ""}`
+    let stuck = null as { next: bigint; since: number; waitMs: number } | null
+    for (let next = from; next <= end; ) {
+      try {
+        next = (await this.ingest(next, end, end, false, only)) + 1n
+        if (stuck) {
+          const ended = this.notServed.end()
+          this.deps.logger("info", "backfill block served after retrying", {
+            next,
+            retries: ended?.hits,
+            durationMs: ended?.durationMs,
+          })
+          stuck = null
+        }
+      } catch (err) {
+        if (!(err instanceof BlockNotServedError)) {
+          this.deps.logger("error", "backfill failed", {
+            resumeFrom: next,
+            to: end,
+            sources: only?.join(",") ?? "all",
+          })
+          throw err
+        }
+        if (stuck?.next !== next) stuck = { next, since: now(), waitMs: SERVED_RETRY_MS }
+        if (now() - stuck.since >= SERVED_GIVE_UP_MS)
+          throw new Error(
+            `backfill stopped: block ${err.block} was not served for ${SERVED_GIVE_UP_MS / 60_000} minutes; resume with ${resume(next)}`,
+            { cause: err },
+          )
+        this.deps.logger(this.notServed.hit(), "backfill block not yet served; retrying", {
+          block: err.block,
+          next,
+          waitMs: stuck.waitMs,
+        })
+        await sleep(stuck.waitMs)
+        stuck.waitMs = Math.min(stuck.waitMs * 2, SERVED_RETRY_MAX_MS)
+      }
+    }
   }
 
   private async ingest(
@@ -282,8 +338,9 @@ export class Indexer {
     let events = 0
     try {
       const batches: SourceBatch[] = []
+      const readStateAt = moveCursor ? toBlock : await this.backfillReadBlock(toBlock)
       for (const [i, source] of sources.entries())
-        batches.push(await source.process(logs[i]!, { toBlock, live: moveCursor }))
+        batches.push(await source.process(logs[i]!, { toBlock, live: moveCursor, readStateAt }))
       let cursor: Cursor | null = null
       if (moveCursor) {
         const end = await chain.getBlock(toBlock)
@@ -300,20 +357,57 @@ export class Indexer {
           throw new BlockNotServedError(newest.number)
         cursor = { block: toBlock, hash: end.hash }
       }
-      await store.writeBatch(
-        batches,
-        sources.map((source, i) => (tx) => source.write(tx, batches[i]!)),
-        { cursor, head },
+      const writers = sources.map(
+        (source, i): TxStep =>
+          (tx) =>
+            source.write(tx, batches[i]!),
       )
+      if (moveCursor) await store.writeBatch(batches, writers, { cursor, head })
+      else await this.writeBackfill(batches, writers)
       if (cursor) this.cursorBlock = cursor.block
       events = batches.reduce((n, b) => n + b.events.length, 0)
     } catch (err) {
       // Sources may hold in-memory state (new hooks) for rows that were never written; drop it.
-      await this.reloadSources()
+      // A backfill reloads its all-time highs as of the span it is retrying.
+      await this.reloadSources(moveCursor ? undefined : { athAsOf: from - 1n })
       throw err
     }
     if (events > 0) logger("info", "ingested", { from, to: toBlock, events })
     return toBlock
+  }
+
+  private timing() {
+    return {
+      sleep: this.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))),
+      now: this.deps.now ?? Date.now,
+    }
+  }
+
+  /**
+   * A backfill write confirms the rows below a head it has just read. When a row it cannot confirm
+   * yet is below its own (the live tick's head block, or an off-chain row at the cursor), the store
+   * refuses it; this reads a newer head and writes the same batches again, without reading the
+   * chain again.
+   */
+  private async writeBackfill(batches: SourceBatch[], writers: TxStep[]) {
+    const { chain, store, logger } = this.deps
+    const { sleep, now } = this.timing()
+    const started = now()
+    let warned = false
+    for (;;) {
+      const head = await chain.getBlockNumber()
+      try {
+        await store.writeBatch(batches, writers, { cursor: null, head })
+        return
+      } catch (err) {
+        if (!(err instanceof UnconfirmedAboveHeadError)) throw err
+        if (!warned && now() - started >= WRITE_WARN_MS) {
+          warned = true
+          logger("warn", "backfill write waiting for newer rows to confirm", { head })
+        }
+        await sleep(WRITE_RETRY_MS)
+      }
+    }
   }
 
   private async checkReorg() {
@@ -354,7 +448,16 @@ export class Indexer {
     logger("warn", "reorg: rolled back to fork block", { fork })
   }
 
-  private async reloadSources() {
-    for (const source of this.deps.sources) await source.reload()
+  private async reloadSources(opts?: { athAsOf?: bigint }) {
+    for (const source of this.deps.sources) await source.reload(opts)
+  }
+
+  /**
+   * The block a backfill span reads unattached state at: the live cursor's block when a live
+   * process has gone at least as far as the span, a block the endpoints serve. Null reads at the head.
+   */
+  private async backfillReadBlock(toBlock: bigint): Promise<bigint | null> {
+    const cursor = await this.deps.store.getCursor()
+    return cursor && cursor.block >= toBlock ? cursor.block : null
   }
 }

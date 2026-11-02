@@ -102,7 +102,12 @@ export class PoolRegistry {
     m.deadBalanceBlock = block
   }
 
-  async load(sql: Sql): Promise<void> {
+  /**
+   * Rebuilds pools and marks from the database. With `athAsOf`, each token's ath is the highest
+   * market cap of its trades and swaps at or below that block (zero with none), the ath a run that
+   * reached that block would hold; without it, the stored ath.
+   */
+  async load(sql: Sql, opts: { athAsOf?: bigint } = {}): Promise<void> {
     const pools = await sql<PoolRow[]>`
       select p.pool_id, p.pool_manager, p.token, t.launch_id, p.launchpad, p.quote_asset,
              p.token_is_currency0, p.created_block
@@ -113,6 +118,23 @@ export class PoolRegistry {
       from indexer.tokens t
       where t.ath_market_cap is not null
          or exists (select 1 from indexer.pools p where p.token = t.address)`
+    const asOf = opts.athAsOf
+    const aths =
+      asOf === undefined
+        ? []
+        : await sql<{ address: Address; mc: string | null; block: bigint | null }[]>`
+          select t.address, best.mc::text as mc, best.block
+          from indexer.tokens t
+          left join lateral (
+            select (e.payload->>'marketCap')::numeric as mc, e.block
+            from indexer.events e
+            where e.entity = t.address and e.type in ('launchpad.trade', 'launchpad.swap')
+              and e.block <= ${asOf.toString()}
+            order by (e.payload->>'marketCap')::numeric desc, e.block
+            limit 1
+          ) best on true
+          where t.ath_block > ${asOf.toString()}`
+    const athOf = new Map(aths.map((r) => [r.address, r]))
     this.pools = new Map(
       pools.map((r) => [
         r.pool_id,
@@ -128,13 +150,30 @@ export class PoolRegistry {
         },
       ]),
     )
+    const athFor = (r: MarkRow): Pick<TokenMarks, "ath" | "athBlock"> => {
+      if (asOf === undefined)
+        return {
+          ath: big(r.ath_market_cap) ?? 0n,
+          athBlock: r.ath_block === null ? null : BigInt(r.ath_block),
+        }
+      // An ath set at or below the block is already the ath as of that block.
+      const best = athOf.get(r.address)
+      if (!best)
+        return {
+          ath: big(r.ath_market_cap) ?? 0n,
+          athBlock: r.ath_block === null ? null : BigInt(r.ath_block),
+        }
+      return {
+        ath: big(best?.mc ?? null) ?? 0n,
+        athBlock: best?.block == null ? null : BigInt(best.block),
+      }
+    }
     this.marksByToken = new Map(
       marks.map((r) => [
         r.address,
         {
           totalSupply: BigInt(r.total_supply),
-          ath: big(r.ath_market_cap) ?? 0n,
-          athBlock: r.ath_block === null ? null : BigInt(r.ath_block),
+          ...athFor(r),
           deadBalance: big(r.dead_balance),
           deadBalanceBlock: r.dead_balance_block === null ? null : BigInt(r.dead_balance_block),
         },

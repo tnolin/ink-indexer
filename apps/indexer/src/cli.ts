@@ -5,7 +5,7 @@ import { BACKFILL_SOURCES, type BackfillSource } from "./sources/source"
 export { BACKFILL_SOURCES }
 
 export const USAGE =
-  "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] | mark <contract> <mark> | collections-from-sales"
+  "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> | collections-from-sales"
 
 export type Cli =
   | { ok: true; command: "start" }
@@ -16,6 +16,8 @@ export type Cli =
       to: bigint | undefined
       /** Undefined: every source. */
       sources?: BackfillSource[]
+      /** Block reads a span keeps in flight; undefined: the default. */
+      blockReads?: number
     }
   | { ok: true; command: "mark"; contract: string; value: MarkValue }
   | { ok: true; command: "collections-from-sales" }
@@ -25,6 +27,13 @@ const bad = (reason: string): Cli => ({ ok: false, usage: USAGE, reason })
 
 /** A non-negative decimal integer, as a bigint; undefined for anything else. */
 const block = (v: string): bigint | undefined => (/^\d+$/.test(v) ? BigInt(v) : undefined)
+
+/** 1 to 16 as a plain decimal integer; undefined for anything else. */
+const blockReads = (v: string): number | undefined => {
+  if (!/^[1-9]\d?$/.test(v)) return undefined
+  const n = Number(v)
+  return n <= 16 ? n : undefined
+}
 
 /** A comma-separated list of `BACKFILL_SOURCES`, without duplicates; a string says what is wrong. */
 function sourceList(v: string): BackfillSource[] | string {
@@ -48,7 +57,7 @@ export function parseCli(argv: string[]): Cli {
   }
   let parsed: {
     positionals: string[]
-    values: { from?: string; to?: string; sources?: string }
+    values: { from?: string; to?: string; sources?: string; "block-reads"?: string }
   }
   try {
     parsed = parseArgs({
@@ -58,6 +67,7 @@ export function parseCli(argv: string[]): Cli {
         from: { type: "string" },
         to: { type: "string" },
         sources: { type: "string" },
+        "block-reads": { type: "string" },
       },
     })
   } catch (err) {
@@ -66,7 +76,12 @@ export function parseCli(argv: string[]): Cli {
   const { positionals, values } = parsed
   const [command] = positionals
   if (command === "start" || command === "collections-from-sales") {
-    if (values.from !== undefined || values.to !== undefined || values.sources !== undefined)
+    if (
+      values.from !== undefined ||
+      values.to !== undefined ||
+      values.sources !== undefined ||
+      values["block-reads"] !== undefined
+    )
       return bad(`${command} takes no options`)
     return { ok: true, command }
   }
@@ -80,8 +95,14 @@ export function parseCli(argv: string[]): Cli {
     if (typeof list === "string") return bad(list)
     sources = list
   }
-  if (values.to === undefined) return { ok: true, command, from, to: undefined, sources }
+  let reads: number | undefined
+  if (values["block-reads"] !== undefined) {
+    reads = blockReads(values["block-reads"])
+    if (reads === undefined) return bad("--block-reads must be an integer from 1 to 16")
+  }
+  if (values.to === undefined)
+    return { ok: true, command, from, to: undefined, sources, blockReads: reads }
   const to = block(values.to)
   if (to === undefined) return bad("--to must be a non-negative integer")
-  return { ok: true, command, from, to, sources }
+  return { ok: true, command, from, to, sources, blockReads: reads }
 }

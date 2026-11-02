@@ -3,6 +3,7 @@ import { resetDb } from "@ink-indexer/db/testing"
 import { NATIVE_QUOTE_ASSET } from "@ink-indexer/sdk"
 import { type Hash, pad, toHex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
+import { UnconfirmedAboveHeadError } from "../src/errors"
 import { HookRegistry, nativeHookRows } from "../src/sources/inkypump/hooks"
 import { type Batch, type CurveRow, processLogs } from "../src/sources/inkypump/index"
 import {
@@ -359,5 +360,73 @@ describe("store.withLock", () => {
     const rolled = store.rollback(B, cursor.hash, [async () => void order.push("rollback")])
     await Promise.all([held, written, rolled])
     expect(order).toEqual(["held-start", "held-end", "write", "rollback"])
+  })
+})
+
+describe("store writes without the cursor", () => {
+  /** An event at `block`, shaped like a launch row but with its own transaction hash. */
+  async function rowAt(block: bigint, i: number): Promise<EventRow> {
+    const chain = new FakeChain(B)
+    launch(chain, { n: 1, block: B })
+    const base = (await batchFrom(chain)).events[0]!
+    return {
+      ...base,
+      block,
+      event: { ...base.event, txHash: pad(toHex(100 + i), { size: 32 }), logIndex: i },
+    }
+  }
+  const only = (...events: EventRow[]): SourceBatch => ({ events, blocks: [] })
+  const flags = () => sql`select block, confirmed from indexer.events order by id`
+  const orderViolations = () => sql`
+    select u.id from indexer.events u join indexer.events c on c.id > u.id and c.confirmed
+    where not u.confirmed`
+
+  it("confirms the rows below its head together with its own, so no confirmed row is above an unconfirmed one", async () => {
+    const live = await rowAt(B + 10n, 1)
+    await store.writeBatch([only(live)], [], {
+      cursor: { block: B + 10n, hash: pad(toHex(1), { size: 32 }) as Hash },
+      head: B + 10n,
+    })
+    expect(await flags()).toEqual([{ block: B + 10n, confirmed: false }])
+
+    await store.writeBatch([only(await rowAt(B + 5n, 2))], [], { cursor: null, head: B + 11n })
+    expect(await flags()).toEqual([
+      { block: B + 10n, confirmed: true },
+      { block: B + 5n, confirmed: true },
+    ])
+    expect(await orderViolations()).toEqual([])
+  })
+
+  it("rolls back before its writers run when a row it cannot confirm is below its own confirmed rows", async () => {
+    await store.writeBatch([only(await rowAt(B + 10n, 1))], [], {
+      cursor: { block: B + 10n, hash: pad(toHex(1), { size: 32 }) as Hash },
+      head: B + 10n,
+    })
+    let ran = false
+    await expect(
+      store.writeBatch(
+        [only(await rowAt(B + 5n, 2))],
+        [
+          async () => {
+            ran = true
+          },
+        ],
+        { cursor: null, head: B + 10n },
+      ),
+    ).rejects.toBeInstanceOf(UnconfirmedAboveHeadError)
+    // It stops before the writers run, so a write that cannot commit does not hold the lock.
+    expect(ran).toBe(false)
+    expect(await flags()).toEqual([{ block: B + 10n, confirmed: false }])
+  })
+
+  it("leaves its own head-block rows unconfirmed and commits when nothing confirmed lies above an unconfirmed row", async () => {
+    await store.writeBatch([only(await rowAt(B + 5n, 1), await rowAt(B + 10n, 2))], [], {
+      cursor: null,
+      head: B + 10n,
+    })
+    expect(await flags()).toEqual([
+      { block: B + 5n, confirmed: true },
+      { block: B + 10n, confirmed: false },
+    ])
   })
 })

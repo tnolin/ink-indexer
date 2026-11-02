@@ -154,10 +154,10 @@ export function inkypumpSource(deps: {
       })
     },
     rollback: rollbackRows,
-    async reload() {
+    async reload(opts) {
       await seedHooks(sql, nativeHookRows())
       registry = new HookRegistry(await loadHooks(sql), logger)
-      await pools.load(sql)
+      await pools.load(sql, opts)
     },
   }
 }

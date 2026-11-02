@@ -29,7 +29,21 @@ export async function writeRows(tx: Tx, batch: V4Batch) {
   await writeDead(tx, batch.dead)
 }
 
+/**
+ * Stores dead balances read or raised at a block. A balance at an older block than the stored one
+ * is left out: a backfill and the live tick write the same token in either order.
+ */
 export async function writeDead(tx: Tx, dead: DeadRow[]) {
+  for (const d of dead) {
+    await tx`
+      update indexer.tokens set dead_balance = ${s(d.balance)}, dead_balance_block = ${s(d.block)}
+      where address = ${d.token}
+        and (dead_balance_block is null or dead_balance_block <= ${s(d.block)})`
+  }
+}
+
+/** Sets dead balances read at the fork block after a rollback, whatever block was stored. */
+export async function resetDead(tx: Tx, dead: DeadRow[]) {
   for (const d of dead) {
     await tx`
       update indexer.tokens set dead_balance = ${s(d.balance)}, dead_balance_block = ${s(d.block)}

@@ -2,6 +2,7 @@ import type { Sql } from "@ink-indexer/db"
 import type { NftEvent } from "@ink-indexer/events"
 import type postgres from "postgres"
 import type { Hash } from "viem"
+import { UnconfirmedAboveHeadError } from "./errors"
 import { entityOf, type SourceBatch, type Tx } from "./sources/source"
 
 export type Cursor = { block: bigint; hash: Hash }
@@ -73,7 +74,9 @@ export function createStore(sql: Sql) {
 
     /**
      * One transaction for every source's batch: each `writers` step, then all events, block hashes
-     * and the cursor. With `cursor: null` (backfill) the live cursor and recent hashes are left alone.
+     * and the cursor. With `cursor: null` (backfill) the live cursor and recent hashes are left alone,
+     * and the write commits only if no confirmed row ends up above an unconfirmed one: otherwise it
+     * throws `UnconfirmedAboveHeadError` and rolls back, and the caller writes again at a newer head.
      */
     async writeBatch(
       batches: SourceBatch[],
@@ -84,6 +87,26 @@ export function createStore(sql: Sql) {
         // Confirm older rows in the same commit that adds newer confirmed ones, so a reader of
         // `confirmed and id > $1` can never pass an unconfirmed row that is old enough to confirm.
         await tx`update indexer.events set confirmed = true where not confirmed and block <= ${s(opts.head - 1n)}`
+        // A backfill's new confirmed rows cannot go above a row still unconfirmed after the sweep.
+        // Stop before the writers and inserts, so a write that cannot commit does not hold the lock
+        // through them. The check after the inserts stays as the final guard.
+        if (!opts.cursor) {
+          const fresh = batches.flatMap((b) => b.events).filter((e) => e.block <= opts.head - 1n)
+          if (fresh.length > 0) {
+            const [row] = await tx<{ doomed: boolean }[]>`
+              select exists (select 1 from indexer.events where not confirmed)
+                and exists (
+                  select 1
+                  from unnest(${fresh.map((e) => e.event.txHash)}::text[],
+                              ${fresh.map((e) => e.event.logIndex)}::int[],
+                              ${fresh.map((e) => e.sub ?? "")}::text[]) as k (h, i, sub)
+                  where not exists (
+                    select 1 from indexer.events x
+                    where x.tx_hash = k.h and x.log_index = k.i and x.sub = k.sub)
+                ) as doomed`
+            if (row?.doomed) throw new UnconfirmedAboveHeadError(opts.head)
+          }
+        }
         for (const write of writers) await write(tx)
         // Chain order across sources (the sort is stable), so ids never put a confirmed row after an unconfirmed one.
         const events = batches
@@ -104,6 +127,17 @@ export function createStore(sql: Sql) {
         }))
         for (const part of chunks(rows))
           await tx`insert into indexer.events ${tx(part)} on conflict (tx_hash, log_index, sub) do nothing`
+        // A backfill adds old, confirmed rows. A row the live tick or an off-chain writer left
+        // unconfirmed (the head block's) is below them by id, and a reader of
+        // `confirmed and id > $1` would pass it for good.
+        if (!opts.cursor) {
+          const [row] = await tx<{ crossed: boolean }[]>`
+            select exists (
+              select 1 from indexer.events
+              where confirmed and id > (select min(id) from indexer.events where not confirmed)
+            ) as crossed`
+          if (row?.crossed) throw new UnconfirmedAboveHeadError(opts.head)
+        }
         if (opts.cursor) {
           const blocks = new Map(batches.flatMap((b) => b.blocks).map((b) => [b.number, b.hash]))
           blocks.set(opts.cursor.block, opts.cursor.hash)
@@ -129,9 +163,8 @@ export function createStore(sql: Sql) {
      * the same transaction: database writes only, no network reads (fetch first), since it holds
      * the store lock. The payload's `blockNumber` is set to the stamped block.
      *
-     * Must not run concurrently with `Indexer.backfill`: a backfill writes old blocks, already
-     * confirmed, with ids above any unconfirmed row at its head block, chain or off-chain. Off-chain
-     * writers run only beside `start`, and a backfill runs while `start` is stopped.
+     * A backfill beside these writers waits, in `writeBatch`, until its head is past the block of
+     * every unconfirmed row, so its confirmed rows never get ids above these.
      */
     async writeOffchain(rows: { event: NftEvent; sub?: string }[], extra?: TxStep) {
       await locked(async (tx) => {

@@ -43,6 +43,25 @@ describe("RpcStats", () => {
     expect(stats.snapshot()["c.test"]).toEqual({ ...zero, getLogs: 1, rateLimited: 1 })
   })
 
+  it("flush logs the window so far with its real length, then starts the next one", () => {
+    vi.useFakeTimers()
+    const { lines, logger } = capture()
+    const stats = new RpcStats(["a.test"], logger)
+    stats.start()
+    stats.count("a.test", "eth_getLogs")
+    stats.rateLimited("a.test")
+    vi.advanceTimersByTime(90_000)
+    stats.flush()
+    stats.stop()
+    expect(lines).toEqual([
+      {
+        level: "info",
+        msg: "rpc calls",
+        fields: { windowS: 90, transports: { "a.test": { ...zero, getLogs: 1, rateLimited: 1 } } },
+      },
+    ])
+  })
+
   it("emits one summary line every 10 minutes and resets after each", () => {
     vi.useFakeTimers()
     const { lines, logger } = capture()

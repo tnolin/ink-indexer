@@ -35,6 +35,7 @@ import {
   TOTAL_SUPPLY,
   tokenOf,
 } from "./inkfun-scenario"
+import { HOOK } from "./scenario"
 
 const B = 59_000_000n
 const GATEWAY = "https://gw.example"
@@ -687,19 +688,13 @@ describe("migration into a Uniswap v4 pool", () => {
       })
       await idx.init()
       // The v4 source reads nothing while the registry is empty; production always has pools.
-      pools.add(
-        {
-          poolId: poolIdOf(9),
-          poolManager: UNISWAP_V4_POOL_MANAGER,
-          token: tokenOf(9),
-          launchId: launchIdOf(9),
-          launchpad: "inkypump",
-          quoteAsset: NATIVE_QUOTE_ASSET,
-          tokenIsCurrency0: false,
-          createdBlock: 1n,
-        },
-        TOTAL_SUPPLY,
-      )
+      await sql`insert into indexer.tokens (address, launchpad, hook, launch_id, creator, created_block, created_at,
+          quote_asset, total_supply, target_raise, sale_supply, gain_bps)
+        values (${tokenOf(9)}, 'inkypump', ${HOOK}, ${launchIdOf(9)}, ${CREATOR}, 1, now(), ${NATIVE_QUOTE_ASSET},
+          ${TOTAL_SUPPLY.toString()}, 1, 1, 0)`
+      await sql`insert into indexer.pools (pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0, created_block)
+        values (${poolIdOf(9)}, ${UNISWAP_V4_POOL_MANAGER}, ${tokenOf(9)}, 'inkypump', ${NATIVE_QUOTE_ASSET}, false, 1)`
+      await pools.load(sql)
       inkfunLaunch(chain, { n: 1, block: B, uri: null })
       inkfunBuy(chain, { n: 1, block: B + 1n, sold: closing, logIndex: 1 })
       inkfunMigrate(chain, { n: 1, block: B + 1n, logIndex: 2 })

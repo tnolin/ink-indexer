@@ -53,7 +53,7 @@ describe("parseCli", () => {
   it("carries the usage line with every rejection", () => {
     const r = parseCli(["backfill"])
     expect(r.ok === false && r.usage).toBe(
-      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] | mark <contract> <mark> | collections-from-sales",
+      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> | collections-from-sales",
     )
   })
 
@@ -120,5 +120,30 @@ describe("parseCli mark", () => {
     expect(r.ok === false && r.usage).toBe(
       "usage: nft:mark <contract> <real|filtered|continuous|drop|clear>",
     )
+  })
+
+  it("--block-reads takes 1 to 16 on a backfill, and is left out by default", () => {
+    expect(parseCli(["backfill", "--from", "1"])).toMatchObject({ blockReads: undefined })
+    for (const n of [1, 8, 16])
+      expect(parseCli(["backfill", "--from", "1", "--block-reads", String(n)])).toEqual({
+        ok: true,
+        command: "backfill",
+        from: 1n,
+        to: undefined,
+        sources: undefined,
+        blockReads: n,
+      })
+    for (const n of ["0", "17", "x", "", "-1", "2.5", "08", "1e1"])
+      expect(parseCli(["backfill", "--from", "1", "--block-reads", n]).ok, n).toBe(false)
+  })
+
+  it("--block-reads is not an option of the other commands", () => {
+    for (const command of ["start", "collections-from-sales"])
+      expect(parseCli([command, "--block-reads", "4"]).ok, command).toBe(false)
+  })
+
+  it("the usage line names --block-reads", () => {
+    const r = parseCli(["backfill"])
+    expect(r.ok === false && r.usage).toContain("[--block-reads <1-16>]")
   })
 })

@@ -32,10 +32,23 @@ it("take waits for a short block to end, and gives up when the wait would pass m
 })
 
 it("take waits for a refill when the bucket is empty", async () => {
-  await sql`update indexer.opensea_budget set tokens = 0, capacity = 100, refill_per_s = 20`
-  const t0 = Date.now()
-  expect(await createBudget(sql).take(0, 3000)).toBe(true)
-  expect(Date.now() - t0).toBeGreaterThanOrEqual(40)
+  // One token at 0.5 a second takes 2 s to refill. The sleep records its length and moves the
+  // bucket's clock by that much, so the test runs in no time and does not depend on its own speed.
+  await sql`update indexer.opensea_budget set tokens = 0, capacity = 100, refill_per_s = 0.5, min_interval_ms = 0,
+    updated_at = clock_timestamp()`
+  const slept: number[] = []
+  const budget = createBudget(sql, {
+    sleep: async (ms) => {
+      slept.push(ms)
+      await sql`update indexer.opensea_budget set updated_at = updated_at - ${ms} * interval '1 millisecond'`
+    },
+  })
+  expect(await budget.take(0, 3000)).toBe(true)
+  expect(slept).toHaveLength(1)
+  expect(slept[0]).toBeGreaterThanOrEqual(1000)
+  expect(slept[0]).toBeLessThanOrEqual(2000)
+  // The refilled token was spent, so a second take with no time to wait is refused.
+  expect(await createBudget(sql).take(0, 0)).toBe(false)
 })
 
 it("block does not shorten an earlier block", async () => {

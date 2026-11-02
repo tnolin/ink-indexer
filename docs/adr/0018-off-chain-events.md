@@ -3,6 +3,8 @@
 Date: 2026-10-18
 Status: Accepted
 
+Amended by [0038](0038-backfill-beside-start.md) (2026-11-02): a backfill may run beside `start`. Its writes read a fresh head, confirm the rows below it and wait while an unconfirmed row is below them, so the last sentence of the Locks paragraph no longer applies.
+
 ## Context
 
 Readers of `indexer.events` poll with `where confirmed and id > $1`. That is only safe if no confirmed row ever has a higher id than an unconfirmed one (ADR 0008 writes events unconfirmed and confirms them one block later). OpenSea-derived events (collection snapshots, drop schedules, stats, listings) and scheduled stage starts have no transaction and no log. They are written between chain batches, by jobs that run beside the chain loop.

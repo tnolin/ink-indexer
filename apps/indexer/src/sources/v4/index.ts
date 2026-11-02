@@ -20,7 +20,7 @@ import type { AthRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { blockSendersFor, servedAt } from "../senders"
 import { type EventRow, pick, type Source } from "../source"
-import { deadAbove, writeDead, writeRows } from "./store"
+import { deadAbove, resetDead, writeRows } from "./store"
 
 export type PoolTradeRow = TradeRow & { poolId: Hash }
 export type DeadRow = { token: Address; balance: bigint; block: bigint }
@@ -78,6 +78,11 @@ export function v4Source(deps: {
   const { sql, chain, pools } = deps
   // The pool ids the last `filters` call asked for; null when the v4 group was not picked.
   let asked: Set<Hash> | null = null
+  // Tokens this process started following at a reload. Burns between their stored balance's block
+  // and the first span it sees were not seen, so the balance is read again. A reload that leaves the
+  // registry as it was adds none.
+  const followed = new Set<Address>()
+  const refresh = new Set<Address>()
   return {
     name: "v4",
     filters(only) {
@@ -100,12 +105,13 @@ export function v4Source(deps: {
           : null,
       ]
     },
-    async process([swapLogs = [], burnLogs = []], { toBlock, live }) {
+    async process([swapLogs = [], burnLogs = []], { toBlock, live, readStateAt }) {
       const late = await swapsOfNewPools(toBlock)
       return processLogs([...swapLogs, ...late], burnLogs, {
         chain,
         pools,
-        readDeadAt: live ? toBlock : null,
+        readDeadAt: readStateAt ?? (live ? toBlock : null),
+        refresh,
         live,
         blockReads: deps.blockReads,
       })
@@ -120,9 +126,16 @@ export function v4Source(deps: {
       )
       return tokens.map((token, i) => ({ token, balance: balances[i]!, block: fork }))
     },
-    rollback: (tx, _fork, reads) => writeDead(tx, reads),
+    rollback: (tx, _fork, reads) => resetDead(tx, reads),
     // The InkyPump source's reload loads the registry, dead balances included.
-    async reload() {},
+    async reload() {
+      const now = new Set(pools.tokens())
+      for (const t of now)
+        if (!followed.has(t) && pools.marks(t)?.deadBalance != null) refresh.add(t)
+      for (const t of [...refresh]) if (!now.has(t)) refresh.delete(t)
+      followed.clear()
+      for (const t of now) followed.add(t)
+    },
   }
 
   /**
@@ -162,19 +175,23 @@ export async function processLogs(
   deps: {
     chain: Pick<V4Chain, "getBlockNumber" | "getBlockSenders" | "readBalances">
     pools: PoolRegistry
-    /** The live tick passes the span's end, a block the endpoints already serve. */
+    /** A block the endpoints already serve: the live tick's span end, or a backfill's live cursor block. Null reads at the head. */
     readDeadAt: bigint | null
     /** The live tick reads each block's senders when it reaches it; a backfill span reads them up front. */
     live: boolean
     blockReads?: number
+    /** Tokens with a stored dead balance to read again; the ones read are removed. */
+    refresh?: Set<Address>
   },
 ): Promise<V4Batch> {
   const { chain, pools } = deps
   const batch: V4Batch = { trades: [], events: [], ath: [], dead: [], blocks: [] }
   const dead = new Map<Address, DeadRow>()
 
-  // shortcut: outside the live tick the dead balance is read at head. That covers pools seeded before swaps were indexed and every pool bonded during a backfill, so their backfilled swaps use today's burned amount. Read it at each pool's bond block on an archive node if a token turns out to have burned before the backfill.
-  const unread = pools.tokens().filter((t) => pools.marks(t)?.deadBalance === null)
+  // shortcut: outside the live tick the dead balance is read at one recent block (the live cursor's, or the head with no cursor). That covers pools seeded before swaps were indexed and every pool bonded during a backfill, so their backfilled swaps use today's burned amount. Read it at each pool's bond block on an archive node if a token turns out to have burned before the backfill.
+  const unread = pools
+    .tokens()
+    .filter((t) => pools.marks(t)?.deadBalance === null || deps.refresh?.has(t))
   if (unread.length > 0) {
     const at = deps.readDeadAt ?? (await chain.getBlockNumber())
     const balances = await servedAt(at, () =>
@@ -184,6 +201,7 @@ export async function processLogs(
       ),
     )
     unread.forEach((token, i) => {
+      deps.refresh?.delete(token)
       pools.setDead(token, balances[i]!, at)
       dead.set(token, { token, balance: balances[i]!, block: at })
     })

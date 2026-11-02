@@ -19,9 +19,12 @@ export type Budget = {
  * `take` asks for a token and, if told to wait, sleeps that long and asks again until it gets one
  * or the wait would pass `maxWaitMs`.
  */
-export function createBudget(sql: Sql): Budget {
+export function createBudget(
+  sql: Sql,
+  opts: { sleep?: (ms: number) => Promise<void> } = {},
+): Budget {
   const now = Date.now
-  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   return {
     async take(c, maxWaitMs) {
       const deadline = now() + maxWaitMs
