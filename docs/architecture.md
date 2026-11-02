@@ -81,7 +81,7 @@ NFT events share a `contract` (also the row's `entity`) and a `source` of `chain
 - **OpenSea budget.** Every process using the key draws from one request budget in Postgres (ADR 0019), so the hourly limit holds across processes.
 - **Stream.** Listings arrive over the Stream in shards of 50 collections per connection, with a one-connection fallback for every collection (ADR 0017).
 - **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `inkfun` (ink.fun launches, curve trades and migrations), `tsunami` (Tsunami launches, curve trades and graduations), `v4-swaps` (Uniswap v4 swaps and burns for registered pools), `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera).
-- **Backfill beside `start`.** A backfill write reads the chain head, confirms the rows below it and checks that no confirmed row is above an unconfirmed one, and writes again at a newer head when one is (ADR 0038). A source is kept out of `INDEXER_SOURCES` while its own backfill runs, and a short final stop hands it over.
+- **Backfill beside `start`.** A backfill write reads the chain head, confirms the rows below it and checks that no confirmed row is above an unconfirmed one, and writes again at a newer head when one is (ADR 0038). A platform stays out of `INDEXER_SOURCES` while its own backfill runs, and a short final stop backfills the last blocks up to the cursor and hands it over. The source groups it backfills may overlap the live tick's rows: duplicates are dropped, the ath only rises, and a dead balance is written only for a newer block.
 
 ## Data model
 

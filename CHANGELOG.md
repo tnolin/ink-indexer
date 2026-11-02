@@ -10,12 +10,12 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Changed
 
-- Indexer: a backfill can run beside `start`. A backfill write confirms the rows below the chain head together with its own and waits while a newer row is still unconfirmed, so readers of `confirmed and id > $1` see every row in order. A source must stay out of `INDEXER_SOURCES` while its own backfill runs; a short stop at the end hands it over. See ADR 0038.
+- Indexer: a backfill can run beside `start`. A backfill write confirms the rows below the chain head together with its own and waits while a newer row is still unconfirmed, so readers of `confirmed and id > $1` see every row in order. A platform must stay out of `INDEXER_SOURCES` while its own backfill runs; a short stop at the end hands it over. See ADR 0038.
 
 ### Fixed
 
-- Indexer: a backfill retries a block an endpoint has not served yet instead of exiting, and reads a token's first burned balance at the live cursor's block instead of the chain head. After 10 minutes on one block it exits with code 1 and names the block to resume from.
-- Indexer: a token's dead balance never moves back to an older block.
+- Indexer: a backfill retries a block an endpoint has not served yet instead of exiting, and reads a token's first burned balance at the live cursor's block instead of the chain head. After 10 minutes on one block it exits with code 1 and names the `--from`, `--to` and `--sources` to resume with.
+- Indexer: a token's dead balance never moves back to an older block, and is read again when the live process starts following the token.
 - Indexer: a backfill values curve and pool trades against the ath as it stood before its range.
 
 ## [indexer-v0.6.0] - 2026-11-01

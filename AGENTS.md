@@ -18,7 +18,7 @@
 - `pnpm test`: all tests. A throwaway Postgres starts automatically unless `TEST_DATABASE_URL` is set (the tests drop its `indexer` schema; `DATABASE_URL` is never used for tests).
 - `pnpm lint`, `pnpm typecheck`, `pnpm format`.
 - `pnpm db:dev`: persistent local Postgres in `.data/postgres`.
-- `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>] [--sources inkypump,inkfun,tsunami,v4-swaps,nft-mints,nft-sales,nft-launches] [--block-reads <1-16>]` (default: every source, 8 block reads). A backfill can run beside `pnpm start` while its source is not in `INDEXER_SOURCES` (ADR 0038).
+- `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>] [--sources inkypump,inkfun,tsunami,v4-swaps,nft-mints,nft-sales,nft-launches] [--block-reads <1-16>]` (default: every source, 8 block reads). A backfill can run beside `pnpm start` while its platform is not in `INDEXER_SOURCES` (ADR 0038); `--sources` names source groups, `INDEXER_SOURCES` names platforms.
 - `pnpm nft:mark <contract> <real|filtered|continuous|drop|clear>`: a manual verdict or kind for a collection.
 
 ## Adding an InkyPump hook
@@ -27,7 +27,7 @@ xStocks hooks are discovered on-chain. For a new native hook (the indexer logs "
 
 1. Add it to `NATIVE_HOOKS` in `packages/sdk/src/inkypump/deployments.ts` with its ABI family and start block.
 2. Capture one launch and one trade as fixtures (`pnpm tsx scripts/capture-fixture.ts <name> <tx>`) and add their names to `FIXTURES` in `packages/sdk/test/fixtures.ts`.
-3. Release, run `pnpm backfill --from <start block> --to <live cursor block>` beside `pnpm start`, then stop `pnpm start`, run `pnpm backfill --from <to + 1>` for the last blocks, and start again.
+3. Release, stop `pnpm start`, run `pnpm backfill --from <start block>`, then start again.
 
 ## Adding an event source
 
