@@ -96,6 +96,7 @@ try {
     process.exit(0)
   }
   const pools = new PoolRegistry()
+  const blockReads = cli.command === "backfill" ? cli.blockReads : undefined
   const ipfs = readIpfsSettings(process.env, log)
   indexer = new Indexer({
     chain,
@@ -118,9 +119,10 @@ try {
         logger: log,
         pools,
         ipfs: { gateway: ipfs.tsunami },
+        blockReads,
       }),
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
-      v4Source({ sql, chain, logger: log, pools }),
+      v4Source({ sql, chain, logger: log, pools, blockReads }),
       nftSource({ sql, chain, logger: log }),
     ],
   })
@@ -141,7 +143,21 @@ try {
 const { heads, pollHeads, router } = rpc
 
 if (cli.command === "backfill") {
-  await indexer.backfill(cli.from, cli.to, cli.sources ?? sources.groups)
+  rpc.stats.start()
+  try {
+    await indexer.backfill(cli.from, cli.to, cli.sources ?? sources.groups)
+  } catch (err) {
+    rpc.stats.flush()
+    log("error", "backfill failed", {
+      error: err instanceof Error ? (err.stack ?? String(err)) : String(err),
+    })
+    reporter.capture(err)
+    await reporter.flush(2000)
+    await sql.end({ timeout: 5 }).catch(() => {})
+    process.exit(1)
+  }
+  rpc.stats.flush()
+  rpc.stats.stop()
   log("info", "backfill done", {
     from: cli.from,
     to: cli.to ?? "head",

@@ -51,6 +51,7 @@ export function isRateLimit(err: unknown): boolean {
 export class RpcStats {
   private counts = new Map<string, TransportCounts>()
   private timer: ReturnType<typeof setInterval> | undefined
+  private windowStart = Date.now()
 
   constructor(
     private readonly names: string[],
@@ -82,14 +83,21 @@ export class RpcStats {
 
   private reset() {
     this.counts = new Map(this.names.map((n) => [n, fresh()]))
+    this.windowStart = Date.now()
   }
 
   /** Logs the window's counts and starts the next window from zero. */
   emit() {
-    this.logger("info", "rpc calls", {
-      windowS: this.everyMs / 1000,
-      transports: this.snapshot(),
-    })
+    this.log(this.everyMs / 1000)
+  }
+
+  /** Logs the counts of the window so far, with its real length: for a process that ends mid-window. */
+  flush() {
+    this.log(Math.round((Date.now() - this.windowStart) / 1000))
+  }
+
+  private log(windowS: number) {
+    this.logger("info", "rpc calls", { windowS, transports: this.snapshot() })
     this.reset()
   }
 
