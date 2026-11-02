@@ -132,7 +132,8 @@ export class PoolRegistry {
               and e.block <= ${asOf.toString()}
             order by (e.payload->>'marketCap')::numeric desc, e.block
             limit 1
-          ) best on true`
+          ) best on true
+          where t.ath_block > ${asOf.toString()}`
     const athOf = new Map(aths.map((r) => [r.address, r]))
     this.pools = new Map(
       pools.map((r) => [
@@ -155,7 +156,13 @@ export class PoolRegistry {
           ath: big(r.ath_market_cap) ?? 0n,
           athBlock: r.ath_block === null ? null : BigInt(r.ath_block),
         }
+      // An ath set at or below the block is already the ath as of that block.
       const best = athOf.get(r.address)
+      if (!best)
+        return {
+          ath: big(r.ath_market_cap) ?? 0n,
+          athBlock: r.ath_block === null ? null : BigInt(r.ath_block),
+        }
       return {
         ath: big(best?.mc ?? null) ?? 0n,
         athBlock: best?.block == null ? null : BigInt(best.block),

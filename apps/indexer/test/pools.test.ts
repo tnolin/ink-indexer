@@ -130,4 +130,13 @@ describe("PoolRegistry.load", () => {
     expect(now.marks(T1)).toMatchObject({ ath: 9n, athBlock: 300n })
     expect(now.marks(T2)).toMatchObject({ ath: 40n, athBlock: 250n })
   })
+
+  it("with athAsOf, keeps the stored ath of a token whose ath was set at or below that block", async () => {
+    await sql`update indexer.tokens set ath_market_cap = 40, ath_block = 150 where address = ${T2}`
+    await sql`update indexer.tokens set ath_market_cap = 90, ath_block = 300 where address = ${T1}`
+    const r = new PoolRegistry()
+    await r.load(sql, { athAsOf: 200n })
+    expect(r.marks(T2)).toMatchObject({ ath: 40n, athBlock: 150n })
+    expect(r.marks(T1)).toMatchObject({ ath: 0n, athBlock: null })
+  })
 })
