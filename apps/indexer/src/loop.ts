@@ -273,6 +273,8 @@ export class Indexer {
     const end = to ?? (await this.deps.chain.getBlockNumber())
     const { sleep, now } = this.timing()
     await this.reloadSources({ athAsOf: from - 1n })
+    const resume = (n: bigint) =>
+      `--from ${n} --to ${end}${only ? ` --sources ${only.join(",")}` : ""}`
     let stuck = null as { next: bigint; since: number; waitMs: number } | null
     for (let next = from; next <= end; ) {
       try {
@@ -287,11 +289,18 @@ export class Indexer {
           stuck = null
         }
       } catch (err) {
-        if (!(err instanceof BlockNotServedError)) throw err
+        if (!(err instanceof BlockNotServedError)) {
+          this.deps.logger("error", "backfill failed", {
+            resumeFrom: next,
+            to: end,
+            sources: only?.join(",") ?? "all",
+          })
+          throw err
+        }
         if (stuck?.next !== next) stuck = { next, since: now(), waitMs: SERVED_RETRY_MS }
         if (now() - stuck.since >= SERVED_GIVE_UP_MS)
           throw new Error(
-            `backfill stopped: block ${err.block} was not served for ${SERVED_GIVE_UP_MS / 60_000} minutes; resume with --from ${next}`,
+            `backfill stopped: block ${err.block} was not served for ${SERVED_GIVE_UP_MS / 60_000} minutes; resume with ${resume(next)}`,
             { cause: err },
           )
         this.deps.logger(this.notServed.hit(), "backfill block not yet served; retrying", {

@@ -130,8 +130,8 @@ describe("backfill values and reads", () => {
       now: () => clock.now,
     })
     await idx.init()
-    await expect(idx.backfill(B, B + 9n)).rejects.toThrow(
-      new RegExp(`block ${B + 30n} was not served.*--from ${B + 4n}\\b`),
+    await expect(idx.backfill(B, B + 9n, ["inkypump", "v4-swaps"])).rejects.toThrow(
+      `block ${B + 30n} was not served for 10 minutes; resume with --from ${B + 4n} --to ${B + 9n} --sources inkypump,v4-swaps`,
     )
     expect(clock.now).toBeGreaterThanOrEqual(600_000)
     expect(clock.now).toBeLessThan(600_000 + 30_000)
@@ -181,5 +181,25 @@ describe("backfill values and reads", () => {
     await live.init()
     await live.trigger()
     expect(await dead()).toEqual([{ balance: "45", block: B + 18n }])
+  })
+
+  it("logs where to resume when a backfill fails for another reason", async () => {
+    const chain = chainWithSwaps()
+    const read = chain.getLogs.bind(chain)
+    chain.getLogs = async (from, to, filter) => {
+      if (from > B + 3n) throw new Error("boom")
+      return read(from, to, filter)
+    }
+    const errors: { msg: string; fields?: Record<string, unknown> }[] = []
+    const idx = indexerOn(sql, chain, {
+      logger: (level, msg, fields) => {
+        if (level === "error") errors.push({ msg, fields })
+      },
+    })
+    await idx.init()
+    await expect(idx.backfill(B, B + 9n)).rejects.toThrow("boom")
+    expect(errors).toEqual([
+      { msg: "backfill failed", fields: { resumeFrom: B + 4n, to: B + 9n, sources: "all" } },
+    ])
   })
 })
