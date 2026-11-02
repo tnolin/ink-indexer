@@ -11,6 +11,12 @@ import type { Cursor, Store, TxStep } from "./store"
 const WRITE_RETRY_MS = 1_000
 /** A backfill write that has waited this long logs one warning. */
 const WRITE_WARN_MS = 30_000
+/** A backfill waits this long, doubling up to the cap, before it reads a block the endpoint has not served yet again. */
+const SERVED_RETRY_MS = 1_000
+const SERVED_RETRY_MAX_MS = 30_000
+/** A backfill that has been refused one block this long stops, so a stuck endpoint is noticed. */
+const SERVED_GIVE_UP_MS = 10 * 60_000
+
 /** A condition warns at most once in this long, and its stretch ends after this long without it. */
 const QUIET_MS = 10 * 60_000
 
@@ -258,13 +264,43 @@ export class Indexer {
    * Re-scans [from, to] idempotently without moving the live cursor. `only` limits it to some
    * sources' filters (see `Source.filters`); a source with none of its filters picked is left out.
    *
-   * It may run beside `start` (see ADR 0038): its writes wait for rows the live tick has not
-   * confirmed yet.
+   * It may run beside `start` (see ADR 0038). Its writes wait for rows the live tick has not
+   * confirmed yet. A block the endpoint has not served yet is retried with a growing wait; after
+   * ten minutes on one block it throws, naming the block to resume from.
    */
   async backfill(from: bigint, to?: bigint, only?: readonly BackfillSource[]) {
     const end = to ?? (await this.deps.chain.getBlockNumber())
-    for (let next = from; next <= end; )
-      next = (await this.ingest(next, end, end, false, only)) + 1n
+    const { sleep, now } = this.timing()
+    let stuck = null as { next: bigint; since: number; waitMs: number } | null
+    for (let next = from; next <= end; ) {
+      try {
+        next = (await this.ingest(next, end, end, false, only)) + 1n
+        if (stuck) {
+          const ended = this.notServed.end()
+          this.deps.logger("info", "backfill block served after retrying", {
+            next,
+            retries: ended?.hits,
+            durationMs: ended?.durationMs,
+          })
+          stuck = null
+        }
+      } catch (err) {
+        if (!(err instanceof BlockNotServedError)) throw err
+        if (stuck?.next !== next) stuck = { next, since: now(), waitMs: SERVED_RETRY_MS }
+        if (now() - stuck.since >= SERVED_GIVE_UP_MS)
+          throw new Error(
+            `backfill stopped: block ${err.block} was not served for ${SERVED_GIVE_UP_MS / 60_000} minutes; resume with --from ${next}`,
+            { cause: err },
+          )
+        this.deps.logger(this.notServed.hit(), "backfill block not yet served; retrying", {
+          block: err.block,
+          next,
+          waitMs: stuck.waitMs,
+        })
+        await sleep(stuck.waitMs)
+        stuck.waitMs = Math.min(stuck.waitMs * 2, SERVED_RETRY_MAX_MS)
+      }
+    }
   }
 
   private async ingest(
