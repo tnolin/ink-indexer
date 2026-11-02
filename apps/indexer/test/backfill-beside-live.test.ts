@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { ChainLog } from "@ink-indexer/sdk"
 import type { Hash } from "viem"
 import { afterEach, describe, expect, inject, it } from "vitest"
 import { loadCalamariFixture, loadTsunamiFixture } from "../../../packages/sdk/test/fixtures"
@@ -38,9 +37,14 @@ const BACKFILL_TO = 59_890_000n
 /** The heads the live process sees, one per tick: two land on a block holding a swap. */
 const LIVE_HEADS = [59_751_391n, 59_800_000n, 59_850_000n, 59_911_867n, 59_950_000n]
 const FINAL_HEAD = 59_960_000n
-/** A swap copied from a recorded one into a block the backfill and the live tick both cover. */
-const COPIED_SWAP_BLOCK = 59_800_000n
-const COPIED_SWAP_TX = `0x${"c0".repeat(32)}` as Hash
+/**
+ * The recorded swap, copied into one block below the live cursor (only the backfill covers it) and
+ * one above (the backfill and the live tick both do).
+ */
+const COPIED_SWAPS = [
+  { block: 59_600_000n, tx: `0x${"c0".repeat(32)}` as Hash },
+  { block: 59_800_000n, tx: `0x${"c1".repeat(32)}` as Hash },
+]
 
 const LIVE_SOURCES: BackfillSource[] = ["inkypump", "v4-swaps"]
 const BACKFILL_SOURCES: BackfillSource[] = ["tsunami", "v4-swaps"]
@@ -51,7 +55,7 @@ afterEach(async () => {
   open = []
 })
 
-/** The recorded Tsunami and Calamari transactions, with the recorded swap copied once into a covered block. */
+/** The recorded Tsunami and Calamari transactions, with the recorded swap copied into two covered blocks. */
 function chainWithFixtures() {
   const chain = new FakeChain(FINAL_HEAD - 10_000n)
   chain.maxSpan = 500_000n
@@ -67,13 +71,14 @@ function chainWithFixtures() {
   addCalamari(chain, "calamari-swap-gm-first")
   addCalamari(chain, "calamari-swap-gm")
   const first = loadCalamariFixture("calamari-swap-gm-first")
-  for (const l of first.logs)
-    chain.add({ ...l, blockNumber: COPIED_SWAP_BLOCK, transactionHash: COPIED_SWAP_TX })
-  chain.senders.set(COPIED_SWAP_BLOCK, {
-    hash: chain.hashOf(COPIED_SWAP_BLOCK),
-    senders: new Map([[COPIED_SWAP_TX, Object.values(first.senders)[0]!]]),
-    timestamp: first.timestamp + 1,
-  })
+  for (const { block, tx } of COPIED_SWAPS) {
+    for (const l of first.logs) chain.add({ ...l, blockNumber: block, transactionHash: tx })
+    chain.senders.set(block, {
+      hash: chain.hashOf(block),
+      senders: new Map([[tx, Object.values(first.senders)[0]!]]),
+      timestamp: first.timestamp + 1,
+    })
+  }
   chain.head = FINAL_HEAD
   return chain
 }
@@ -305,5 +310,3 @@ describe("backfill beside start", () => {
     }
   }, 180_000)
 })
-
-export type { ChainLog }
