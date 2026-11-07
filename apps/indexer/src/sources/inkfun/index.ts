@@ -31,6 +31,7 @@ import { BlockNotServedError } from "../../errors"
 import { fetchIpfsJson } from "../../ipfs"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
@@ -90,6 +91,8 @@ export type InkfunDeps = {
   ipfs: { gateway: string; fetch?: typeof fetch }
   /** The clock the dropped-log warning limit reads; tests inject one. */
   now?: () => number
+  /** Where a trusted contract's undecodable log is reported; none by default. */
+  report?: Pick<Reporter, "warn">
 }
 
 type Item = { log: ChainLog; d: InkfunLog }
@@ -116,6 +119,8 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
     source: "inkfun",
     logger,
     topics: INKFUN_LOG_TOPICS,
+    trusted: (a) => a === INKFUN_FACTORY || a === INKFUN_MIGRATION || curves.has(a),
+    report: deps.report,
     now: deps.now,
   })
   const curves = new Map<Address, KnownCurve>()

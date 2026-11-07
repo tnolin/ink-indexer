@@ -18,6 +18,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import type { AthRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
@@ -95,12 +96,15 @@ export function v4Source(deps: {
   blockReads?: number
   /** The clock the dropped-log warning limit reads; tests inject one. */
   now?: () => number
+  /** Where a trusted contract's undecodable log is reported; none by default. */
+  report?: Pick<Reporter, "warn">
 }): Source<V4Batch, RollbackReads> {
   const { sql, chain, pools } = deps
   const dropped = droppedLogs({
     source: "v4",
     logger: deps.logger,
     topics: [SWAP_TOPIC, TRANSFER_TOPIC],
+    report: deps.report,
     now: deps.now,
   })
   // The pool ids the last `filters` call asked for; null when the v4 group was not picked.

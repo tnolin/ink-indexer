@@ -81,7 +81,7 @@ export type MasterLaunchConfig = {
 
 /**
  * The configuration of each Master launch, read from the factory that made it at one block, in one
- * multicall. Null for a launch whose calls fail, which is a factory that does not know the id.
+ * multicall. Null for a launch whose calls fail. A factory that does not know the id answers with zeros rather than reverting, so a caller compares the returned token with the one it expects.
  */
 export async function readMasterLaunchConfigs(
   client: StateReader,

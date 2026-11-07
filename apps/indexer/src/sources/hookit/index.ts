@@ -33,12 +33,12 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import { fetchIpfsJson } from "../../ipfs"
 import type { Logger } from "../../log"
-import { isTransportError, type LogFilter } from "../../rpc"
+import type { LogFilter } from "../../rpc"
 import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
-import { blockSendersFor } from "../senders"
+import { blockSendersFor, servedAt } from "../senders"
 import { type EventRow, pick, type Source } from "../source"
 import { curvesToRefresh, loadCurves, loadHooks, rollbackRows, writeRows } from "./store"
 
@@ -180,6 +180,8 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
     source: "hookit",
     logger,
     topics: HOOKIT_LOG_TOPICS,
+    trusted: (a) => HOOKIT_MASTER_FACTORIES.has(a) || a === HOOKIT_BONDING_FACTORY,
+    report,
     now: deps.now,
   })
   let warnedTooMany = false
@@ -307,7 +309,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
   /**
    * Sets the configuration of Master launches whose `LaunchConfigured` is not among the logs, from
    * the factory's own views at the launch block. A launch the factory cannot answer for is left
-   * without one and skipped, never failing the span. The first such launch of each factory is
+   * without one and skipped. A read that errors fails the span, so it is retried. The first such launch of each factory is
    * reported, because the factory not emitting the event is a change worth a look.
    */
   async function configureFromFactory(
@@ -320,21 +322,14 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
         report.warn("a Master launch had no LaunchConfigured event", { factory: log.address })
       }
       // shortcut: a launch's markets come from the transaction's MarketLaunched logs; with those missing too, a multi-market launch registers only its first pool. Read launchMarkets from the factory to close it.
-      let config: MasterLaunchConfig | null = null
-      try {
-        const [read] = await chain.readMasterLaunchConfigs(
+      // A refusal of an unserved block fails the span so the tick retries it; so does any other error.
+      const [read] = await servedAt(log.blockNumber, () =>
+        chain.readMasterLaunchConfigs(
           [{ factory: log.address, launchId: d.launchId }],
           log.blockNumber,
-        )
-        config = read ?? null
-      } catch (err) {
-        if (isTransportError(err)) throw err
-        logger("warn", "could not read a Hookit launch's configuration", {
-          token: d.token,
-          tx: log.transactionHash,
-          error: String(err),
-        })
-      }
+        ),
+      )
+      const config: MasterLaunchConfig | null = read ?? null
       if (config?.token === d.token) {
         group(log, d.launchId).configured = {
           kind: "configured",
@@ -348,6 +343,15 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
         logger("warn", "ignoring Hookit launch without a configuration", {
           token: d.token,
           tx: log.transactionHash,
+        })
+        report.warn("a Master launch was skipped for want of a configuration", {
+          token: d.token,
+          tx: log.transactionHash,
+          factory: log.address,
+          reason:
+            config === null
+              ? "the factory has no such launch"
+              : "the factory holds another token for the id",
         })
       }
     }

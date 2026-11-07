@@ -29,6 +29,6 @@ Every swap on the PoolManager is one log. Most belong to pools the indexer does 
 
 - Each span makes two more `eth_getLogs` calls once a pool is registered, one `eth_getBlockByNumber` per block with a tracked swap, and one `eth_blockNumber` plus one balance multicall for each newly bonded token. The measured totals are in the pull request that introduced this source.
 - The request carries every tracked pool id, so its size grows with the number of bonded tokens.
-- On a database with no registered pool, the swaps of the first bond that fall in its own span are missed.
+- On a database with no registered pool the source makes no request of its own, and still runs for each span: swaps and burns of pools that other sources register in that span are read for the span, with a request limited to those pools and tokens.
 - Backfill: `pnpm backfill --sources v4-swaps` reads swaps and burns for the pools in the registry. The cost is about one `eth_getBlockByNumber` per block with a tracked swap, plus two `eth_getLogs` per span.
 - A token whose pool was seeded by the migration has its dead balance read at head, so backfilled swaps use today's burned amount.

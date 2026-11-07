@@ -25,6 +25,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
@@ -122,10 +123,19 @@ export function inkypumpSource(deps: {
   pools: PoolRegistry
   /** The clock the dropped-log warning limit reads; tests inject one. */
   now?: () => number
+  /** Where a trusted contract's undecodable log is reported; none by default. */
+  report?: Pick<Reporter, "warn">
 }): Source<Batch, CurveRow[]> {
   const { sql, chain, logger, pools } = deps
-  const dropped = droppedLogs({ source: "inkypump", logger, topics: LOG_TOPICS, now: deps.now })
   let registry = new HookRegistry([], logger)
+  // Only logs of registered hooks and known factories reach `dropped`, so no trust test is needed here.
+  const dropped = droppedLogs({
+    source: "inkypump",
+    logger,
+    topics: LOG_TOPICS,
+    report: deps.report,
+    now: deps.now,
+  })
   return {
     name: "inkypump",
     filters: (only) => [pick(only, "inkypump", LOG_FILTER)],
@@ -416,7 +426,11 @@ async function trustAndDecode(logs: ChainLog[], deps: SourceDeps, batch: Batch):
         deps.registry.warnUnknown(log)
         continue
       }
-      const d = decodeLog(log) as XStocksHookCreated
+      const d = decodeLog(log)
+      if (d?.kind !== "xstocksHookCreated") {
+        deps.dropped?.(log)
+        continue
+      }
       if (deps.registry.get(d.hook)) continue
       const quote = await deps.chain.readErc20Meta(d.wrapper)
       const row: HookRow = {

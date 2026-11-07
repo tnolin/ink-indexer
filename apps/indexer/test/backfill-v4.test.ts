@@ -138,6 +138,30 @@ describe("backfill values and reads", () => {
     expect(Math.max(...waits)).toBe(30_000)
   })
 
+  it("names the later span to resume from when a block is refused after earlier spans were written", async () => {
+    const chain = chainWithSwaps()
+    const refused = B + 5n
+    const read = chain.getBlockSenders.bind(chain)
+    chain.getBlockSenders = async (n: bigint) => {
+      if (n === refused) throw Object.assign(new Error("header not found"), { code: -32000 })
+      return read(n)
+    }
+    const clock = { now: 0 }
+    const idx = indexerOn(sql, chain, {
+      sleep: async (ms) => {
+        clock.now += ms
+      },
+      now: () => clock.now,
+    })
+    await idx.init()
+    await expect(idx.backfill(B, B + 9n, ["inkypump", "v4-swaps"])).rejects.toThrow(
+      `block ${refused} was not served for 10 minutes; resume with --from ${B + 4n} --to ${B + 9n} --sources inkypump,v4-swaps`,
+    )
+    // The first span's rows were kept.
+    const [row] = await sql`select count(*)::int as n from indexer.events`
+    expect(row!.n).toBeGreaterThan(0)
+  })
+
   it("reads the dead balance at the live cursor block when the cursor is past the span", async () => {
     const chain = chainWithSwaps()
     chain.balances.set(DEAD_KEY, 7n)

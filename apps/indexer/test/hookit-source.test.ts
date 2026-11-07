@@ -31,6 +31,7 @@ import {
   loadHookitLaunchConfigs,
   loadHookitPoolKey,
 } from "../../../packages/sdk/test/fixtures"
+import { BlockNotServedError } from "../src/errors"
 import type { Logger } from "../src/log"
 import { hookitSource } from "../src/sources/hookit/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
@@ -483,6 +484,7 @@ describe("Hookit Master launches", () => {
 
 const NO_CONFIGURED = "a Master launch had no LaunchConfigured event"
 const SKIPPED = "ignoring Hookit launch without a configuration"
+const SKIPPED_REPORT = "a Master launch was skipped for want of a configuration"
 
 /** What the launching factory answered for a recorded launch, as `readMasterLaunchConfigs` returns it. */
 const recordedConfig = (name: HookitFixtureName) => {
@@ -590,11 +592,36 @@ describe("Hookit Master launch without LaunchConfigured", () => {
   })
 
   it.each([
-    [
-      "the read fails",
-      (t: Awaited<ReturnType<typeof setup>>, key: string) =>
-        t.chain.masterConfigs.set(key, new Error("rpc")),
-    ],
+    ["an unserved block", () => Object.assign(new Error("header not found"), { code: -32000 })],
+    ["a failed call", () => new Error("rpc")],
+  ])(
+    "synthetic: LaunchConfigured removed and %s fails the span instead of skipping the launch",
+    async (_label, error) => {
+      const t = await setup()
+      try {
+        const { f, key } = seedWithoutConfigured(t, "hookit-hkt-launch")
+        t.chain.masterConfigs.set(key, error())
+        await expect(t.ingest(f.blockNumber)).rejects.toThrow()
+        expect(await t.sql`select 1 from indexer.tokens`).toEqual([])
+        expect(t.warnings.filter((w) => w.msg === SKIPPED)).toEqual([])
+      } finally {
+        await t.sql.end()
+      }
+    },
+  )
+
+  it("synthetic: an unserved block surfaces as a block not served, so the tick retries it", async () => {
+    const t = await setup()
+    try {
+      const { f, key } = seedWithoutConfigured(t, "hookit-hkt-launch")
+      t.chain.masterConfigs.set(key, Object.assign(new Error("header not found"), { code: -32000 }))
+      await expect(t.ingest(f.blockNumber)).rejects.toBeInstanceOf(BlockNotServedError)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it.each([
     [
       "the factory has no such launch",
       (t: Awaited<ReturnType<typeof setup>>, key: string) => t.chain.masterConfigs.delete(key),
@@ -626,8 +653,18 @@ describe("Hookit Master launch without LaunchConfigured", () => {
         expect(batch.pools).toEqual([])
         expect(await t.sql`select 1 from indexer.tokens`).toEqual([])
         expect(t.warnings.filter((w) => w.msg === SKIPPED)).toHaveLength(2)
-        expect(t.reports).toHaveLength(1)
-        expect(t.reports[0]!.message).toBe(NO_CONFIGURED)
+        // The factory is reported once; each skipped launch is reported too.
+        expect(t.reports.map((r) => r.message)).toEqual([
+          NO_CONFIGURED,
+          SKIPPED_REPORT,
+          SKIPPED_REPORT,
+        ])
+        expect(t.reports[1]!.context).toMatchObject({
+          token: f.tokens[0]!.token,
+          tx: f.txHash,
+          factory: expect.any(String),
+          reason: expect.any(String),
+        })
       } finally {
         await t.sql.end()
       }
