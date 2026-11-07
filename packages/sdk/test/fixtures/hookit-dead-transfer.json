@@ -1,0 +1,32 @@
+{
+  "name": "hookit-dead-transfer",
+  "txHash": "0x9c53475e26d26936250a36fb55e6ed9abc98d80f0abd9a4585dd6690d050b26e",
+  "blockNumber": "58422429n",
+  "blockHash": "0x837bcd4fe4af71a72ab79c257d641510b9eecd9a3d1ceb5fd00388a0ebaa2901",
+  "timestamp": 1791920840,
+  "logs": [
+    {
+      "address": "0xc33056fea957cdceb0c28ec0f6e12790407d41b8",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x00000000000000000000000024389cb07fae2a77881fee65ca8d7af6857d8ef5",
+        "0x000000000000000000000000000000000000000000000000000000000000dead"
+      ],
+      "data": "0x000000000000000000000000000000000000000000108b2a2c28029094000000",
+      "blockNumber": "58422429n",
+      "blockHash": "0x837bcd4fe4af71a72ab79c257d641510b9eecd9a3d1ceb5fd00388a0ebaa2901",
+      "transactionHash": "0x9c53475e26d26936250a36fb55e6ed9abc98d80f0abd9a4585dd6690d050b26e",
+      "logIndex": 7
+    }
+  ],
+  "sender": "0x24389cb07fae2a77881fee65ca8d7af6857d8ef5",
+  "tokens": [
+    {
+      "token": "0xc33056fea957cdceb0c28ec0f6e12790407d41b8",
+      "metadataURI": "ipfs://QmVsGCCdofpcdx1813ZPftqdkfCb1yutvrMGwTGc7wZtMd",
+      "totalSupply": "1000000000000000000000000000n",
+      "totalSupplyBefore": "1000000000000000000000000000n"
+    }
+  ],
+  "classic": []
+}
