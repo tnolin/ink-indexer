@@ -18,7 +18,7 @@
 - `pnpm test`: all tests. A throwaway Postgres starts automatically unless `TEST_DATABASE_URL` is set (the tests drop its `indexer` schema; `DATABASE_URL` is never used for tests).
 - `pnpm lint`, `pnpm typecheck`, `pnpm format`.
 - `pnpm db:dev`: persistent local Postgres in `.data/postgres`.
-- `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>] [--sources inkypump,inkfun,tsunami,v4-swaps,nft-mints,nft-sales,nft-launches] [--block-reads <1-16>]` (default: every source, 8 block reads). A backfill can run beside `pnpm start` while its platform is not in `INDEXER_SOURCES` (ADR 0038); `--sources` names source groups, `INDEXER_SOURCES` names platforms.
+- `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>] [--sources inkypump,inkfun,tsunami,hookit,v4-swaps,nft-mints,nft-sales,nft-launches] [--block-reads <1-16>]` (default: every source, 8 block reads). A backfill can run beside `pnpm start` while its platform is not in `INDEXER_SOURCES` (ADR 0038); `--sources` names source groups, `INDEXER_SOURCES` names platforms.
 - `pnpm nft:mark <contract> <real|filtered|continuous|drop|clear>`: a manual verdict or kind for a collection.
 
 ## Adding an InkyPump hook

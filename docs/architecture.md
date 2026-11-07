@@ -8,7 +8,7 @@ All sources are on Ink mainnet (chain ID 57073).
 
 | Part | Path | License | What it does |
 | --- | --- | --- | --- |
-| SDK | `packages/sdk` | MIT | Event decoders, curve math, event builders and readers for InkyPump V2, ink.fun and Tsunami, decoders for NFT mints, SeaDrop, Seaport and Chimera, and OpenSea response parsers |
+| SDK | `packages/sdk` | MIT | Event decoders, curve math, event builders and readers for InkyPump V2, ink.fun, Tsunami and Hookit, decoders for NFT mints, SeaDrop, Seaport and Chimera, and OpenSea response parsers |
 | Events | `packages/events` | MIT | Typed, versioned event schema. The public contract between the indexer and anything that reads it |
 | DB | `packages/db` | AGPL-3.0 | Postgres schema and migrations |
 | Indexer | `apps/indexer` | AGPL-3.0 | Follows Ink, reads OpenSea, writes normalized rows |
@@ -29,7 +29,7 @@ All sources are on Ink mainnet (chain ID 57073).
  ┌───────────────────────────────────────┐
  │  apps/indexer: sources/*              │
  │  one module per source:               │
- │  InkyPump · ink.fun · Tsunami         │
+ │  InkyPump · ink.fun · Tsunami · Hookit│
  │  NFTs · OpenSea                       │
  └───────────────────────────────────────┘
                     │
@@ -54,6 +54,7 @@ Each source is a module in `apps/indexer/src/sources/`. Adding a protocol means 
 | InkyPump V2 | Launches, curve buys and sells, curve progress, bond to Uniswap V4 | V2 hook events (`LaunchCreated`, `LaunchMetadata`, `Trade`, `LaunchFinalized`) read with `eth_getLogs`. See the [integration guide](https://docs.inkyswap.com/api-reference/contracts/integration-guide.md) |
 | ink.fun | Launches with their IPFS metadata, curve buys and sells, curve progress, migration into a Uniswap v4 pool | One topic-only filter merged with InkyPump's (`LaunchCreated`, `Bought`, `Sold`, `Migrated`), trusted by emitter: the factory, a known curve or the migration module. See ADR 0035 |
 | Tsunami | Launches with their IPFS metadata, curve buys and sells, curve progress, graduation into a Calamari pool, and the move of a pool to a new one | One topic-only filter merged with the other launchpads' (`TokenLaunched` in both signatures, `TokenBought`, `TokenSold`, `TokenMigrated`, `CreatorPoolMigrated`, and the Calamari `Initialize` of a launch's own pool), trusted by emitter: either factory, a curve seen launched, or Calamari's PoolManager. See ADR 0036 |
+| Hookit | Master launches that trade in concentrated Uniswap v4 pools from their first block (one pool per market), Classic launches on a bonding curve with their buys, sells, progress and graduation into a pool, and each launch's IPFS or inline metadata | One topic-only filter merged with the other launchpads' (Master `TokenLaunched`, `MarketLaunched`, `LaunchConfigured` and `DevBuyExecuted`; Classic `TokenLaunched`, `Bought`, `Sold`, `HktHolderDrop` and `Graduated`), trusted by emitter: the five Master factories, the Classic factory or a Classic curve seen launched. See ADR 0039 |
 | Uniswap v4 pools | Swaps in the pools of tracked tokens, with the trader, market cap, all-time-high market cap and pool liquidity; transfers of those tokens to the dead address | PoolManager `Swap` logs filtered to the pool ids in the pool registry, and `Transfer` logs to the dead address, read with `eth_getLogs`. See ADR 0033 |
 | NFTs (chain) | ERC-721 and ERC-1155 mints and burns, SeaDrop drops and mint progress, Seaport sales, Chimera collection launches | `Transfer`, SeaDrop, `OrderFulfilled` and `CampaignCreated` logs on Ink. See ADR 0016 |
 | OpenSea | Collection pages, drop schedules, floors and stats, listings, item ranks, creator accounts | API v2 with chain slug `ink`, and the Stream API for listings, both drawing on one shared request budget. See ADR 0017 and ADR 0019 |
@@ -80,7 +81,7 @@ NFT events share a `contract` (also the row's `entity`) and a `source` of `chain
 - **One log, several events.** `indexer.events` is unique on `(tx_hash, log_index, sub)`, so a sweep or a log that crosses two mint milestones yields one row per event (ADR 0016).
 - **OpenSea budget.** Every process using the key draws from one request budget in Postgres (ADR 0019), so the hourly limit holds across processes.
 - **Stream.** Listings arrive over the Stream in shards of 50 collections per connection, with a one-connection fallback for every collection (ADR 0017).
-- **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `inkfun` (ink.fun launches, curve trades and migrations), `tsunami` (Tsunami launches, curve trades and graduations), `v4-swaps` (Uniswap v4 swaps and burns for registered pools), `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera).
+- **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `inkfun` (ink.fun launches, curve trades and migrations), `tsunami` (Tsunami launches, curve trades and graduations), `hookit` (Hookit launches, Classic curve trades and graduations), `v4-swaps` (Uniswap v4 swaps and burns for registered pools), `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera).
 - **Backfill beside `start`.** A backfill write reads the chain head, confirms the rows below it and checks that no confirmed row is above an unconfirmed one, and writes again at a newer head when one is (ADR 0038). A platform stays out of `INDEXER_SOURCES` while its own backfill runs, and a short final stop backfills the last blocks up to the cursor and hands it over. The source groups it backfills may overlap the live tick's rows: duplicates are dropped, the ath only rises, and a dead balance is written only for a newer block.
 
 ## Data model
