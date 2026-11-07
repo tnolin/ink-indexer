@@ -6,6 +6,7 @@ import type {
   InkfunLaunchState,
   LaunchKey,
   LaunchState,
+  MasterLaunchConfig,
   TsunamiCurveState,
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
@@ -30,6 +31,11 @@ export type RecordedCalls = {
     result: InkfunLaunchState[]
   }[]
   readClassicLaunches?: { ids: bigint[]; block: bigint; result: ClassicLaunch[] }[]
+  readMasterLaunchConfigs?: {
+    launches: { factory: Address; launchId: bigint }[]
+    block: bigint
+    result: (MasterLaunchConfig | null)[]
+  }[]
   readMetadataUris?: { tokens: Address[]; block: bigint; result: (string | null)[] }[]
   readCurveSold?: { curves: Address[]; block: bigint; result: bigint[] }[]
   getBlockSenders?: {
@@ -90,6 +96,8 @@ export class ReplayChain implements Chain {
       this.answers.set(`readInkfunLaunches:${stringify([c.launches, c.block])}`, c.result)
     for (const c of calls.readClassicLaunches ?? [])
       this.answers.set(`readClassicLaunches:${stringify([c.ids, c.block])}`, c.result)
+    for (const c of calls.readMasterLaunchConfigs ?? [])
+      this.answers.set(`readMasterLaunchConfigs:${stringify([c.launches, c.block])}`, c.result)
     for (const c of calls.readMetadataUris ?? [])
       this.answers.set(`readMetadataUris:${stringify([c.tokens, c.block])}`, c.result)
     for (const c of calls.readCurveSold ?? [])
@@ -156,6 +164,10 @@ export class ReplayChain implements Chain {
 
   async readClassicLaunches(ids: bigint[], block: bigint) {
     return this.answer<ClassicLaunch[]>("readClassicLaunches", [ids, block])
+  }
+
+  async readMasterLaunchConfigs(launches: { factory: Address; launchId: bigint }[], block: bigint) {
+    return this.answer<(MasterLaunchConfig | null)[]>("readMasterLaunchConfigs", [launches, block])
   }
 
   async readMetadataUris(tokens: Address[], block: bigint) {

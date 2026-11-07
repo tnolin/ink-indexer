@@ -122,6 +122,7 @@ const recording: Chain = {
   // code and token names, and the recording runs without them.
   readInkfunLaunches: (launches, block) => live.readInkfunLaunches(launches, block),
   readClassicLaunches: (ids, block) => live.readClassicLaunches(ids, block),
+  readMasterLaunchConfigs: (launches, block) => live.readMasterLaunchConfigs(launches, block),
   readMetadataUris: (tokens, block) => live.readMetadataUris(tokens, block),
   readCurveSold: (curves, block) => live.readCurveSold(curves, block),
   readTsunamiCurves: (curves, block) => live.readTsunamiCurves(curves, block),

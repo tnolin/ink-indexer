@@ -20,3 +20,15 @@ export const hookitBondingAbi = parseAbi([
 
 /** Every Hookit token exposes its metadata URI. */
 export const hookitTokenAbi = parseAbi(["function metadataURI() view returns (string)"])
+
+/**
+ * The views every Master factory exposes for one launch. They answer the fields of
+ * `LaunchConfigured`, so a launch whose configuration event is missing can be read back.
+ */
+export const hookitMasterFactoryAbi = parseAbi([
+  "function launches(uint256 id) view returns (address token, address creator, address hooks, bool customHook, bytes32 poolId, int24 tickLower, int24 tickUpper, uint128 liquidity)",
+  "function launchBitmasks(uint256 id) view returns (uint256)",
+  "function launchQuote(uint256 id) view returns (address)",
+  "function launchTickSpacing(uint256 id) view returns (int24)",
+  "function launchFeeFlag(uint256 id) view returns (uint24)",
+])

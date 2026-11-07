@@ -12,15 +12,19 @@
 // --topics hookit-history <name> <launchId> <fromBlock> <toBlock> [httpRpcUrl] records every bonding event of one
 // launch in a block range with launches(id) at the last event's block.
 // --topics hookit-state <name> <block> <poolId>... [--rpc url] records StateView slot0 and liquidity at a block.
+// --topics hookit-config <name> <txHash>... records, for every Master launch in those transactions, what the
+// launching factory's views answer (token, bitmask, quote, tick spacing, fee) at the launch block.
 // Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami|hookit]
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   type ChainLog,
+  decodeHookitLog,
   decodeInkfunLog,
   decodeLog,
   HOOKIT_BONDING_FACTORY,
   HOOKIT_LOG_TOPICS,
+  HOOKIT_MASTER_FACTORIES,
   HOOKIT_TOPICS,
   INKFUN_LOG_TOPICS,
   type LaunchKey,
@@ -32,6 +36,7 @@ import {
   readCurveSold,
   readInkfunLaunches,
   readLaunchStates,
+  readMasterLaunchConfigs,
   readMetadataUris,
   readTotalSupplies,
   readTsunamiCurves,
@@ -65,7 +70,8 @@ if (
   mode !== "tsunami" &&
   mode !== "hookit" &&
   mode !== "hookit-history" &&
-  mode !== "hookit-state"
+  mode !== "hookit-state" &&
+  mode !== "hookit-config"
 )
   throw new Error(`unknown --topics ${mode}`)
 const rpcAt = argv.indexOf("--rpc")
@@ -151,6 +157,33 @@ if (mode === "hookit-history") {
     },
     `${history.length} logs`,
   )
+  process.exit(0)
+}
+
+if (mode === "hookit-config") {
+  // <name> <txHash>...
+  const reads = []
+  for (const hash of argv.slice(1) as Hash[]) {
+    const receipt = await client.getTransactionReceipt({ hash })
+    for (const l of receipt.logs) {
+      const d = decodeHookitLog(l)
+      const factory = l.address.toLowerCase() as Address
+      if (d?.kind !== "masterLaunched" || !HOOKIT_MASTER_FACTORIES.has(factory)) continue
+      const [config] = await readMasterLaunchConfigs(
+        client,
+        [{ factory, launchId: d.launchId }],
+        receipt.blockNumber,
+      )
+      reads.push({
+        txHash: hash,
+        blockNumber: receipt.blockNumber,
+        factory,
+        launchId: d.launchId,
+        config,
+      })
+    }
+  }
+  save({ name, reads }, `${reads.length} launch configurations`)
   process.exit(0)
 }
 

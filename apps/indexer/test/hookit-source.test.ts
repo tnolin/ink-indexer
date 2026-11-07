@@ -22,12 +22,13 @@ import {
   SWAP_TOPIC,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
-import { type Address, encodeAbiParameters, type Hash, pad, toHex } from "viem"
+import { type Address, encodeAbiParameters, type Hash, HttpRequestError, pad, toHex } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import {
   type HookitFixtureName,
   loadHookitFixture,
   loadHookitHistory,
+  loadHookitLaunchConfigs,
   loadHookitPoolKey,
 } from "../../../packages/sdk/test/fixtures"
 import type { Logger } from "../src/log"
@@ -478,6 +479,160 @@ describe("Hookit Master launches", () => {
       await t.sql.end()
     }
   })
+})
+
+const NO_CONFIGURED = "a Master launch had no LaunchConfigured event"
+const SKIPPED = "ignoring Hookit launch without a configuration"
+
+/** What the launching factory answered for a recorded launch, as `readMasterLaunchConfigs` returns it. */
+const recordedConfig = (name: HookitFixtureName) => {
+  const f = loadHookitFixture(name)
+  const read = loadHookitLaunchConfigs().reads.find((r) => r.txHash === f.txHash)
+  if (!read) throw new Error(`no recorded configuration for ${name}`)
+  return { key: `${read.factory}:${read.launchId}`, read }
+}
+
+/** Seeds a recorded Master launch with its LaunchConfigured log removed and the factory's recorded answer in place. */
+function seedWithoutConfigured(t: Awaited<ReturnType<typeof setup>>, name: HookitFixtureName) {
+  const f = t.seed(name)
+  t.chain.logs = t.chain.logs.filter((l) => decodeHookitLog(l)?.kind !== "configured")
+  const { key, read } = recordedConfig(name)
+  t.chain.masterConfigs.set(key, read.config)
+  return { f, key, read }
+}
+
+describe("Hookit Master launch without LaunchConfigured", () => {
+  it.each([
+    "hookit-hkt-launch",
+    "hookit-hmu-launch",
+    "hookit-kbtc-launch",
+    "hookit-inky-launch",
+    "hookit-bloop-launch",
+    "hookit-qcard-launch",
+  ] as const)(
+    "synthetic: LaunchConfigured removed from %s indexes the same launch from the factory's views",
+    async (name) => {
+      const normal = await setup()
+      const fallback = await setup()
+      try {
+        normal.seed(name)
+        const expected = await normal.ingest(normal.chain.logs.at(-1)!.blockNumber)
+        const { f, read } = seedWithoutConfigured(fallback, name)
+        const batch = await fallback.ingest(f.blockNumber)
+        expect(launchesOf(batch)).toHaveLength(1)
+        expect(launchesOf(batch)).toEqual(launchesOf(expected))
+        expect(batch.tokens).toEqual(expected.tokens)
+        expect(batch.pools).toEqual(expected.pools)
+        const rows = (t: typeof fallback) =>
+          t.sql`select address, quote_asset, hook, launch_id, phase from indexer.tokens`
+        expect(await rows(fallback)).toEqual(await rows(normal))
+        expect(fallback.chain.masterConfigReads).toEqual([
+          { launches: [{ factory: read.factory, launchId: read.launchId }], block: f.blockNumber },
+        ])
+        expect(normal.chain.masterConfigReads).toEqual([])
+        expect(fallback.reports).toEqual([
+          { message: NO_CONFIGURED, context: { factory: read.factory } },
+        ])
+        expect(normal.reports).toEqual([])
+      } finally {
+        await normal.sql.end()
+        await fallback.sql.end()
+      }
+    },
+  )
+
+  it("synthetic: LaunchConfigured removed and a transport failure fails the span instead of skipping the launch", async () => {
+    const t = await setup()
+    try {
+      const { f, key } = seedWithoutConfigured(t, "hookit-hkt-launch")
+      t.chain.masterConfigs.set(key, new HttpRequestError({ url: "https://rpc.example" }))
+      await expect(t.ingest(f.blockNumber)).rejects.toThrow()
+      expect(t.warnings.filter((w) => w.msg === SKIPPED)).toEqual([])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("synthetic: LaunchConfigured removed from two launches of one factory sends one warning", async () => {
+    const t = await setup()
+    try {
+      const { f, key, read } = seedWithoutConfigured(t, "hookit-hkt-launch")
+      const second = f.blockNumber + 1n
+      const other: Hash = `0x${"5e".repeat(32)}`
+      for (const l of [...t.chain.logs]) {
+        if (decodeHookitLog(l)?.kind !== "masterLaunched") continue
+        t.chain.add({ ...l, blockNumber: second, transactionHash: other })
+      }
+      t.chain.senders.set(second, { hash: t.chain.hashOf(second), senders: new Map() })
+      t.chain.masterConfigs.set(key, read.config)
+      const batch = await t.ingest(second)
+      expect(launchesOf(batch)).toHaveLength(2)
+      expect(t.chain.masterConfigReads.map((r) => r.block)).toEqual([f.blockNumber, second])
+      expect(t.reports).toHaveLength(1)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("synthetic: LaunchConfigured removed from launches of two factories sends a warning for each", async () => {
+    const t = await setup()
+    try {
+      const a = seedWithoutConfigured(t, "hookit-hkt-launch")
+      const b = seedWithoutConfigured(t, "hookit-kbtc-launch")
+      await t.ingest(b.f.blockNumber)
+      expect(t.reports.map((r) => r.context)).toEqual([
+        { factory: a.read.factory },
+        { factory: b.read.factory },
+      ])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it.each([
+    [
+      "the read fails",
+      (t: Awaited<ReturnType<typeof setup>>, key: string) =>
+        t.chain.masterConfigs.set(key, new Error("rpc")),
+    ],
+    [
+      "the factory has no such launch",
+      (t: Awaited<ReturnType<typeof setup>>, key: string) => t.chain.masterConfigs.delete(key),
+    ],
+    [
+      "the factory holds another token for the id",
+      (t: Awaited<ReturnType<typeof setup>>, key: string) =>
+        t.chain.masterConfigs.set(key, {
+          ...recordedConfig("hookit-hkt-launch").read.config,
+          token: "0x00000000000000000000000000000000000000b2",
+        }),
+    ],
+  ])(
+    "synthetic: LaunchConfigured removed and %s skips the launch with one warning per factory",
+    async (_label, break_) => {
+      const t = await setup()
+      try {
+        const { f, key } = seedWithoutConfigured(t, "hookit-hkt-launch")
+        break_(t, key)
+        const second = f.blockNumber + 1n
+        for (const l of [...t.chain.logs]) {
+          if (decodeHookitLog(l)?.kind !== "masterLaunched") continue
+          t.chain.add({ ...l, blockNumber: second, transactionHash: `0x${"5e".repeat(32)}` })
+        }
+        t.chain.senders.set(second, { hash: t.chain.hashOf(second), senders: new Map() })
+        const batch = await t.ingest(second)
+        expect(batch.events).toEqual([])
+        expect(batch.tokens).toEqual([])
+        expect(batch.pools).toEqual([])
+        expect(await t.sql`select 1 from indexer.tokens`).toEqual([])
+        expect(t.warnings.filter((w) => w.msg === SKIPPED)).toHaveLength(2)
+        expect(t.reports).toHaveLength(1)
+        expect(t.reports[0]!.message).toBe(NO_CONFIGURED)
+      } finally {
+        await t.sql.end()
+      }
+    },
+  )
 })
 
 describe("Hookit Classic curves", () => {

@@ -1,6 +1,6 @@
 import type { Address, Hash } from "viem"
 import type { StateReader } from "../inkypump/state"
-import { hookitBondingAbi, hookitTokenAbi } from "./abi"
+import { hookitBondingAbi, hookitMasterFactoryAbi, hookitTokenAbi } from "./abi"
 import { HOOKIT_BONDING_FACTORY } from "./constants"
 
 /** The fields of the bonding factory's `launches(id)` the indexer uses. */
@@ -68,4 +68,68 @@ export async function readMetadataUris(
     ),
   })
   return results.map((r) => (r.status === "success" ? r.result : null))
+}
+
+/** What `LaunchConfigured` carries, plus the token the factory holds for the launch id. */
+export type MasterLaunchConfig = {
+  token: Address
+  bitmask: bigint
+  quote: Address
+  tickSpacing: number
+  fee: number
+}
+
+/**
+ * The configuration of each Master launch, read from the factory that made it at one block, in one
+ * multicall. Null for a launch whose calls fail, which is a factory that does not know the id.
+ */
+export async function readMasterLaunchConfigs(
+  client: StateReader,
+  launches: { factory: Address; launchId: bigint }[],
+  blockNumber: bigint,
+): Promise<(MasterLaunchConfig | null)[]> {
+  if (launches.length === 0) return []
+  const fns = [
+    "launches",
+    "launchBitmasks",
+    "launchQuote",
+    "launchTickSpacing",
+    "launchFeeFlag",
+  ] as const
+  const results = await client.multicall({
+    allowFailure: true,
+    blockNumber,
+    contracts: launches.flatMap(({ factory, launchId }) =>
+      fns.map(
+        (functionName) =>
+          ({
+            address: factory,
+            abi: hookitMasterFactoryAbi,
+            functionName,
+            args: [launchId],
+          }) as const,
+      ),
+    ),
+  })
+  return launches.map((_, i) => {
+    const [info, bitmask, quote, tickSpacing, fee] = results.slice(
+      i * fns.length,
+      (i + 1) * fns.length,
+    )
+    if (
+      info?.status !== "success" ||
+      bitmask?.status !== "success" ||
+      quote?.status !== "success" ||
+      tickSpacing?.status !== "success" ||
+      fee?.status !== "success"
+    )
+      return null
+    return {
+      token: ((info.result as readonly unknown[])[0] as Address).toLowerCase() as Address,
+      bitmask: bitmask.result as bigint,
+      quote: (quote.result as Address).toLowerCase() as Address,
+      tickSpacing: tickSpacing.result as number,
+      fee: fee.result as number,
+    }
+  })
 }

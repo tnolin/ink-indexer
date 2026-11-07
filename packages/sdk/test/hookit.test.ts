@@ -30,6 +30,7 @@ import {
   hookModules,
   quoteReserve,
   readClassicLaunches,
+  readMasterLaunchConfigs,
   readMetadataUris,
   reservesInRange,
   UNISWAP_V4_POOL_MANAGER,
@@ -40,6 +41,7 @@ import {
   type HookitFixtureName,
   loadHookitFixture,
   loadHookitHistory,
+  loadHookitLaunchConfigs,
   loadHookitPoolState,
 } from "./fixtures"
 
@@ -678,6 +680,70 @@ describe("state reads", () => {
     expect(out).toEqual([at])
     expect(calls).toHaveLength(1)
     expect(await readClassicLaunches(client as never, [], 1n)).toEqual([])
+  })
+
+  it("reads each Master launch's configuration from its factory and matches the recorded LaunchConfigured", async () => {
+    const { reads } = loadHookitLaunchConfigs()
+    // Every Master factory is covered.
+    expect(new Set(reads.map((r) => r.factory))).toEqual(new Set(HOOKIT_MASTER_FACTORIES))
+    for (const r of reads) {
+      const fixture = HOOKIT_FIXTURES.map((n) => loadHookitFixture(n)).find(
+        (f) => f.txHash === r.txHash,
+      )
+      const logs = fixture?.logs.map((l) => decodeHookitLog(l)) ?? []
+      const configured = logs.find((d) => d?.kind === "configured" && d.launchId === r.launchId)
+      const launched = logs.find((d) => d?.kind === "masterLaunched" && d.launchId === r.launchId)
+      if (configured?.kind !== "configured" || launched?.kind !== "masterLaunched")
+        throw new Error(`no launch events for ${r.txHash}`)
+      const seen: { address: string; functionName: string; args: unknown[] }[] = []
+      const client = {
+        multicall: async (args: {
+          blockNumber: bigint
+          contracts: { address: string; functionName: string; args: unknown[] }[]
+        }) => {
+          expect(args.blockNumber).toBe(r.blockNumber)
+          seen.push(...args.contracts)
+          const answers: Record<string, unknown> = {
+            launches: [r.config.token, r.config.token, ZERO_ADDRESS, false, "0x00", 0, 0, 0n],
+            launchBitmasks: r.config.bitmask,
+            launchQuote: r.config.quote,
+            launchTickSpacing: r.config.tickSpacing,
+            launchFeeFlag: r.config.fee,
+          }
+          return args.contracts.map((c) => ({ status: "success", result: answers[c.functionName] }))
+        },
+      }
+      const [out] = await readMasterLaunchConfigs(
+        client as never,
+        [{ factory: r.factory, launchId: r.launchId }],
+        r.blockNumber,
+      )
+      expect(out).toEqual(r.config)
+      expect(out).toMatchObject({
+        token: launched.token,
+        bitmask: configured.bitmask,
+        quote: configured.quote,
+        tickSpacing: configured.tickSpacing,
+        fee: configured.fee,
+      })
+      expect(seen.every((c) => c.address === r.factory && c.args[0] === r.launchId)).toBe(true)
+    }
+  })
+
+  it("gives null for a Master launch whose calls fail and reads nothing for none", async () => {
+    const client = {
+      multicall: async () => [
+        { status: "failure", error: new Error("reverted") },
+        { status: "success", result: 1n },
+        { status: "success", result: ZERO_ADDRESS },
+        { status: "success", result: 60 },
+        { status: "success", result: 0 },
+      ],
+    }
+    expect(
+      await readMasterLaunchConfigs(client as never, [{ factory: ZERO_ADDRESS, launchId: 1n }], 1n),
+    ).toEqual([null])
+    expect(await readMasterLaunchConfigs(client as never, [], 1n)).toEqual([])
   })
 
   it("reads metadata URIs and gives null for a failing call", async () => {

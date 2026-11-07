@@ -277,6 +277,7 @@ class PoolChain implements Chain {
     curves.map(() => ({ realBase: 0n, realQuote: 0n, virtualBase: 1n, virtualQuote: 1n }))
   readClassicLaunches = async (ids: unknown[]) =>
     ids.map(() => loadHookitFixture("hookit-hooc-launch").classic[0]!.at)
+  readMasterLaunchConfigs = async (launches: unknown[]) => launches.map(() => null)
   readMetadataUris = async (tokens: unknown[]) => tokens.map(() => null)
   readErc20Names = async (tokens: string[]) => tokens.map(() => ({ symbol: null, name: null }))
   /** Answers for the block holding the Tsunami transaction only. */

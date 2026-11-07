@@ -277,6 +277,21 @@ export function loadHookitFixture(name: HookitFixtureName): HookitFixture {
   return readFixtureJson(name)
 }
 
+/** What each Master factory's views answered for a recorded launch, at the launch block. */
+export type HookitLaunchConfigs = {
+  reads: {
+    txHash: Hash
+    blockNumber: bigint
+    factory: Address
+    launchId: bigint
+    config: { token: Address; bitmask: bigint; quote: Address; tickSpacing: number; fee: number }
+  }[]
+}
+
+export function loadHookitLaunchConfigs(): HookitLaunchConfigs {
+  return readFixtureJson("hookit-launch-configs")
+}
+
 /** Every bonding event of one launch from its creation to its latest event, with `launches(id)` at the last one. */
 export type HookitHistory = {
   name: string

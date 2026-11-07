@@ -21,6 +21,7 @@ import {
   hookitTradeEvent,
   inlineJson,
   type LaunchMetadataFields,
+  type MasterLaunchConfig,
   type PoolKey,
   parseHookitMetadata,
   poolIdOf,
@@ -32,7 +33,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import { fetchIpfsJson } from "../../ipfs"
 import type { Logger } from "../../log"
-import type { LogFilter } from "../../rpc"
+import { isTransportError, type LogFilter } from "../../rpc"
 import type { Reporter } from "../../sentry"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
@@ -114,6 +115,7 @@ export type HookitDeps = {
     | "getBlockSenders"
     | "readTotalSupplies"
     | "readClassicLaunches"
+    | "readMasterLaunchConfigs"
     | "readMetadataUris"
     | "readErc20Names"
   >
@@ -173,6 +175,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
   const warned = new Set<Address>()
   let warnedTooMany = false
   const warnedLaunches = new Set<bigint>()
+  const reportedFactories = new Set<Address>()
   /** Transactions whose trader this source set for the `v4` source; cleared when the next span starts. */
   let overridden: Hash[] = []
 
@@ -289,6 +292,55 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
     return out
   }
 
+  /**
+   * Sets the configuration of Master launches whose `LaunchConfigured` is not among the logs, from
+   * the factory's own views at the launch block. A launch the factory cannot answer for is left
+   * without one and skipped, never failing the span. The first such launch of each factory is
+   * reported, because the factory not emitting the event is a change worth a look.
+   */
+  async function configureFromFactory(
+    missing: { log: ChainLog; d: Master }[],
+    group: (log: ChainLog, launchId: bigint) => Group,
+  ) {
+    for (const { log, d } of missing) {
+      if (!reportedFactories.has(log.address)) {
+        reportedFactories.add(log.address)
+        report.warn("a Master launch had no LaunchConfigured event", { factory: log.address })
+      }
+      // shortcut: a launch's markets come from the transaction's MarketLaunched logs; with those missing too, a multi-market launch registers only its first pool. Read launchMarkets from the factory to close it.
+      let config: MasterLaunchConfig | null = null
+      try {
+        const [read] = await chain.readMasterLaunchConfigs(
+          [{ factory: log.address, launchId: d.launchId }],
+          log.blockNumber,
+        )
+        config = read ?? null
+      } catch (err) {
+        if (isTransportError(err)) throw err
+        logger("warn", "could not read a Hookit launch's configuration", {
+          token: d.token,
+          tx: log.transactionHash,
+          error: String(err),
+        })
+      }
+      if (config?.token === d.token) {
+        group(log, d.launchId).configured = {
+          kind: "configured",
+          launchId: d.launchId,
+          bitmask: config.bitmask,
+          quote: config.quote,
+          tickSpacing: config.tickSpacing,
+          fee: config.fee,
+        }
+      } else {
+        logger("warn", "ignoring Hookit launch without a configuration", {
+          token: d.token,
+          tx: log.transactionHash,
+        })
+      }
+    }
+  }
+
   async function process(input: ChainLog[], live: boolean): Promise<HookitBatch> {
     const batch: HookitBatch = {
       hooks: [],
@@ -316,19 +368,21 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
       }
       return g
     }
-    const items = trust(input).filter(({ log, d }) => {
+    const trusted = trust(input)
+    for (const { log, d } of trusted) {
       if (d.kind === "market") group(log, d.launchId).markets.set(d.index, d)
       else if (d.kind === "configured") group(log, d.launchId).configured = d
       else if (d.kind === "devBuy") group(log, d.launchId).devBuy = d
-      else if (d.kind === "masterLaunched" && !group(log, d.launchId).configured) {
-        logger("warn", "ignoring Hookit launch without a configuration", {
-          token: d.token,
-          tx: log.transactionHash,
-        })
-        return false
-      }
-      return true
-    })
+    }
+    await configureFromFactory(
+      trusted.flatMap(({ log, d }) =>
+        d.kind === "masterLaunched" && !group(log, d.launchId).configured ? [{ log, d }] : [],
+      ),
+      group,
+    )
+    const items = trusted.filter(
+      ({ log, d }) => d.kind !== "masterLaunched" || group(log, d.launchId).configured,
+    )
     if (items.length === 0) return batch
 
     const blocks = new Map<bigint, Item[]>()

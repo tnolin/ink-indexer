@@ -4,6 +4,7 @@ import type {
   InkfunLaunchState,
   LaunchKey,
   LaunchState,
+  MasterLaunchConfig,
   TsunamiCurveState,
 } from "@ink-indexer/sdk"
 import { type Address, type Hash, pad, toHex } from "viem"
@@ -81,6 +82,9 @@ export class FakeChain implements Chain {
   /** Per Hookit Classic launch id, what `readClassicLaunches` answers; a function gives it per block. An id with no entry throws. */
   classicLaunches = new Map<bigint, ClassicLaunch | ((block: bigint) => ClassicLaunch)>()
   classicLaunchReads: { ids: bigint[]; block: bigint }[] = []
+  /** Per `factory:launchId`, what `readMasterLaunchConfigs` answers: null when the factory has no such launch, an Error to make the read fail. */
+  masterConfigs = new Map<string, MasterLaunchConfig | null | Error>()
+  masterConfigReads: { launches: { factory: Address; launchId: bigint }[]; block: bigint }[] = []
   /** Per token, what `metadataURI()` answers; a token with no entry (or null) reverts. */
   metadataUris = new Map<string, string | null>()
   metadataUriReads: { tokens: Address[]; block: bigint }[] = []
@@ -213,6 +217,15 @@ export class FakeChain implements Chain {
       const v = this.classicLaunches.get(id)
       if (v === undefined) throw new Error(`no fake Classic launch ${id}`)
       return typeof v === "function" ? v(block) : v
+    })
+  }
+
+  async readMasterLaunchConfigs(launches: { factory: Address; launchId: bigint }[], block: bigint) {
+    this.masterConfigReads.push({ launches, block })
+    return launches.map((l) => {
+      const v = this.masterConfigs.get(`${l.factory}:${l.launchId}`) ?? null
+      if (v instanceof Error) throw v
+      return v
     })
   }
 
