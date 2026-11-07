@@ -33,6 +33,7 @@ import { BlockNotServedError } from "../../errors"
 import { fetchIpfsJson } from "../../ipfs"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import type { Reporter } from "../../sentry"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { blockSendersFor } from "../senders"
@@ -117,6 +118,8 @@ export type HookitDeps = {
     | "readErc20Names"
   >
   logger: Logger
+  /** Where warnings that need a person to look go; none by default. */
+  report?: Pick<Reporter, "warn">
   pools: PoolRegistry
   ipfs: { gateway: string; fetch?: typeof fetch }
   /** Block-sender reads a backfill span keeps in flight; tests lower it. */
@@ -164,6 +167,7 @@ const groupKey = (log: ChainLog, launchId: bigint) =>
  */
 export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
   const { sql, chain, logger, pools } = deps
+  const report = deps.report ?? { warn: () => {} }
   const curves = new Map<bigint, KnownClassic>()
   const knownHooks = new Set<Address>()
   const warned = new Set<Address>()
@@ -541,12 +545,11 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
               tickSpacing: HOOKIT_GRADUATED_TICK_SPACING,
               hooks: HOOKIT_GRADUATED_FEE_HOOK,
             }
-            if (poolIdOf(key) !== d.poolId)
-              logger("warn", "Hookit graduation pool id does not match its pool key", {
-                token: known.token,
-                poolId: d.poolId,
-                tx: log.transactionHash,
-              })
+            if (poolIdOf(key) !== d.poolId) {
+              const fields = { token: known.token, poolId: d.poolId, tx: log.transactionHash }
+              logger("warn", "Hookit graduation pool id does not match its pool key", fields)
+              report.warn("Hookit graduation pool id does not match its pool key", fields)
+            }
             const pool: PoolEntry = {
               poolId: d.poolId,
               poolManager: UNISWAP_V4_POOL_MANAGER,

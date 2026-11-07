@@ -5,6 +5,7 @@ function fakeSdk() {
   return {
     init: vi.fn(),
     captureException: vi.fn(),
+    captureMessage: vi.fn(),
     flush: vi.fn(async () => true),
   }
 }
@@ -41,6 +42,44 @@ describe("initSentry", () => {
     expect(sdk.captureException).toHaveBeenCalledWith(err)
     expect(await r.flush(2000)).toBe(true)
     expect(sdk.flush).toHaveBeenCalledWith(2000)
+  })
+})
+
+describe("Reporter.warn", () => {
+  it("sends a warning-level message with its context when SENTRY_DSN is set", () => {
+    const sdk = fakeSdk()
+    const r = initSentry({ SENTRY_DSN: "https://k@o1.ingest.sentry.io/1" }, sdk)
+    r.warn("a Master launch had no LaunchConfigured event", { factory: "0xabc" })
+    expect(sdk.captureMessage).toHaveBeenCalledWith(
+      "a Master launch had no LaunchConfigured event",
+      {
+        level: "warning",
+        extra: { factory: "0xabc" },
+      },
+    )
+  })
+
+  it("does nothing without SENTRY_DSN", () => {
+    expect(() => noopReporter.warn("x", { a: 1 })).not.toThrow()
+  })
+
+  it("redacts configured secrets in a message before it is sent", () => {
+    const sdk = fakeSdk()
+    initSentry(
+      {
+        SENTRY_DSN: "https://k@o1.ingest.sentry.io/1",
+        INK_RPC_WS_URLS: "wss://rpc.example.com/v2/abc123key",
+      },
+      sdk,
+    )
+    const opts = sdk.init.mock.calls[0]?.[0] as { beforeSend: (e: Ev) => Ev | null }
+    const out = opts.beforeSend({
+      message: "failed wss://rpc.example.com/v2/abc123key",
+      level: "warning",
+      extra: { url: "abc123key" },
+    })
+    expect(JSON.stringify(out)).not.toContain("abc123key")
+    expect(out?.level).toBe("warning")
   })
 })
 

@@ -77,6 +77,7 @@ async function setup(opts: { fetch?: Fetch; live?: boolean } = {}) {
   const live = opts.live ?? false
   const sql: Sql = await resetDb(inject("databaseUrl"))
   const warnings: { msg: string; fields?: Record<string, unknown> }[] = []
+  const reports: { message: string; context?: Record<string, unknown> }[] = []
   const logger: Logger = (level, msg, fields) => {
     if (level === "warn") warnings.push({ msg, fields })
   }
@@ -88,6 +89,7 @@ async function setup(opts: { fetch?: Fetch; live?: boolean } = {}) {
     logger,
     pools,
     ipfs: { gateway: GATEWAY, fetch: opts.fetch ?? metadataFetch() },
+    report: { warn: (message, context) => reports.push({ message, context }) },
   })
   // InkyPump's rollback removes the token, trade, pool and ath rows above a fork for every launchpad.
   const inkypump = inkypumpSource({ sql, chain, logger, pools })
@@ -168,6 +170,7 @@ async function setup(opts: { fetch?: Fetch; live?: boolean } = {}) {
     inkypump,
     addHistory,
     warnings,
+    reports,
     seed,
     batchOf,
     ingest,
@@ -765,6 +768,7 @@ describe("Hookit Classic graduation (synthetic: no launch has graduated yet)", (
       const [state] = await t.sql`select progress_bps from indexer.curve_state`
       expect(state!.progress_bps).toBe(10_000)
       expect(t.pools.byId(g.poolId)?.hook).toBe(HOOKIT_GRADUATED_FEE_HOOK)
+      expect(t.reports).toEqual([])
     } finally {
       await t.sql.end()
     }
@@ -968,6 +972,12 @@ describe("Hookit Classic graduation (synthetic: no launch has graduated yet)", (
       expect(
         t.warnings.map((w) => w.msg).filter((m) => m !== "token metadata not fetched"),
       ).toEqual(["Hookit graduation pool id does not match its pool key"])
+      expect(t.reports).toEqual([
+        {
+          message: "Hookit graduation pool id does not match its pool key",
+          context: expect.objectContaining({ poolId: other, token: g.token }),
+        },
+      ])
     } finally {
       await t.sql.end()
     }

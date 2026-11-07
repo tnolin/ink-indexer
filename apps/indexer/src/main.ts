@@ -122,7 +122,15 @@ try {
         ipfs: { gateway: ipfs.tsunami },
         blockReads,
       }),
-      hookitSource({ sql, chain, logger: log, pools, ipfs: { gateway: ipfs.hookit }, blockReads }),
+      hookitSource({
+        sql,
+        chain,
+        logger: log,
+        report: reporter,
+        pools,
+        ipfs: { gateway: ipfs.hookit },
+        blockReads,
+      }),
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools, blockReads }),
       nftSource({ sql, chain, logger: log }),
