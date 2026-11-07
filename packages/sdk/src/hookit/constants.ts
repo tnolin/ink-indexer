@@ -37,6 +37,9 @@ export const HOOKIT_HOOKS = {
 /** The graduated-fee hook that holds every graduated curve token's pool. */
 export const HOOKIT_GRADUATED_FEE_HOOK: Address = HOOKIT_HOOKS.graduatedFee.address
 
+/** Tick spacing in the pool key of every graduated curve token. */
+export const HOOKIT_GRADUATED_TICK_SPACING = 60
+
 /** The protocol's buyback contract. Its pool swaps are trades of its own, never a token creator's. */
 export const HOOKIT_BUYBACK: Address = "0x141038d294e8752f3eaff3c789bb824d56e87230"
 

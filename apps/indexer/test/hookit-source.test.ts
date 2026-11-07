@@ -11,6 +11,7 @@ import type {
 } from "@ink-indexer/events"
 import {
   type ChainLog,
+  classicCurveOf,
   decodeHookitLog,
   HOOKIT_BONDING_FACTORY,
   HOOKIT_GRADUATED_FEE_HOOK,
@@ -367,8 +368,17 @@ describe("Hookit Master launches", () => {
       expect(launch!.creator).not.toBe(f.sender)
       const userSwaps = eventsOf<SwapEvent>(swaps, "launchpad.swap")
       expect(userSwaps.length).toBeGreaterThan(0)
-      for (const s of userSwaps) expect(s.trader).toBe(launch!.creator)
-      expect(swaps.trades.every((tr) => tr.trader === launch!.creator)).toBe(true)
+      // Only the swap the emitting factory made is the dev buy; other swaps keep the sender.
+      const factory = f.logs.find((l) => decodeHookitLog(l)?.kind === "masterLaunched")!.address
+      const bySender = new Map(
+        f.logs
+          .filter((l) => l.topics[0] === SWAP_TOPIC)
+          .map((l) => [l.logIndex, `0x${l.topics[2]!.slice(26)}`]),
+      )
+      const devBuys = userSwaps.filter((s) => bySender.get(s.logIndex) === factory)
+      expect(devBuys.length).toBeGreaterThan(0)
+      for (const s of devBuys) expect(s.trader).toBe(launch!.creator)
+      for (const s of userSwaps.filter((s) => !devBuys.includes(s))) expect(s.trader).toBe(f.sender)
     } finally {
       await t.sql.end()
     }
@@ -378,10 +388,11 @@ describe("Hookit Master launches", () => {
     const t = await setup()
     try {
       const f = t.seed("hookit-bloop-launch")
+      const factory = f.logs.find((l) => decodeHookitLog(l)?.kind === "masterLaunched")!.address
       await t.span(f.blockNumber)
-      expect(t.pools.traderOf(f.txHash)).toBeDefined()
+      expect(t.pools.traderOf(f.txHash, factory)).toBeDefined()
       await t.batchOf(f.blockNumber + 1n, f.blockNumber + 1n)
-      expect(t.pools.traderOf(f.txHash)).toBeUndefined()
+      expect(t.pools.traderOf(f.txHash, factory)).toBeUndefined()
     } finally {
       await t.sql.end()
     }
@@ -592,6 +603,31 @@ describe("Hookit Classic curves", () => {
     }
   })
 
+  it("a span replayed after a reload does not count its trades twice", async () => {
+    const t = await setup()
+    try {
+      const h = t.addHistory(loadHookitHistory().blockNumber)
+      const launchBlock = h.logs.find(
+        (l) => decodeHookitLog(l)?.kind === "classicLaunched",
+      )!.blockNumber
+      await t.ingest(launchBlock)
+      await t.ingest(h.blockNumber, launchBlock + 1n)
+      const read = async () =>
+        (
+          await t.sql`
+            select h.tokens_sold::text, c.progress_bps
+            from indexer.hookit_curves h, indexer.curve_state c`
+        )[0]!
+      const once = await read()
+      expect(once.tokens_sold).toBe(h.state.tokensSold.toString())
+      await t.source.reload()
+      await t.ingest(h.blockNumber, launchBlock + 1n)
+      expect(await read()).toEqual(once)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
   it("a rollback restores the curve state read at the fork", async () => {
     const t = await setup()
     try {
@@ -612,6 +648,26 @@ describe("Hookit Classic curves", () => {
       expect(t.chain.classicLaunchReads.at(-1)).toEqual({ ids: [1n], block: launch.blockNumber })
       const [state] = await t.sql`select curve_value::text from indexer.curve_state`
       expect(state!.curve_value).toBe(at.realQuote.toString())
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("after a rollback, the rolled-back span replays onto the restored curve exactly once", async () => {
+    const t = await setup()
+    try {
+      const launch = t.seed("hookit-hooc-launch")
+      await t.ingest(launch.blockNumber)
+      const f = loadHookitFixture("hookit-drop-sold")
+      addFixture(t.chain, f)
+      await t.ingest(f.blockNumber, launch.blockNumber + 1n)
+      const sold = async () =>
+        (await t.sql`select tokens_sold::text from indexer.hookit_curves`)[0]!
+      const first = await sold()
+      t.chain.classicLaunches.set(1n, launch.classic[0]!.at)
+      await t.rollback(launch.blockNumber)
+      await t.ingest(f.blockNumber, launch.blockNumber + 1n)
+      expect(await sold()).toEqual(first)
     } finally {
       await t.sql.end()
     }
@@ -772,6 +828,81 @@ describe("Hookit Classic graduation (synthetic: no launch has graduated yet)", (
       const [state] = await t.sql`select progress_bps from indexer.curve_state`
       expect(state!.progress_bps).toBeLessThan(10_000)
       expect(t.pools.poolIds()).toEqual([])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a synthetic graduation span ingested twice gives identical rows", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log())
+      await t.ingest(g.launch.blockNumber)
+      const rows = async () => ({
+        tokens:
+          await t.sql`select phase, bonded_block::text, total_supply::text, total_supply_block::text from indexer.tokens`,
+        pools: await t.sql`select * from indexer.pools`,
+        curve: await t.sql`select * from indexer.curve_state`,
+        events: await t.sql`select type, payload from indexer.events order by block, log_index`,
+      })
+      await t.ingest(g.block, g.launch.blockNumber + 1n)
+      const once = await rows()
+      await t.ingest(g.block, g.launch.blockNumber + 1n)
+      expect(await rows()).toEqual(once)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a synthetic graduation replayed over a newer burn keeps the newer supply", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log())
+      await t.ingest(g.launch.blockNumber)
+      await t.ingest(g.block, g.launch.blockNumber + 1n)
+      await t.sql`
+        update indexer.tokens set total_supply = ${(GRADUATED_SUPPLY - 1n).toString()}, total_supply_block = ${(g.block + 3n).toString()}`
+      await t.ingest(g.block, g.launch.blockNumber + 1n)
+      const [token] = await t.sql`
+        select phase, total_supply::text, total_supply_block::text from indexer.tokens`
+      expect(token).toEqual({
+        phase: "bonded",
+        total_supply: (GRADUATED_SUPPLY - 1n).toString(),
+        total_supply_block: (g.block + 3n).toString(),
+      })
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a synthetic graduation in the launch's own block leaves the curve constants intact", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      // The graduation is a log of the launch transaction's block, after the seed buy.
+      t.chain.add(
+        g.log({
+          blockNumber: g.launch.blockNumber,
+          blockHash: t.chain.hashOf(g.launch.blockNumber),
+          transactionHash: g.launch.txHash,
+          logIndex: 900,
+        }),
+      )
+      const batch = await t.ingest(g.launch.blockNumber)
+      expect(eventsOf(batch, "launchpad.bond")).toHaveLength(1)
+      const curve = classicCurveOf(g.launch.classic[0]!.at)
+      const [row] = await t.sql`
+        select virtual_quote::text, virtual_tokens::text, curve_supply::text from indexer.hookit_curves`
+      expect(row).toEqual({
+        virtual_quote: curve.vQ0.toString(),
+        virtual_tokens: curve.vT0.toString(),
+        curve_supply: curve.curveSupply.toString(),
+      })
+      expect((await t.sql`select progress_bps from indexer.curve_state`)[0]!.progress_bps).toBe(
+        10_000,
+      )
     } finally {
       await t.sql.end()
     }

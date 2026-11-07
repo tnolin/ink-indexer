@@ -10,6 +10,7 @@ import {
   decodeHookitLog,
   HOOKIT_BONDING_FACTORY,
   HOOKIT_GRADUATED_FEE_HOOK,
+  HOOKIT_GRADUATED_TICK_SPACING,
   HOOKIT_LOG_TOPICS,
   HOOKIT_MASTER_FACTORIES,
   type HookitLog,
@@ -44,8 +45,6 @@ const METADATA_CONCURRENCY = 4
 const LAUNCH_READS = 4
 /** Unknown emitters named in a warning; past this one warning says there are more. */
 const MAX_WARNED = 1_000
-/** Tick spacing of every graduated pool, part of its key. */
-const GRADUATED_TICK_SPACING = 60
 
 type Of<K extends HookitLog["kind"]> = Extract<HookitLog, { kind: K }>
 type Master = Of<"masterLaunched">
@@ -62,6 +61,8 @@ export type KnownClassic = {
   supply: bigint
   sold: bigint
   progressBps: number
+  /** Events at or below this block are already in `sold`, so a replayed span does not count them again. */
+  appliedThrough: bigint
 }
 export type HookitTokenRow = {
   address: Address
@@ -457,9 +458,9 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
             pools.add(pool, read.supply, blockNumber)
             batch.pools.push(pool)
           }
-          // The factory's dev-buy swap is made for the creator, whatever the transaction's sender.
+          // The factory's own dev-buy swap is made for the creator, whatever the transaction's sender.
           if (g.devBuy) {
-            pools.setTraderOf(log.transactionHash, g.devBuy.buyer)
+            pools.setTraderOf(log.transactionHash, g.devBuy.buyer, log.address)
             overridden.push(log.transactionHash)
           }
         } else if (d.kind === "classicLaunched") {
@@ -474,6 +475,8 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
             supply: read.supply,
             sold: 0n,
             progressBps: 0,
+            // Trades in the launch block replay from an untouched curve.
+            appliedThrough: blockNumber - 1n,
           }
           curves.set(d.launchId, known)
           const event = hookitClassicLaunchEvent(
@@ -519,6 +522,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
             }
             continue
           }
+          if (d.kind !== "graduated" && blockNumber <= known.appliedThrough) continue
           if (d.kind === "graduated") {
             // The graduating trade has already written 10,000 bps; moving tokens into the pool
             // changes the supply, so it is read again at this block.
@@ -530,7 +534,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
               currency0,
               currency1,
               fee: 0,
-              tickSpacing: GRADUATED_TICK_SPACING,
+              tickSpacing: HOOKIT_GRADUATED_TICK_SPACING,
               hooks: HOOKIT_GRADUATED_FEE_HOOK,
             }
             if (poolIdOf(key) !== d.poolId)
@@ -559,7 +563,6 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
               block: blockNumber,
               blockHash,
             })
-            known.progressBps = 10_000
             const before = curveRows.get(known.token)
             curveRows.set(known.token, {
               token: known.token,

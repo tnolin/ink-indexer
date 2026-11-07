@@ -14,6 +14,7 @@ type CurveRecord = {
   virtual_tokens: string
   curve_supply: string
   tokens_sold: string
+  updated_block: string
   quote_asset: Address
   total_supply: string
   target_raise: string
@@ -21,7 +22,7 @@ type CurveRecord = {
 }
 
 const COLUMNS = `t.address as token, h.launch_number::text, h.virtual_quote::text, h.virtual_tokens::text,
-  h.curve_supply::text, h.tokens_sold::text, t.quote_asset, t.total_supply::text, t.target_raise::text`
+  h.curve_supply::text, h.tokens_sold::text, h.updated_block::text, t.quote_asset, t.total_supply::text, t.target_raise::text`
 
 const toKnown = (r: CurveRecord): KnownClassic => ({
   token: r.token,
@@ -36,6 +37,7 @@ const toKnown = (r: CurveRecord): KnownClassic => ({
   supply: BigInt(r.total_supply),
   sold: BigInt(r.tokens_sold),
   progressBps: r.progress_bps ?? 0,
+  appliedThrough: BigInt(r.updated_block),
 })
 
 /** Every Classic launch still on its curve, with the progress last written. */
@@ -126,9 +128,14 @@ export async function writeRows(tx: Tx, batch: HookitBatch) {
   }
   for (const b of batch.bonds) {
     await tx`
-      update indexer.tokens set phase = 'bonded', bonded_block = ${s(b.block)},
-        total_supply = ${s(b.totalSupply)}, total_supply_block = ${s(b.block)}
+      update indexer.tokens set phase = 'bonded', bonded_block = ${s(b.block)}
       where address = ${b.token}`
+    // A supply read at an older block than the stored one is left out: the newer one already holds
+    // the burns after this graduation, which a replayed span would otherwise undo.
+    await tx`
+      update indexer.tokens set total_supply = ${s(b.totalSupply)}, total_supply_block = ${s(b.block)}
+      where address = ${b.token}
+        and (total_supply_block is null or total_supply_block <= ${s(b.block)})`
   }
   await writePools(tx, batch.pools)
   await writeAth(tx, batch.ath)
