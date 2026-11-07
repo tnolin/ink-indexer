@@ -35,3 +35,17 @@ export const textField = (v: unknown, max: number, cut: boolean): string | null 
   if (s.length <= max) return s
   return cut ? cleanText(s.slice(0, max)) : null
 }
+
+/** An `https:` image URL of at most 2,048 characters without credentials, in its normalized form. */
+export function httpsImage(v: string): string | null {
+  try {
+    const u = new URL(v)
+    if (u.protocol !== "https:" || u.username !== "" || u.password !== "") return null
+    return u.href.length <= MAX_LINK ? u.href : null
+  } catch {
+    return null
+  }
+}
+
+export const object = (v: unknown): Record<string, unknown> | null =>
+  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null

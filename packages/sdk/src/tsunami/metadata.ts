@@ -1,8 +1,10 @@
 import {
+  httpsImage,
   ipfsCid,
   type LaunchMetadataFields,
   MAX_DESCRIPTION,
   MAX_LINK,
+  object,
   textField,
 } from "../metadata"
 
@@ -17,20 +19,6 @@ export function gatewayCid(uri: string): string | null {
   const m = GATEWAY_URI.exec(uri)
   return m?.[1] === undefined ? null : ipfsCid(`ipfs://${m[1]}`)
 }
-
-/** An `https:` image URL of at most 2,048 characters without credentials, in its normalized form. */
-function httpsImage(v: string): string | null {
-  try {
-    const u = new URL(v)
-    if (u.protocol !== "https:" || u.username !== "" || u.password !== "") return null
-    return u.href.length <= MAX_LINK ? u.href : null
-  } catch {
-    return null
-  }
-}
-
-const object = (v: unknown): Record<string, unknown> | null =>
-  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 
 /**
  * The description, image and links of a Tsunami token's metadata JSON. The image is kept when it is
