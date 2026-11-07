@@ -67,6 +67,7 @@ export class PoolRegistry {
   private marksByToken = new Map<Address, TokenMarks>()
   private marksByPool = new Map<Hash, PoolMarks>()
   private poolsOfToken = new Map<Address, Set<Hash>>()
+  private traderByTx = new Map<Hash, Address>()
 
   byId(poolId: Hash): PoolEntry | undefined {
     return this.pools.get(poolId)
@@ -80,12 +81,48 @@ export class PoolRegistry {
     return [...new Set([...this.pools.values()].map((p) => p.token))]
   }
 
-  add(p: PoolEntry, totalSupply: bigint): void {
+  /** `supplyBlock` is the block `totalSupply` was read at, for a token whose burns are followed. */
+  add(p: PoolEntry, totalSupply: bigint, supplyBlock?: bigint): void {
     this.pools.set(p.poolId, p)
     this.indexPool(p)
     const m = this.marksByToken.get(p.token)
-    if (m) m.totalSupply = totalSupply
-    else this.marksByToken.set(p.token, { ...emptyMarks(), totalSupply })
+    if (m) {
+      m.totalSupply = totalSupply
+      if (supplyBlock !== undefined) m.supplyBlock = supplyBlock
+    } else
+      this.marksByToken.set(p.token, {
+        ...emptyMarks(),
+        totalSupply,
+        supplyBlock: supplyBlock ?? null,
+      })
+  }
+
+  /** The launchpad of a token's pools. */
+  launchpadOf(token: Address): LaunchpadKey | undefined {
+    const id = this.poolsOfToken.get(token)?.values().next().value
+    return id === undefined ? undefined : this.pools.get(id)?.launchpad
+  }
+
+  /** How many pools the token trades in. */
+  marketCount(token: Address): number {
+    return this.poolsOfToken.get(token)?.size ?? 0
+  }
+
+  /**
+   * Makes `trader` the trader of the pool swaps in a transaction, in place of the transaction's
+   * sender. A source that learns the real trader from another log of the transaction (a launch's
+   * dev buy, made by a factory on the creator's behalf) sets it before the swaps are processed.
+   */
+  setTraderOf(txHash: Hash, trader: Address): void {
+    this.traderByTx.set(txHash, trader)
+  }
+
+  traderOf(txHash: Hash): Address | undefined {
+    return this.traderByTx.get(txHash)
+  }
+
+  forgetTraderOf(txHash: Hash): void {
+    this.traderByTx.delete(txHash)
   }
 
   marks(token: Address): TokenMarks | undefined {
@@ -132,6 +169,22 @@ export class PoolRegistry {
     if (!m) return
     m.deadBalance = balance
     m.deadBalanceBlock = block
+  }
+
+  /** Sets a total supply read at `block`. */
+  setSupply(token: Address, supply: bigint, block: bigint): void {
+    const m = this.marksByToken.get(token)
+    if (!m) return
+    m.totalSupply = supply
+    m.supplyBlock = block
+  }
+
+  /** Lowers a supply that has been read by a burn at `block`; the supply never goes below zero. */
+  burnSupply(token: Address, value: bigint, block: bigint): void {
+    const m = this.marksByToken.get(token)
+    if (!m || m.totalSupply === null) return
+    m.totalSupply = m.totalSupply > value ? m.totalSupply - value : 0n
+    m.supplyBlock = block
   }
 
   /** Adds a transfer to the dead address to a balance that has been read. */

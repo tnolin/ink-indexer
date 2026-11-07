@@ -80,7 +80,8 @@ export type CurveRow = {
   marketCap: bigint
   updatedBlock: bigint
 }
-export type AthRow = { token: Address; marketCap: bigint; block: bigint }
+/** `poolId` marks the ath of one pool of a token with several markets, each in its own quote units. */
+export type AthRow = { token: Address; marketCap: bigint; block: bigint; poolId?: Hash }
 export type Batch = {
   hooks: HookRow[]
   tokens: TokenRow[]

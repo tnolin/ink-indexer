@@ -28,7 +28,8 @@ export class FakeChain implements Chain {
   maxSpan = 1_000n
   logs: ChainLog[] = []
   states = new Map<string, LaunchState>()
-  supplies = new Map<string, bigint>()
+  /** Per token, its `totalSupply()`; a function gives it per block. A token with no entry reads 10^27. */
+  supplies = new Map<string, bigint | ((block: bigint) => bigint)>()
   /** Per contract, its mint stats at a block. A contract with no entry has no `getMintStats`. */
   mintStats = new Map<
     string,
@@ -220,7 +221,10 @@ export class FakeChain implements Chain {
         this.supplyInFlight--
       }
     }
-    return tokens.map((t) => this.supplies.get(t) ?? 10n ** 27n)
+    return tokens.map((t) => {
+      const v = this.supplies.get(t) ?? 10n ** 27n
+      return typeof v === "function" ? v(block ?? this.head) : v
+    })
   }
 
   async readErc20Meta(token: Address) {

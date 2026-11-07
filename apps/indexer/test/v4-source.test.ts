@@ -360,7 +360,11 @@ describe("v4 source", () => {
     pools.add({ ...entry(1), createdBlock: B + 2n }, SUPPLY)
     const batch = await source.process([[], []], { toBlock: B + 5n, live: false })
     expect(batch.events.map((e) => e.event.type)).toEqual(["launchpad.swap"])
-    expect(chain.getLogsCalls).toEqual([[B + 2n, B + 5n]])
+    // One request for the new pool's swaps and one for its token's transfers to the dead and zero addresses.
+    expect(chain.getLogsCalls).toEqual([
+      [B + 2n, B + 5n],
+      [B + 2n, B + 5n],
+    ])
   })
 })
 
@@ -628,6 +632,7 @@ describe("v4 source through the database", () => {
             events: [],
             ath: [],
             dead: [{ token: TOKEN, balance, block }],
+            supply: [],
             blocks: [],
           }),
         )

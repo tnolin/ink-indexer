@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import type { Address, Hash } from "viem"
-import { chunks, curveRecord, s, writeAth } from "../inkypump/store"
+import { chunks, curveRecord, s, writeAth, writePools } from "../inkypump/store"
 import type { Tx } from "../source"
 import type { KnownCurve, Supply, TsunamiBatch } from "./index"
 
@@ -92,19 +92,7 @@ export async function writeRows(tx: Tx, batch: TsunamiBatch) {
         total_supply = ${s(b.totalSupply)}
       where address = ${b.token}`
   }
-  {
-    const rows = batch.pools.map((p) => ({
-      pool_id: p.poolId,
-      pool_manager: p.poolManager,
-      token: p.token,
-      launchpad: p.launchpad,
-      quote_asset: p.quoteAsset,
-      token_is_currency0: p.tokenIsCurrency0,
-      created_block: s(p.createdBlock),
-    }))
-    for (const part of chunks(rows))
-      await tx`insert into indexer.pools ${tx(part)} on conflict do nothing`
-  }
+  await writePools(tx, batch.pools)
   await writeAth(tx, batch.ath)
   for (const part of chunks(batch.curve.map(curveRecord))) {
     await tx`

@@ -1,6 +1,7 @@
 import type { Sql } from "@ink-indexer/db"
 import type { AbiFamily, LaunchKey } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
+import type { PoolEntry } from "../pools"
 import type { Tx } from "../source"
 import type { HookRow } from "./hooks"
 import type { AthRow, Batch, CurveRow, KnownLaunch } from "./index"
@@ -140,19 +141,7 @@ export async function writeRows(tx: Tx, batch: Batch) {
   for (const b of batch.bonds) {
     await tx`update indexer.tokens set phase = 'bonded', bonded_block = ${s(b.block)} where address = ${b.token}`
   }
-  {
-    const rows = batch.pools.map((p) => ({
-      pool_id: p.poolId,
-      pool_manager: p.poolManager,
-      token: p.token,
-      launchpad: p.launchpad,
-      quote_asset: p.quoteAsset,
-      token_is_currency0: p.tokenIsCurrency0,
-      created_block: s(p.createdBlock),
-    }))
-    for (const part of chunks(rows))
-      await tx`insert into indexer.pools ${tx(part)} on conflict do nothing`
-  }
+  await writePools(tx, batch.pools)
   await writeAth(tx, batch.ath)
   for (const part of chunks(batch.curve.map(curveRecord))) {
     await tx`
@@ -179,9 +168,42 @@ export async function writeRows(tx: Tx, batch: Batch) {
   }
 }
 
-/** Raises each token's ath, moving `ath_block` only when the ath rises. */
+/**
+ * Registers pools. A first copy stands, so a backfill and the live tick can register the same pool.
+ * Hook and tick range are written for the pools that have them.
+ */
+export async function writePools(tx: Tx, pools: PoolEntry[]) {
+  const rows = pools.map((p) => ({
+    pool_id: p.poolId,
+    pool_manager: p.poolManager,
+    token: p.token,
+    launchpad: p.launchpad,
+    quote_asset: p.quoteAsset,
+    token_is_currency0: p.tokenIsCurrency0,
+    created_block: s(p.createdBlock),
+    hook: p.hook ?? null,
+    tick_lower: p.tickLower ?? null,
+    tick_upper: p.tickUpper ?? null,
+  }))
+  for (const part of chunks(rows))
+    await tx`insert into indexer.pools ${tx(part)} on conflict do nothing`
+}
+
+/**
+ * Raises each ath, moving `ath_block` only when the ath rises. A row with a `poolId` is the ath of
+ * one pool of a token with several markets; every other row is the token's.
+ */
 export async function writeAth(tx: Tx, ath: AthRow[]) {
   for (const a of ath) {
+    if (a.poolId !== undefined) {
+      await tx`
+        update indexer.pools set
+          ath_block = case when ${s(a.marketCap)}::numeric > coalesce(ath_market_cap, 0)
+                           then ${s(a.block)}::bigint else ath_block end,
+          ath_market_cap = greatest(coalesce(ath_market_cap, 0), ${s(a.marketCap)}::numeric)
+        where pool_id = ${a.poolId}`
+      continue
+    }
     await tx`
       update indexer.tokens set
         ath_block = case when ${s(a.marketCap)}::numeric > coalesce(ath_market_cap, 0)
@@ -193,8 +215,8 @@ export async function writeAth(tx: Tx, ath: AthRow[]) {
 
 /**
  * Deletes rows above `fork` (curve and pool trades alike), un-bonds, removes pools bonded above it,
- * recomputes ath from the trade and swap events that remain, and restores curve state read at the
- * fork block. The store has already deleted the events above the fork in this transaction.
+ * recomputes ath (each token's, and each pool's of a token with several markets) from the trade and
+ * swap events that remain, and restores curve state read at the fork block. The store has already deleted the events above the fork in this transaction.
  */
 export async function rollbackRows(tx: Tx, fork: bigint, refreshed: CurveRow[]) {
   const f = s(fork)
@@ -216,6 +238,23 @@ export async function rollbackRows(tx: Tx, fork: bigint, refreshed: CurveRow[]) 
       where t2.ath_block > ${f}
     ) m
     where m.address = t.address`
+  await tx`
+    update indexer.pools p set ath_market_cap = m.mc, ath_block = m.block
+    from (
+      select p2.pool_id, best.mc, best.block
+      from indexer.pools p2
+      left join lateral (
+        select (e.payload->>'marketCap')::numeric as mc, e.block
+        from indexer.events e
+        where e.entity = p2.token and e.type = 'launchpad.swap'
+          and e.payload->>'poolId' = p2.pool_id
+          and e.block <= ${f}
+        order by (e.payload->>'marketCap')::numeric desc, e.block
+        limit 1
+      ) best on true
+      where p2.ath_block > ${f}
+    ) m
+    where m.pool_id = p.pool_id`
   await tx`delete from indexer.tokens where created_block > ${f}`
   await tx`delete from indexer.hooks where kind = 'xstocks' and discovered_block > ${f}`
   await tx`update indexer.tokens set phase = 'curve', bonded_block = null where bonded_block > ${f}`
