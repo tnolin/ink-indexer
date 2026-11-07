@@ -126,26 +126,27 @@ describe("v4 source: Hookit hook swaps", () => {
       tokenAmount: String(routerSwap!.swap.amount1),
       logIndex: routerSwap!.log.logIndex,
     })
-    // The pool state is the one after the transaction's last swap, the hook's second buy, on the
-    // supply the burn between the two left.
-    const supplyAfterBurn = ONE_E27 - burn!.value
-    expect(one!.supply).toBe(String(supplyAfterBurn))
-    expect(one!.price).toBe(String(poolPrice(hookSwapB!.swap.sqrtPriceX96, false)))
-    expect(one!.price).not.toBe(String(poolPrice(routerSwap!.swap.sqrtPriceX96, false)))
+    // The event is the user's own swap at its own post-swap state. The hook's buys after it and the
+    // burn between them are not folded into it, and they do not raise the ath.
+    expect(one!.supply).toBe(String(ONE_E27))
+    expect(one!.price).toBe(String(poolPrice(routerSwap!.swap.sqrtPriceX96, false)))
     expect(one!.marketCap).toBe(
-      String(poolMarketCap(hookSwapB!.swap.sqrtPriceX96, false, supplyAfterBurn)),
+      String(poolMarketCap(routerSwap!.swap.sqrtPriceX96, false, ONE_E27)),
     )
-    expect(BigInt(one!.athMarketCap)).toBeGreaterThanOrEqual(BigInt(one!.marketCap))
+    expect(one!.athMarketCap).toBe(one!.marketCap)
     // The recorded supply after the transaction holds exactly that burn.
+    const supplyAfterBurn = ONE_E27 - burn!.value
     expect(first.tokens[0]!.totalSupply).toBe(supplyAfterBurn)
     expect(hookSwapA!.swap.sender).toBe(burn!.from)
+    expect(hookSwapB!.swap.sender).toBe(burn!.from)
 
-    // The next swap, a sell in a later block, is priced from its own last state on the lowered supply.
-    const [sellSwap, , sellHookB] = swapsOf("hookit-hkt-sell")
+    // The next swap carries the pool state the hook buys left and the lowered supply.
+    const [sellSwap] = swapsOf("hookit-hkt-sell")
     const [sellBurn] = burnsOf("hookit-hkt-sell")
     expect(next).toMatchObject({ side: "sell", trader: sell.sender, router: sellSwap!.swap.sender })
-    expect(next!.supply).toBe(String(supplyAfterBurn - sellBurn!.value))
-    expect(next!.price).toBe(String(poolPrice(sellHookB!.swap.sqrtPriceX96, false)))
+    expect(next!.supply).toBe(String(supplyAfterBurn))
+    expect(sellBurn!.value).toBeGreaterThan(0n)
+    expect(next!.price).toBe(String(poolPrice(sellSwap!.swap.sqrtPriceX96, false)))
     // One sender read per block that holds a user swap.
     expect(t.chain.getBlockSendersCalls).toBe(2)
   })
@@ -159,19 +160,6 @@ describe("v4 source: Hookit hook swaps", () => {
     expect(batch.ath).toEqual([])
     expect(t.pools.marks(HKT_TOKEN)?.ath).toBe(0n)
     expect(t.chain.getBlockSendersCalls).toBe(0)
-  })
-
-  it("a hook swap in the next transaction does not change the swap before it", async () => {
-    const t = setup("hookit-hkt-launch", { supplyBlock: first.blockNumber - 1n })
-    addFixture(t.chain, first)
-    // The same logs under another transaction: the hook's swaps follow nothing of their own transaction.
-    const other = nextTx()
-    for (const l of t.chain.logs)
-      if (l.logIndex > routerSwap!.log.logIndex && decodeSwap(l)) l.transactionHash = other
-    const batch = await t.run(first.blockNumber)
-    const [one] = eventsOf(batch)
-    expect(batch.events).toHaveLength(1)
-    expect(one!.price).toBe(String(poolPrice(routerSwap!.swap.sqrtPriceX96, false)))
   })
 
   it("a swap by the hook of a pool that is not a Hookit pool is a swap like any other (synthetic)", async () => {
@@ -247,7 +235,7 @@ describe("v4 source: Hookit liquidity", () => {
     const t = setup("hookit-hkt-launch", { supplyBlock: first.blockNumber - 1n })
     addFixture(t.chain, first)
     const [ev] = eventsOf(await t.run(first.blockNumber))
-    const last = swapsOf("hookit-hkt-first-swap")[2]!.swap
+    const last = swapsOf("hookit-hkt-first-swap")[0]!.swap
     const want = reservesByFloat(last.sqrtPriceX96, last.liquidity, -887220, 201240)
     // ETH is currency0 and the token currency1.
     near(ev!.quoteLiquidity, want.amount0)
@@ -269,7 +257,7 @@ describe("v4 source: Hookit liquidity", () => {
       (x) => x.swap.poolId === usdgPool.poolId,
     )
     const userSell = inkySwaps[0]!
-    const hookLast = inkySwaps.at(-1)!
+    const hookLast = userSell
     expect(usdg.quoteAsset).toBe(usdgPool.quoteAsset)
     // $3.099425 for 615,304.96 tokens.
     expect(usdg).toMatchObject({
@@ -307,7 +295,8 @@ describe("v4 source: Hookit liquidity", () => {
     expect(t.entries[0]!.tokenIsCurrency0).toBe(false)
     addFixture(t.chain, f)
     const [ev] = eventsOf(await t.run(f.blockNumber))
-    const [user, , hookLast] = swapsOf("hookit-stock-pool-swap")
+    const [user] = swapsOf("hookit-stock-pool-swap")
+    const hookLast = user
     // The swapper receives wMSTRx (currency0) and pays the token: a sell.
     expect(user!.swap.amount0).toBeGreaterThan(0n)
     expect(ev).toMatchObject({
@@ -383,7 +372,8 @@ describe("v4 source: Hookit burns", () => {
     expect(first.tokens[0]!.totalSupplyBefore).toBe(ONE_E27)
     expect(first.tokens[0]!.totalSupply).toBe(ONE_E27 - burn1!.value)
     const [, next] = eventsOf(batch)
-    expect(next!.supply).toBe(String(ONE_E27 - burn1!.value - burn2!.value))
+    // The sell's own burn comes after its swap, so the next swap after that sees it.
+    expect(next!.supply).toBe(String(ONE_E27 - burn1!.value))
     expect(t.pools.marks(HKT_TOKEN)).toMatchObject({
       totalSupply: ONE_E27 - burn1!.value - burn2!.value,
       supplyBlock: sell.blockNumber,
@@ -399,7 +389,7 @@ describe("v4 source: Hookit burns", () => {
     expect(next!.marketCap).toBe(
       String(
         poolMarketCap(
-          swapsOf("hookit-hkt-sell")[2]!.swap.sqrtPriceX96,
+          swapsOf("hookit-hkt-sell")[0]!.swap.sqrtPriceX96,
           false,
           BigInt(next!.supply),
         ),
@@ -934,8 +924,9 @@ describe("v4 source: a live process that follows a Hookit token during a backfil
         select payload->>'supply' as supply, block from indexer.events
         where type = 'launchpad.swap' and block <= ${cursor.toString()} order by block`
       expect(swaps.map((r) => r.supply)).toEqual([
+        // Each swap comes before the burn of its own transaction.
+        String(supplyAt(first.blockNumber - 1n)),
         String(supplyAt(first.blockNumber)),
-        String(supplyAt(sell.blockNumber)),
       ])
     } finally {
       await sql.end()

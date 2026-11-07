@@ -1,5 +1,4 @@
 import type { Sql } from "@ink-indexer/db"
-import type { SwapEvent } from "@ink-indexer/events"
 import {
   type ChainLog,
   DEAD_ADDRESS,
@@ -48,8 +47,6 @@ type V4Chain = Pick<
 
 type Kept =
   | { kind: "swap"; log: ChainLog; swap: V4Swap; pool: PoolEntry }
-  // A swap the pool's own hook made: it moves the price and is not a trade.
-  | { kind: "hookSwap"; log: ChainLog; swap: V4Swap; pool: PoolEntry }
   | { kind: "burn"; log: ChainLog; token: Address; value: bigint }
   | { kind: "supplyBurn"; log: ChainLog; token: Address; value: bigint }
 
@@ -83,8 +80,8 @@ const byPosition = (a: Kept, b: Kept) =>
  * Swaps in the Uniswap v4 pools of the shared registry, whether the pool sits in Uniswap's or in
  * Calamari's PoolManager, and transfers of their tokens to the dead address. Each swap becomes a
  * `launchpad.swap` event and a pool trade, valued at the pool price on the supply outside the dead
- * address. A Hookit pool's own hook also buys from it; those swaps move the price of the swap they
- * follow in the transaction and are not trades. Transfers of a Hookit token to the zero address are
+ * address. A Hookit pool's own hook also buys from it; those swaps are not trades, and the next
+ * swap's state already includes them. Transfers of a Hookit token to the zero address are
  * burns and lower its total supply. The InkyPump source owns the registry's lifecycle: it registers
  * pools, rolls back pool trades and ath, and reloads the registry.
  */
@@ -286,9 +283,11 @@ export async function processLogs(
     if (!swap || !pool || log.address.toLowerCase() !== pool.poolManager) continue
     // A swap that moves no token is neither a buy nor a sell.
     if (swapLegs(swap, pool.tokenIsCurrency0).tokenAmount === 0n) continue
-    const byHook =
-      pool.launchpad === "hookit" && pool.hook !== undefined && swap.sender === pool.hook
-    kept.push({ kind: byHook ? "hookSwap" : "swap", log, swap, pool })
+    // A Hookit pool's own hook buys from it. That moves the price, which every later swap carries in
+    // its own post-swap state, and is not a trade.
+    if (pool.launchpad === "hookit" && pool.hook !== undefined && swap.sender === pool.hook)
+      continue
+    kept.push({ kind: "swap", log, swap, pool })
   }
   for (const log of burnLogs) {
     const t = decodeTransfer(log)
@@ -314,8 +313,6 @@ export async function processLogs(
 
   // The ath before this span, by token or, for a token with several markets, by pool.
   const athBefore = new Map<string, { token: Address; poolId?: Hash; ath: bigint }>()
-  // The latest swap event of each pool in each transaction, which the pool's hook swaps after it update.
-  const latest = new Map<string, SwapEvent>()
   for (const [blockNumber, items] of grouped) {
     const blockHash = items[0]!.log.blockHash
     batch.blocks.push({ number: blockNumber, hash: blockHash })
@@ -347,11 +344,7 @@ export async function processLogs(
       const { log, swap, pool } = item
       const m = pools.marks(pool.token)!
       const supply = (m.totalSupply ?? 0n) - (m.deadBalance ?? 0n)
-      const key = `${log.transactionHash}:${pool.poolId}`
-      const prior = item.kind === "hookSwap" ? latest.get(key) : undefined
-      // A hook swap follows a swap of the same transaction, or it is not recorded at all.
-      if (item.kind === "hookSwap" && !prior) continue
-      if (item.kind === "swap" && !block) throw new BlockNotServedError(blockNumber)
+      if (!block) throw new BlockNotServedError(blockNumber)
 
       const multi = pools.marketCount(pool.token) > 1
       const athKey = multi ? pool.poolId : pool.token
@@ -380,29 +373,10 @@ export async function processLogs(
         tickLower: pool.tickLower,
         tickUpper: pool.tickUpper,
       }
-      if (item.kind === "hookSwap") {
-        const after = swapEvent(
-          swap,
-          { ...state, trader: prior!.trader },
-          {
-            txHash: log.transactionHash,
-            logIndex: log.logIndex,
-            blockNumber,
-            blockTimestamp: prior!.blockTimestamp,
-          },
-        )
-        prior!.price = after.price
-        prior!.marketCap = after.marketCap
-        prior!.athMarketCap = after.athMarketCap
-        prior!.quoteLiquidity = after.quoteLiquidity
-        prior!.tokenLiquidity = after.tokenLiquidity
-        prior!.supply = after.supply
-        continue
-      }
       const trader =
         swap.sender === HOOKIT_BUYBACK
           ? HOOKIT_BUYBACK
-          : (pools.traderOf(log.transactionHash) ?? block!.senders.get(log.transactionHash))
+          : (pools.traderOf(log.transactionHash) ?? block.senders.get(log.transactionHash))
       if (!trader) throw new BlockNotServedError(blockNumber)
       const event = swapEvent(
         swap,
@@ -411,11 +385,10 @@ export async function processLogs(
           txHash: log.transactionHash,
           logIndex: log.logIndex,
           blockNumber,
-          blockTimestamp: block!.timestamp,
+          blockTimestamp: block.timestamp,
         },
       )
       batch.events.push({ event, block: blockNumber, blockHash })
-      latest.set(key, event)
       const legs = swapLegs(swap, pool.tokenIsCurrency0)
       const buy = legs.side === "buy"
       batch.trades.push({
