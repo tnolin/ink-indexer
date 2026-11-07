@@ -324,7 +324,7 @@ export class Indexer {
     const { chain, store, logger } = this.deps
     const picked = this.deps.sources
       .map((source) => ({ source, filters: source.filters(only) }))
-      .filter((s) => s.filters.some((f) => f !== null))
+      .filter((s) => s.filters.some((f) => f !== null) || s.source.readsLate?.(only))
     const sources = picked.map((s) => s.source)
     // Every request covers the same range. A transport may serve less than asked, so each call asks
     // up to the lowest end returned so far, and logs above the final end are dropped.

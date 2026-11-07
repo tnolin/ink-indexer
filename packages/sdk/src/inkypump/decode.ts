@@ -1,11 +1,4 @@
-import {
-  AbiEventSignatureNotFoundError,
-  type Address,
-  decodeEventLog,
-  type Hash,
-  type Hex,
-  toHex,
-} from "viem"
+import { type Address, decodeEventLog, type Hash, type Hex, toHex } from "viem"
 import { hookEventsAbi, XSTOCKS_HOOK_CREATED_TOPIC } from "./abi"
 
 export type LaunchCreated = {
@@ -65,8 +58,7 @@ export type DecodedLog =
 const lower = (a: string) => a.toLowerCase() as Address
 const id = (n: bigint) => toHex(n, { size: 32 })
 
-function topicAddress(topic: Hex | undefined): Address {
-  if (!topic) throw new Error("xStocks hook-created log is missing a topic")
+function topicAddress(topic: Hex): Address {
   return lower(`0x${topic.slice(26)}`)
 }
 
@@ -77,18 +69,18 @@ function decodeHookEvent(log: { topics: readonly Hex[]; data: Hex }) {
       topics: log.topics as [Hex, ...Hex[]],
       data: log.data,
     })
-  } catch (err) {
-    if (err instanceof AbiEventSignatureNotFoundError) return null
-    throw err
+  } catch {
+    // An unknown signature, or data that does not decode: one malformed log must not fail a span.
+    return null
   }
 }
 
-/** Decodes one InkyPump V2 log. Returns null for a topic0 it doesn't know. Does not check the emitter. */
+/** Decodes one InkyPump V2 log. Returns null for a topic0 it doesn't know, for a log whose data doesn't decode and for a malformed one (missing topics, a trade type that is neither buy nor sell). Does not check the emitter. */
 export function decodeLog(log: { topics: readonly Hex[]; data: Hex }): DecodedLog | null {
   const [topic0, t1, t2, t3] = log.topics
   if (topic0 === undefined) return null
   if (topic0 === XSTOCKS_HOOK_CREATED_TOPIC) {
-    if (!t1) throw new Error("xStocks hook-created log is missing assetId")
+    if (!t1 || !t2 || !t3) return null
     return {
       kind: "xstocksHookCreated",
       assetId: t1,
@@ -123,8 +115,7 @@ export function decodeLog(log: { topics: readonly Hex[]; data: Hex }): DecodedLo
     }
     case "Trade": {
       const a = ev.args
-      if (a.tradeType !== 0 && a.tradeType !== 1)
-        throw new Error(`unknown tradeType ${a.tradeType}`)
+      if (a.tradeType !== 0 && a.tradeType !== 1) return null
       return {
         kind: "trade",
         launchId: id(a.launchId),

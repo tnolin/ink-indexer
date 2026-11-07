@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type {
   ChainLog,
+  ClassicLaunch,
   InkfunLaunchState,
   LaunchKey,
   LaunchState,
+  MasterLaunchConfig,
   TsunamiCurveState,
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
@@ -28,6 +30,13 @@ export type RecordedCalls = {
     block: bigint
     result: InkfunLaunchState[]
   }[]
+  readClassicLaunches?: { ids: bigint[]; block: bigint; result: ClassicLaunch[] }[]
+  readMasterLaunchConfigs?: {
+    launches: { factory: Address; launchId: bigint }[]
+    block: bigint
+    result: (MasterLaunchConfig | null)[]
+  }[]
+  readMetadataUris?: { tokens: Address[]; block: bigint; result: (string | null)[] }[]
   readCurveSold?: { curves: Address[]; block: bigint; result: bigint[] }[]
   getBlockSenders?: {
     block: bigint
@@ -85,6 +94,12 @@ export class ReplayChain implements Chain {
       this.answers.set(`readErc20Meta:${stringify([c.token])}`, c.result)
     for (const c of calls.readInkfunLaunches ?? [])
       this.answers.set(`readInkfunLaunches:${stringify([c.launches, c.block])}`, c.result)
+    for (const c of calls.readClassicLaunches ?? [])
+      this.answers.set(`readClassicLaunches:${stringify([c.ids, c.block])}`, c.result)
+    for (const c of calls.readMasterLaunchConfigs ?? [])
+      this.answers.set(`readMasterLaunchConfigs:${stringify([c.launches, c.block])}`, c.result)
+    for (const c of calls.readMetadataUris ?? [])
+      this.answers.set(`readMetadataUris:${stringify([c.tokens, c.block])}`, c.result)
     for (const c of calls.readCurveSold ?? [])
       this.answers.set(`readCurveSold:${stringify([c.curves, c.block])}`, c.result)
     for (const c of calls.getBlockSenders ?? [])
@@ -145,6 +160,18 @@ export class ReplayChain implements Chain {
 
   async readInkfunLaunches(launches: { token: Address; curve: Address }[], block: bigint) {
     return this.answer<InkfunLaunchState[]>("readInkfunLaunches", [launches, block])
+  }
+
+  async readClassicLaunches(ids: bigint[], block: bigint) {
+    return this.answer<ClassicLaunch[]>("readClassicLaunches", [ids, block])
+  }
+
+  async readMasterLaunchConfigs(launches: { factory: Address; launchId: bigint }[], block: bigint) {
+    return this.answer<(MasterLaunchConfig | null)[]>("readMasterLaunchConfigs", [launches, block])
+  }
+
+  async readMetadataUris(tokens: Address[], block: bigint) {
+    return this.answer<(string | null)[]>("readMetadataUris", [tokens, block])
   }
 
   async readTsunamiCurves(curves: Address[], block: bigint) {

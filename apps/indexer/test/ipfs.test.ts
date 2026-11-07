@@ -1,6 +1,11 @@
-import { parseTsunamiMetadata } from "@ink-indexer/sdk"
+import { parseHookitMetadata, parseTsunamiMetadata } from "@ink-indexer/sdk"
 import { describe, expect, it } from "vitest"
-import { DEFAULT_IPFS_GATEWAY, DEFAULT_TSUNAMI_IPFS_GATEWAY, fetchIpfsJson } from "../src/ipfs"
+import {
+  DEFAULT_HOOKIT_IPFS_GATEWAY,
+  DEFAULT_IPFS_GATEWAY,
+  DEFAULT_TSUNAMI_IPFS_GATEWAY,
+  fetchIpfsJson,
+} from "../src/ipfs"
 import type { Level } from "../src/log"
 import { readIpfsSettings } from "../src/wiring"
 
@@ -224,7 +229,11 @@ describe("fetchIpfsJson", () => {
   })
 })
 
-const DEFAULTS = { inkfun: DEFAULT_IPFS_GATEWAY, tsunami: DEFAULT_TSUNAMI_IPFS_GATEWAY }
+const DEFAULTS = {
+  inkfun: DEFAULT_IPFS_GATEWAY,
+  tsunami: DEFAULT_TSUNAMI_IPFS_GATEWAY,
+  hookit: DEFAULT_HOOKIT_IPFS_GATEWAY,
+}
 
 describe("readIpfsSettings", () => {
   it("an empty IPFS_GATEWAY uses the default gateway", () => {
@@ -283,6 +292,102 @@ describe("readIpfsSettings", () => {
   })
 })
 
+describe("fetchIpfsJson for Hookit", () => {
+  const recording = () => {
+    const calls: string[] = []
+    const fake = (async (url: string) => {
+      calls.push(url)
+      return json({ name: "A" })
+    }) as unknown as typeof fetch
+    return { calls, fake }
+  }
+
+  it("ipfs://hookit-test-tst is not fetched and the launch is text-only", async () => {
+    const { calls, fake } = recording()
+    const out = await fetchIpfsJson("ipfs://hookit-test-tst", {
+      gateway: GATEWAY,
+      fetch: fake,
+      ipfsOnly: true,
+    })
+    expect(out).toBeNull()
+    expect(parseHookitMetadata(out, GATEWAY)).toBeNull()
+    expect(calls).toEqual([])
+  })
+
+  it("an https gateway URI is not fetched when only ipfs:// URIs are accepted", async () => {
+    const { calls, fake } = recording()
+    const uri =
+      "https://ipfs.filebase.io/ipfs/bafkreid4zfy2kgmcoevjnouiybwoupmislmz6hynddono2atedb43pm5ei"
+    expect(await fetchIpfsJson(uri, { gateway: GATEWAY, fetch: fake, ipfsOnly: true })).toBeNull()
+    expect(calls).toEqual([])
+  })
+
+  it("an ipfs:// URI is still fetched when only ipfs:// URIs are accepted", async () => {
+    const { calls, fake } = recording()
+    expect(await fetchIpfsJson(URI, { gateway: GATEWAY, fetch: fake, ipfsOnly: true })).toEqual({
+      name: "A",
+    })
+    expect(calls).toEqual([`${GATEWAY}/ipfs/bafkreiabc`])
+  })
+
+  it("an inline data: URI is never fetched", async () => {
+    const { calls, fake } = recording()
+    const uri = "data:application/json;base64,eyJhIjoxfQ=="
+    expect(await fetchIpfsJson(uri, { gateway: GATEWAY, fetch: fake, ipfsOnly: true })).toBeNull()
+    expect(calls).toEqual([])
+  })
+
+  it("the warning names the launchpad and token, never the gateway", async () => {
+    const { log, lines } = logger()
+    const fake = (async () => new Response("no", { status: 404 })) as unknown as typeof fetch
+    await fetchIpfsJson(URI, {
+      gateway: GATEWAY,
+      fetch: fake,
+      sleep: noSleep,
+      ipfsOnly: true,
+      log,
+      launchpad: "hookit",
+      token: TOKEN,
+    })
+    expect(lines).toEqual([
+      {
+        level: "warn",
+        msg: "token metadata not fetched",
+        fields: { launchpad: "hookit", token: TOKEN },
+      },
+    ])
+    expect(JSON.stringify(lines)).not.toContain("gw.example")
+  })
+})
+
+describe("readIpfsSettings for Hookit", () => {
+  it("an empty HOOKIT_IPFS_GATEWAY uses the default", () => {
+    const { log, lines } = logger()
+    expect(readIpfsSettings({}, log).hookit).toBe("https://ipfs.filebase.io")
+    expect(readIpfsSettings({ HOOKIT_IPFS_GATEWAY: " " }, log).hookit).toBe(
+      DEFAULT_HOOKIT_IPFS_GATEWAY,
+    )
+    expect(lines).toEqual([])
+  })
+
+  it("trims a trailing slash and leaves the other settings alone", () => {
+    const { log } = logger()
+    expect(readIpfsSettings({ HOOKIT_IPFS_GATEWAY: "https://h.example/" }, log)).toEqual({
+      ...DEFAULTS,
+      hookit: "https://h.example",
+    })
+  })
+
+  it("an invalid HOOKIT_IPFS_GATEWAY warns once without its value and uses the default", () => {
+    const { log, lines } = logger()
+    const out = readIpfsSettings({ HOOKIT_IPFS_GATEWAY: "http://gw.example/?key=hunter2" }, log)
+    expect(out).toEqual(DEFAULTS)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]?.fields?.variable).toBe("HOOKIT_IPFS_GATEWAY")
+    expect(JSON.stringify(lines)).not.toContain("hunter2")
+  })
+})
+
 describe("readIpfsSettings for Tsunami", () => {
   it("an empty TSUNAMI_IPFS_GATEWAY uses Tsunami's gateway", () => {
     const { log, lines } = logger()
@@ -297,7 +402,7 @@ describe("readIpfsSettings for Tsunami", () => {
     const { log } = logger()
     expect(readIpfsSettings({}, log).inkfun).toBe("https://cracker.mypinata.cloud")
     expect(readIpfsSettings({ TSUNAMI_IPFS_GATEWAY: "https://t.example" }, log)).toEqual({
-      inkfun: DEFAULT_IPFS_GATEWAY,
+      ...DEFAULTS,
       tsunami: "https://t.example",
     })
   })
@@ -309,7 +414,7 @@ describe("readIpfsSettings for Tsunami", () => {
         { IPFS_GATEWAY: "https://a.example/", TSUNAMI_IPFS_GATEWAY: "https://b.example/" },
         log,
       ),
-    ).toEqual({ inkfun: "https://a.example", tsunami: "https://b.example" })
+    ).toEqual({ ...DEFAULTS, inkfun: "https://a.example", tsunami: "https://b.example" })
   })
 
   it("an invalid TSUNAMI_IPFS_GATEWAY warns once without its value and uses the default", () => {

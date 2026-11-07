@@ -26,14 +26,20 @@ export type V4Swap = {
 
 const lower = (a: string) => a.toLowerCase() as Address
 
-/** Decodes a PoolManager `Swap` log. Null for any other topic0. Does not check the emitter. */
+/** Decodes a PoolManager `Swap` log. Null for any other topic0 and for data that does not decode. Does not check the emitter. */
 export function decodeSwap(log: { topics: readonly Hex[]; data: Hex }): V4Swap | null {
   if (log.topics[0] !== SWAP_TOPIC) return null
-  const { args } = decodeEventLog({
-    abi: swapAbi,
-    topics: log.topics as [Hex, ...Hex[]],
-    data: log.data,
-  })
+  let args: ReturnType<typeof decodeEventLog<typeof swapAbi>>["args"]
+  try {
+    ;({ args } = decodeEventLog({
+      abi: swapAbi,
+      topics: log.topics as [Hex, ...Hex[]],
+      data: log.data,
+    }))
+  } catch {
+    // Truncated data: one malformed log must not fail a span.
+    return null
+  }
   return {
     poolId: args.id.toLowerCase() as Hash,
     sender: lower(args.sender),
@@ -48,17 +54,22 @@ export function decodeSwap(log: { topics: readonly Hex[]; data: Hex }): V4Swap |
 
 /**
  * Decodes an ERC-20 `Transfer` log. Null for any other topic0, and for an ERC-721 `Transfer`,
- * which shares the topic0 but indexes the token id as a fourth topic.
+ * which shares the topic0 but indexes the token id as a fourth topic, and for data that does not decode.
  */
 export function decodeTransfer(log: {
   topics: readonly Hex[]
   data: Hex
 }): { from: Address; to: Address; value: bigint } | null {
   if (log.topics[0] !== TRANSFER_TOPIC || log.topics.length !== 3) return null
-  const { args } = decodeEventLog({
-    abi: transferAbi,
-    topics: log.topics as [Hex, ...Hex[]],
-    data: log.data,
-  })
+  let args: ReturnType<typeof decodeEventLog<typeof transferAbi>>["args"]
+  try {
+    ;({ args } = decodeEventLog({
+      abi: transferAbi,
+      topics: log.topics as [Hex, ...Hex[]],
+      data: log.data,
+    }))
+  } catch {
+    return null
+  }
   return { from: lower(args.from), to: lower(args.to), value: args.value }
 }

@@ -5,6 +5,7 @@ import {
   CHIMERA_FACTORY,
   type ChainLog,
   DEAD_ADDRESS,
+  HOOKIT_BONDING_FACTORY,
   LOG_TOPICS,
   NATIVE_QUOTE_ASSET,
   NFT_TOPICS,
@@ -24,6 +25,7 @@ import {
 } from "../../../packages/sdk/test/builders"
 import {
   loadChimeraCampaigns,
+  loadHookitFixture,
   loadNftFixture,
   loadTsunamiFixture,
   NFT_FIXTURES,
@@ -32,6 +34,7 @@ import type { Chain } from "../src/chain"
 import { readLogs } from "../src/log-plan"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
+import { hookitSource } from "../src/sources/hookit/index"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
@@ -64,6 +67,7 @@ const CALAMARI_TOKEN = "0x00000000000000000000000000000000000000a7"
 const CALAMARI_POOL = `0x${"a7".repeat(32)}` as Hash
 const FUN_TOKEN = "0x00000000000000000000000000000000000000a5" as const
 const FUN_CURVE = "0x00000000000000000000000000000000000000a6" as const
+const HOOKIT_TX = `0x${(0xbad400).toString(16).padStart(64, "0")}` as Hash
 const TSUNAMI_TX = `0x${(0xbad300).toString(16).padStart(64, "0")}` as Hash
 const word = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash
 const ADDR_WORD = (a: string) => `0x${"0".repeat(24)}${a.slice(2)}` as Hash
@@ -215,7 +219,16 @@ function buildPool(): { logs: ChainLog[]; extra: ChainLog[] } {
       blockHash: word(Number(at(15))),
       transactionHash: TSUNAMI_TX,
     }))
-  const logs = [...calls.logs, ...moved, ...extra, ...v4, ...inkfun, ...tsunami].sort(
+  // Hookit: HOOC's recorded Classic launch and seed buy, moved into the range.
+  const hookit = loadHookitFixture("hookit-hooc-launch")
+    .logs.filter((l) => l.address === HOOKIT_BONDING_FACTORY)
+    .map((l) => ({
+      ...l,
+      blockNumber: at(16),
+      blockHash: word(Number(at(16))),
+      transactionHash: HOOKIT_TX,
+    }))
+  const logs = [...calls.logs, ...moved, ...extra, ...v4, ...inkfun, ...tsunami, ...hookit].sort(
     (a, b) => Number(a.blockNumber - b.blockNumber) || a.logIndex - b.logIndex,
   )
   return { logs, extra }
@@ -262,16 +275,27 @@ class PoolChain implements Chain {
   readCurveSold = async (curves: unknown[]) => curves.map(() => 0n)
   readTsunamiCurves = async (curves: unknown[]) =>
     curves.map(() => ({ realBase: 0n, realQuote: 0n, virtualBase: 1n, virtualQuote: 1n }))
+  readClassicLaunches = async (ids: unknown[]) =>
+    ids.map(() => loadHookitFixture("hookit-hooc-launch").classic[0]!.at)
+  readMasterLaunchConfigs = async (launches: unknown[]) => launches.map(() => null)
+  readMetadataUris = async (tokens: unknown[]) => tokens.map(() => null)
   readErc20Names = async (tokens: string[]) => tokens.map(() => ({ symbol: null, name: null }))
   /** Answers for the block holding the Tsunami transaction only. */
   getBlockSenders = async (n: bigint) => {
-    const txs = this.pool.filter((l) => l.blockNumber === n && l.transactionHash === TSUNAMI_TX)
+    const txs = this.pool.filter(
+      (l) =>
+        l.blockNumber === n &&
+        (l.transactionHash === TSUNAMI_TX || l.transactionHash === HOOKIT_TX),
+    )
     return txs.length === 0
       ? null
       : {
           hash: txs[0]!.blockHash,
           timestamp: Number(n),
-          senders: new Map([[TSUNAMI_TX, A1 as Address]]),
+          senders: new Map([
+            [TSUNAMI_TX, A1 as Address],
+            [HOOKIT_TX, A1 as Address],
+          ]),
         }
   }
   readBalances = async (pairs: unknown[]) => pairs.map(() => 0n)
@@ -321,6 +345,7 @@ function sourcesFor(chain: Chain, sql: Sql) {
     inkypumpSource({ sql, chain, pools, logger: quiet }),
     inkfunSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
     tsunamiSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
+    hookitSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
     v4Source({ sql, chain, pools, logger: quiet }),
     nftSource({ sql, chain, logger: quiet }),
   ]

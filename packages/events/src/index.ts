@@ -42,6 +42,11 @@ export type LaunchEvent = LaunchpadBase & {
   /** Whether the pool uses a hook written for the launchpad. Null where it does not apply. */
   customHook: boolean | null
   hookModules: string[] | null
+  /**
+   * Every market of a token launched into several pools, in launch order with market 0 first. Null
+   * for a single-market or curve token. Absent on rows written before this field existed.
+   */
+  markets?: { quoteAsset: Address; poolId: Hash }[] | null
 }
 
 export type TradeEvent = LaunchpadBase & {
@@ -100,6 +105,11 @@ export type SwapEvent = LaunchpadBase & {
   athMarketCap: string
   /** The pool's quote side after the swap, in quote base units. */
   quoteLiquidity: string
+  /**
+   * The pool's token side after the swap, in token base units. Together with `quoteLiquidity` it
+   * describes a concentrated pool, whose two sides are not equal in value. Absent on earlier rows.
+   */
+  tokenLiquidity?: string
   /** Total supply minus the dead address's balance, in token base units. */
   supply: string
 }

@@ -25,6 +25,8 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import type { Reporter } from "../../sentry"
+import { droppedLogs } from "../dropped"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
 import { HookRegistry, type HookRow, nativeHookRows } from "./hooks"
@@ -80,7 +82,8 @@ export type CurveRow = {
   marketCap: bigint
   updatedBlock: bigint
 }
-export type AthRow = { token: Address; marketCap: bigint; block: bigint }
+/** `poolId` marks the ath of one pool of a token with several markets, each in its own quote units. */
+export type AthRow = { token: Address; marketCap: bigint; block: bigint; poolId?: Hash }
 export type Batch = {
   hooks: HookRow[]
   tokens: TokenRow[]
@@ -99,6 +102,8 @@ export type SourceDeps = {
   pools: PoolRegistry
   logger: Logger
   loadLaunches(keys: LaunchKey[]): Promise<KnownLaunch[]>
+  /** Called with a log of a handled topic that did not decode. */
+  dropped?: (log: ChainLog) => void
 }
 
 type Item = { log: ChainLog; d: Exclude<DecodedLog, XStocksHookCreated> }
@@ -116,9 +121,21 @@ export function inkypumpSource(deps: {
   chain: SourceDeps["chain"]
   logger: Logger
   pools: PoolRegistry
+  /** The clock the dropped-log warning limit reads; tests inject one. */
+  now?: () => number
+  /** Where a trusted contract's undecodable log is reported; none by default. */
+  report?: Pick<Reporter, "warn">
 }): Source<Batch, CurveRow[]> {
   const { sql, chain, logger, pools } = deps
   let registry = new HookRegistry([], logger)
+  // Only logs of registered hooks and known factories reach `dropped`, so no trust test is needed here.
+  const dropped = droppedLogs({
+    source: "inkypump",
+    logger,
+    topics: LOG_TOPICS,
+    report: deps.report,
+    now: deps.now,
+  })
   return {
     name: "inkypump",
     filters: (only) => [pick(only, "inkypump", LOG_FILTER)],
@@ -128,6 +145,7 @@ export function inkypumpSource(deps: {
         registry,
         pools,
         logger,
+        dropped,
         loadLaunches: (keys) => loadLaunches(sql, keys),
       }),
     write: writeRows,
@@ -408,7 +426,11 @@ async function trustAndDecode(logs: ChainLog[], deps: SourceDeps, batch: Batch):
         deps.registry.warnUnknown(log)
         continue
       }
-      const d = decodeLog(log) as XStocksHookCreated
+      const d = decodeLog(log)
+      if (d?.kind !== "xstocksHookCreated") {
+        deps.dropped?.(log)
+        continue
+      }
       if (deps.registry.get(d.hook)) continue
       const quote = await deps.chain.readErc20Meta(d.wrapper)
       const row: HookRow = {
@@ -430,6 +452,7 @@ async function trustAndDecode(logs: ChainLog[], deps: SourceDeps, batch: Batch):
       continue
     }
     const d = decodeLog(log)
+    if (!d) deps.dropped?.(log)
     if (!d || d.kind === "xstocksHookCreated") continue
     items.push({ log, d })
   }

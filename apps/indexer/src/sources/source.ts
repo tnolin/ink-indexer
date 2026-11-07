@@ -25,6 +25,12 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
    */
   filters(only?: readonly BackfillSource[]): (LogFilter | null)[]
   /**
+   * True when `process` has work for the span even if every filter is null: it reads logs itself
+   * for pools that earlier sources register in the span. The loop then still calls `process`, with
+   * an empty array per filter, and makes no request for it.
+   */
+  readsLate?(only?: readonly BackfillSource[]): boolean
+  /**
    * One log array per filter, same order. Network reads allowed; no DB writes. `live` is true for
    * the live tick's spans and false for a backfill's. `readStateAt` is the block to read state
    * that is not tied to a log at, a block the endpoints serve: the span's end for the live tick,
@@ -48,7 +54,7 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
 
 /**
  * The names `backfill --sources` takes. `inkypump` is the InkyPump source, `inkfun` the ink.fun
- * source and `tsunami` the Tsunami source (launches, curve trades and graduations), and
+ * source and `tsunami` the Tsunami source (launches, curve trades and graduations), `hookit` the Hookit source (launches, markets and Classic curve trades), and
  * `v4-swaps` the swaps and burns of tokens with a registered Uniswap v4 pool, whichever
  * PoolManager holds it. The NFT source's filters come in three
  * groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and `nft-launches`
@@ -58,6 +64,7 @@ export const BACKFILL_SOURCES = [
   "inkypump",
   "inkfun",
   "tsunami",
+  "hookit",
   "v4-swaps",
   "nft-mints",
   "nft-sales",

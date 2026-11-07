@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Address, Hash } from "viem"
-import type { ChainLog, LaunchState, TsunamiCurveState } from "../src/index"
+import type { ChainLog, ClassicLaunch, LaunchState, TsunamiCurveState } from "../src/index"
 
 export const FIXTURES = [
   "legacy-launch",
@@ -225,4 +225,110 @@ export type CalamariFixture = Omit<V4Fixture, "name"> & {
 
 export function loadCalamariFixture(name: CalamariFixtureName): CalamariFixture {
   return readFixtureJson(name)
+}
+
+/** Transactions recorded with `capture-fixture.ts --topics hookit`. */
+export const HOOKIT_FIXTURES = [
+  "hookit-hkt-launch",
+  "hookit-hkt-first-swap",
+  "hookit-hkt-sell",
+  "hookit-hkt-buyback",
+  "hookit-hmu-launch",
+  "hookit-hmu-split",
+  "hookit-inky-launch",
+  "hookit-inky-usdg-wmstrx",
+  "hookit-stock-pool-swap",
+  "hookit-a18-launch",
+  "hookit-kbtc-launch",
+  "hookit-quill-launch",
+  "hookit-bloop-launch",
+  "hookit-qcard-launch",
+  "hookit-dead-transfer",
+  "hookit-hooc-launch",
+  "hookit-drop-sold",
+  "hookit-classic-wnvdax",
+  "hookit-classic-latest",
+  "hookit-tsunami-launch",
+] as const
+export type HookitFixtureName = (typeof HOOKIT_FIXTURES)[number]
+
+export type HookitFixture = {
+  name: HookitFixtureName
+  txHash: Hash
+  blockNumber: bigint
+  blockHash: Hash
+  timestamp: number
+  logs: ChainLog[]
+  /** The transaction's `from`. */
+  sender: Address
+  /** Every Hookit token the transaction touches, read at its block. */
+  tokens: {
+    token: Address
+    metadataURI: string
+    totalSupply: bigint
+    /** `totalSupply()` one block earlier; null when the token did not exist yet. */
+    totalSupplyBefore: bigint | null
+  }[]
+  /** `launches(id)` of every bonding launch the transaction touches, at its block and the block before. */
+  classic: { id: bigint; at: ClassicLaunch; before: ClassicLaunch | null }[]
+}
+
+export function loadHookitFixture(name: HookitFixtureName): HookitFixture {
+  return readFixtureJson(name)
+}
+
+/** What each Master factory's views answered for a recorded launch, at the launch block. */
+export type HookitLaunchConfigs = {
+  reads: {
+    txHash: Hash
+    blockNumber: bigint
+    factory: Address
+    launchId: bigint
+    config: { token: Address; bitmask: bigint; quote: Address; tickSpacing: number; fee: number }
+  }[]
+}
+
+export function loadHookitLaunchConfigs(): HookitLaunchConfigs {
+  return readFixtureJson("hookit-launch-configs")
+}
+
+/** Every bonding event of one launch from its creation to its latest event, with `launches(id)` at the last one. */
+export type HookitHistory = {
+  name: string
+  launchId: bigint
+  blockNumber: bigint
+  logs: ChainLog[]
+  state: ClassicLaunch
+}
+
+export function loadHookitHistory(): HookitHistory {
+  return readFixtureJson("hookit-hooc-history")
+}
+
+/** StateView reads of the $HKT and QUILL pools at one block. */
+export type HookitPoolState = {
+  blockNumber: bigint
+  pools: { poolId: Hash; sqrtPriceX96: bigint; tick: number; liquidity: bigint }[]
+}
+
+export function loadHookitPoolState(): HookitPoolState {
+  return readFixtureJson("hookit-pool-state")
+}
+
+/** `poolKeyOf(1)` of the bonding factory: the key the first launch's pool will have once it graduates. */
+export type HookitPoolKey = {
+  name: string
+  launchId: bigint
+  blockNumber: bigint
+  poolKey: {
+    currency0: Address
+    currency1: Address
+    fee: number
+    tickSpacing: number
+    hooks: Address
+  }
+}
+
+export function loadHookitPoolKey(): HookitPoolKey {
+  return readFixtureJson("hookit-pool-key")
 }

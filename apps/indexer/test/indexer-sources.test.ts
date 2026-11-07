@@ -2,6 +2,7 @@ import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
   CHIMERA_FACTORY,
+  HOOKIT_TOPICS,
   INKFUN_TOPICS,
   NATIVE_QUOTE_ASSET,
   SEADROP_V1,
@@ -13,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
+import { hookitSource } from "../src/sources/hookit/index"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
@@ -37,7 +39,7 @@ describe("readSources", () => {
   it("enables every platform when unset or empty", () => {
     for (const v of [undefined, "", "  "]) {
       const s = sources({ INDEXER_SOURCES: v })
-      expect(s.names).toEqual(["inkypump", "opensea", "chimera", "inkfun", "tsunami"])
+      expect(s.names).toEqual(["inkypump", "opensea", "chimera", "inkfun", "tsunami", "hookit"])
       expect(s.openSea).toBe(true)
       expect(s.groups).toEqual([
         "inkypump",
@@ -47,6 +49,7 @@ describe("readSources", () => {
         "nft-launches",
         "inkfun",
         "tsunami",
+        "hookit",
       ])
     }
   })
@@ -66,6 +69,10 @@ describe("readSources", () => {
     })
     expect(sources({ INDEXER_SOURCES: "inkfun" })).toMatchObject({
       groups: ["inkfun", "v4-swaps"],
+      openSea: false,
+    })
+    expect(sources({ INDEXER_SOURCES: "hookit" })).toMatchObject({
+      groups: ["hookit", "v4-swaps"],
       openSea: false,
     })
   })
@@ -88,7 +95,7 @@ describe("readSources", () => {
 
   it("rejects an unknown name, naming the allowed ones", () => {
     expect(() => sources({ INDEXER_SOURCES: "inkypump,bogus" })).toThrow(
-      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera, inkfun, tsunami)",
+      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera, inkfun, tsunami, hookit)",
     )
   })
 
@@ -133,6 +140,13 @@ describe("the live tick with INDEXER_SOURCES", () => {
         inkypumpSource({ sql, chain, pools, logger: quiet }),
         inkfunSource({ sql, chain, pools, logger: quiet, ipfs: { gateway: "https://gw.example" } }),
         tsunamiSource({
+          sql,
+          chain,
+          pools,
+          logger: quiet,
+          ipfs: { gateway: "https://gw.example" },
+        }),
+        hookitSource({
           sql,
           chain,
           pools,
@@ -185,6 +199,17 @@ describe("the live tick with INDEXER_SOURCES", () => {
     expect(all).toHaveLength(3)
     expect(JSON.stringify(all[0]?.topics)).toContain(TSUNAMI_TOPICS.launched)
     expect(JSON.stringify(all[0]?.topics)).toContain(INKFUN_TOPICS.bought)
+  })
+
+  it("hookit alone reads one filter while no pool is registered, and merges with the other launchpads'", async () => {
+    const alone = await liveFilters({ INDEXER_SOURCES: "hookit" }, false)
+    expect(alone).toHaveLength(1)
+    expect(JSON.stringify(alone[0]?.topics)).toContain(HOOKIT_TOPICS.bought)
+    expect(await liveFilters({ INDEXER_SOURCES: "hookit" })).toHaveLength(3)
+    const all = await liveFilters({ INDEXER_SOURCES: "inkypump,inkfun,tsunami,hookit" })
+    expect(all).toHaveLength(3)
+    expect(JSON.stringify(all[0]?.topics)).toContain(HOOKIT_TOPICS.masterLaunched)
+    expect(JSON.stringify(all[0]?.topics)).toContain(TSUNAMI_TOPICS.launched)
   })
 
   it("inkypump alone reads its own and the two v4 filters and no NFT filter, in 3 requests", async () => {
