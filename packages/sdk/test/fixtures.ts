@@ -299,3 +299,21 @@ export type HookitPoolState = {
 export function loadHookitPoolState(): HookitPoolState {
   return readFixtureJson("hookit-pool-state")
 }
+
+/** `poolKeyOf(1)` of the bonding factory: the key the first launch's pool will have once it graduates. */
+export type HookitPoolKey = {
+  name: string
+  launchId: bigint
+  blockNumber: bigint
+  poolKey: {
+    currency0: Address
+    currency1: Address
+    fee: number
+    tickSpacing: number
+    hooks: Address
+  }
+}
+
+export function loadHookitPoolKey(): HookitPoolKey {
+  return readFixtureJson("hookit-pool-key")
+}

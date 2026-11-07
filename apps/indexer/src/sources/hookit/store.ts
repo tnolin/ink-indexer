@@ -124,6 +124,12 @@ export async function writeRows(tx: Tx, batch: HookitBatch) {
           tokens_sold = excluded.tokens_sold, updated_block = excluded.updated_block
         where indexer.hookit_curves.updated_block <= excluded.updated_block`
   }
+  for (const b of batch.bonds) {
+    await tx`
+      update indexer.tokens set phase = 'bonded', bonded_block = ${s(b.block)},
+        total_supply = ${s(b.totalSupply)}, total_supply_block = ${s(b.block)}
+      where address = ${b.token}`
+  }
   await writePools(tx, batch.pools)
   await writeAth(tx, batch.ath)
   for (const part of chunks(batch.curve.map(curveRecord))) {

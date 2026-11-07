@@ -2,21 +2,32 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import type { IndexerEvent, LaunchEvent, SwapEvent, TradeEvent } from "@ink-indexer/events"
+import type {
+  BondEvent,
+  IndexerEvent,
+  LaunchEvent,
+  SwapEvent,
+  TradeEvent,
+} from "@ink-indexer/events"
 import {
   type ChainLog,
   decodeHookitLog,
   HOOKIT_BONDING_FACTORY,
   HOOKIT_GRADUATED_FEE_HOOK,
   HOOKIT_MASTER_FACTORIES,
+  HOOKIT_TOPICS,
+  poolIdOf,
+  poolMarketCap,
+  SWAP_TOPIC,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
-import type { Address, Hash } from "viem"
+import { type Address, encodeAbiParameters, type Hash, pad, toHex } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import {
   type HookitFixtureName,
   loadHookitFixture,
   loadHookitHistory,
+  loadHookitPoolKey,
 } from "../../../packages/sdk/test/fixtures"
 import type { Logger } from "../src/log"
 import { hookitSource } from "../src/sources/hookit/index"
@@ -617,6 +628,214 @@ describe("Hookit Classic curves", () => {
       expect(t.chain.classicLaunchReads.filter((r) => r.block === launch.blockNumber - 1n)).toEqual(
         [],
       )
+    } finally {
+      await t.sql.end()
+    }
+  })
+})
+
+/** A graduation no chain has produced yet, so every test built on it is synthetic. */
+const GRADUATION_BLOCK_AFTER_LAUNCH = 5n
+const GRADUATED_SUPPLY = 9n * 10n ** 26n
+const SWAP_SENDER: Address = "0x00000000000000000000000000000000000000a9"
+
+function graduationOf(t: Awaited<ReturnType<typeof setup>>) {
+  const launch = t.seed("hookit-hooc-launch")
+  const { poolKey } = loadHookitPoolKey()
+  const token = poolKey.currency1
+  const poolId = poolIdOf(poolKey)
+  const block = launch.blockNumber + GRADUATION_BLOCK_AFTER_LAUNCH
+  const txHash = pad(toHex(0x9ad), { size: 32 }) as Hash
+  const log = (over: Partial<ChainLog> = {}): ChainLog => ({
+    address: HOOKIT_BONDING_FACTORY,
+    topics: [HOOKIT_TOPICS.graduated, pad(toHex(1n), { size: 32 }), poolId],
+    data: encodeAbiParameters(
+      [{ type: "uint256" }, { type: "uint256" }, { type: "uint128" }],
+      [4_200n * 10n ** 15n, 2n * 10n ** 26n, 5n * 10n ** 21n],
+    ),
+    blockNumber: block,
+    blockHash: t.chain.hashOf(block),
+    transactionHash: txHash,
+    logIndex: 3,
+    ...over,
+  })
+  t.chain.senders.set(block, {
+    hash: t.chain.hashOf(block),
+    senders: new Map([[txHash, SWAP_SENDER]]),
+  })
+  t.chain.supplies.set(token, (b) => (b >= block ? GRADUATED_SUPPLY : 10n ** 27n))
+  return { launch, token, poolId, poolKey, block, txHash, log }
+}
+
+describe("Hookit Classic graduation (synthetic: no launch has graduated yet)", () => {
+  it("a synthetic graduation bonds the token and registers a full-range pool whose id hashes from poolKeyOf", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log())
+      await t.ingest(g.launch.blockNumber)
+      const batch = await t.ingest(g.block, g.launch.blockNumber + 1n)
+      const [bond] = eventsOf<BondEvent>(batch, "launchpad.bond")
+      expect(bond).toMatchObject({
+        poolId: g.poolId,
+        poolManager: UNISWAP_V4_POOL_MANAGER,
+        liquidityQuote: "4200000000000000000",
+        liquidityTokens: "200000000000000000000000000",
+        launchId: pad(g.token, { size: 32 }),
+      })
+      expect(t.chain.supplyReads.at(-1)).toEqual({ tokens: [g.token], block: g.block })
+      const [pool] = await t.sql`
+        select pool_id, pool_manager, hook, token_is_currency0, tick_lower, tick_upper, quote_asset, launchpad
+        from indexer.pools`
+      expect(pool).toEqual({
+        pool_id: g.poolId,
+        pool_manager: UNISWAP_V4_POOL_MANAGER,
+        hook: HOOKIT_GRADUATED_FEE_HOOK,
+        token_is_currency0: false,
+        tick_lower: null,
+        tick_upper: null,
+        quote_asset: ETH,
+        launchpad: "hookit",
+      })
+      const [token] = await t.sql`
+        select phase, bonded_block::text, total_supply::text, total_supply_block::text from indexer.tokens`
+      expect(token).toEqual({
+        phase: "bonded",
+        bonded_block: g.block.toString(),
+        total_supply: GRADUATED_SUPPLY.toString(),
+        total_supply_block: g.block.toString(),
+      })
+      const [state] = await t.sql`select progress_bps from indexer.curve_state`
+      expect(state!.progress_bps).toBe(10_000)
+      expect(t.pools.byId(g.poolId)?.hook).toBe(HOOKIT_GRADUATED_FEE_HOOK)
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("the pool's first swap in the same span is indexed with the graduation supply (synthetic)", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log())
+      await t.ingest(g.launch.blockNumber)
+      const sqrtPriceX96 = 2n ** 96n / 1000n
+      const swapTx = pad(toHex(0x9ae), { size: 32 }) as Hash
+      t.chain.senders.get(g.block)!.senders.set(swapTx, SWAP_SENDER)
+      t.chain.add({
+        address: UNISWAP_V4_POOL_MANAGER,
+        topics: [SWAP_TOPIC, g.poolId, pad(SWAP_SENDER, { size: 32 })],
+        data: encodeAbiParameters(
+          [
+            { type: "int128" },
+            { type: "int128" },
+            { type: "uint160" },
+            { type: "uint128" },
+            { type: "int24" },
+            { type: "uint24" },
+          ],
+          [-(10n ** 15n), 10n ** 21n, sqrtPriceX96, 5n * 10n ** 21n, -69_000, 0],
+        ),
+        blockNumber: g.block,
+        blockHash: t.chain.hashOf(g.block),
+        transactionHash: swapTx,
+        logIndex: 4,
+      })
+      const { hookit, swaps } = await t.span(g.block, g.launch.blockNumber + 1n)
+      expect(eventsOf(hookit, "launchpad.bond")).toHaveLength(1)
+      const [swap] = eventsOf<SwapEvent>(swaps, "launchpad.swap")
+      expect(swap).toMatchObject({ side: "buy", trader: SWAP_SENDER })
+      expect(swap!.marketCap).toBe(poolMarketCap(sqrtPriceX96, false, GRADUATED_SUPPLY).toString())
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a rollback below a synthetic graduation un-bonds the token and removes the pool", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log())
+      await t.ingest(g.launch.blockNumber)
+      await t.ingest(g.block, g.launch.blockNumber + 1n)
+      t.chain.classicLaunches.set(1n, g.launch.classic[0]!.at)
+      await t.rollback(g.block - 1n)
+      expect(await t.sql`select 1 from indexer.pools`).toEqual([])
+      expect(await t.sql`select 1 from indexer.events where type = 'launchpad.bond'`).toEqual([])
+      const [token] = await t.sql`
+        select phase, bonded_block, total_supply::text from indexer.tokens`
+      expect(token).toEqual({
+        phase: "curve",
+        bonded_block: null,
+        total_supply: (10n ** 27n).toString(),
+      })
+      const [state] = await t.sql`select progress_bps from indexer.curve_state`
+      expect(state!.progress_bps).toBeLessThan(10_000)
+      expect(t.pools.poolIds()).toEqual([])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a synthetic Graduated for a launch the source has not seen is skipped with the unknown-launch warning", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log())
+      const batch = await t.ingest(g.block, g.launch.blockNumber + 1n)
+      expect(batch.events).toEqual([])
+      expect(batch.pools).toEqual([])
+      expect(t.warnings.map((w) => w.msg)).toEqual([
+        "ignoring Hookit curve event for an unknown launch",
+      ])
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a synthetic Graduated from another emitter is ignored", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log({ address: "0x00000000000000000000000000000000000bad01" }))
+      await t.ingest(g.launch.blockNumber)
+      const batch = await t.ingest(g.block, g.launch.blockNumber + 1n)
+      expect(batch.events).toEqual([])
+      expect(batch.pools).toEqual([])
+      expect(t.warnings.filter((w) => w.msg !== "token metadata not fetched")).toEqual([])
+      expect((await t.sql`select phase from indexer.tokens`)[0]!.phase).toBe("curve")
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a synthetic Graduated with truncated data is skipped", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      t.chain.add(g.log({ data: g.log().data.slice(0, 66) as Hash }))
+      await t.ingest(g.launch.blockNumber)
+      const batch = await t.ingest(g.block, g.launch.blockNumber + 1n)
+      expect(batch.events).toEqual([])
+      expect(batch.pools).toEqual([])
+      expect((await t.sql`select phase from indexer.tokens`)[0]!.phase).toBe("curve")
+    } finally {
+      await t.sql.end()
+    }
+  })
+
+  it("a synthetic Graduated whose pool id does not hash from its key still registers the id it names, with a warning", async () => {
+    const t = await setup()
+    try {
+      const g = graduationOf(t)
+      const other = pad(toHex(0xabc), { size: 32 }) as Hash
+      t.chain.add(g.log({ topics: [HOOKIT_TOPICS.graduated, pad(toHex(1n), { size: 32 }), other] }))
+      await t.ingest(g.launch.blockNumber)
+      await t.ingest(g.block, g.launch.blockNumber + 1n)
+      expect((await t.sql`select pool_id from indexer.pools`)[0]!.pool_id).toBe(other)
+      expect(
+        t.warnings.map((w) => w.msg).filter((m) => m !== "token metadata not fetched"),
+      ).toEqual(["Hookit graduation pool id does not match its pool key"])
     } finally {
       await t.sql.end()
     }

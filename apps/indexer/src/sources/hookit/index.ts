@@ -13,12 +13,16 @@ import {
   HOOKIT_LOG_TOPICS,
   HOOKIT_MASTER_FACTORIES,
   type HookitLog,
+  hookitBondEvent,
   hookitClassicLaunchEvent,
+  hookitLaunchId,
   hookitMasterLaunchEvent,
   hookitTradeEvent,
   inlineJson,
   type LaunchMetadataFields,
+  type PoolKey,
   parseHookitMetadata,
+  poolIdOf,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
@@ -40,6 +44,8 @@ const METADATA_CONCURRENCY = 4
 const LAUNCH_READS = 4
 /** Unknown emitters named in a warning; past this one warning says there are more. */
 const MAX_WARNED = 1_000
+/** Tick spacing of every graduated pool, part of its key. */
+const GRADUATED_TICK_SPACING = 60
 
 type Of<K extends HookitLog["kind"]> = Extract<HookitLog, { kind: K }>
 type Master = Of<"masterLaunched">
@@ -79,11 +85,14 @@ export type ClassicRow = {
   sold: bigint
   block: bigint
 }
+export type Bond = { token: Address; block: bigint; totalSupply: bigint }
 export type Sold = { token: Address; sold: bigint; block: bigint }
 export type HookitBatch = {
   hooks: { address: Address; discoveredBlock: bigint }[]
   tokens: HookitTokenRow[]
   classic: ClassicRow[]
+  /** Tokens that graduated in this span, with the supply read at the graduation block. */
+  bonds: Bond[]
   pools: PoolEntry[]
   trades: TradeRow[]
   curve: CurveRow[]
@@ -181,8 +190,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
     const items: Item[] = []
     for (const log of [...logs].sort(byPosition)) {
       const d = decodeHookitLog(log)
-      // Graduation is not handled yet; its log is not kept.
-      if (!d || d.kind === "graduated") continue
+      if (!d) continue
       const trusted = MASTER_KINDS.has(d.kind)
         ? HOOKIT_MASTER_FACTORIES.has(log.address)
         : log.address === HOOKIT_BONDING_FACTORY
@@ -279,6 +287,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
       hooks: [],
       tokens: [],
       classic: [],
+      bonds: [],
       pools: [],
       trades: [],
       curve: [],
@@ -493,7 +502,12 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
           })
           batch.events.push({ event, block: blockNumber, blockHash })
           touch(known, blockNumber)
-        } else if (d.kind === "bought" || d.kind === "sold" || d.kind === "drop") {
+        } else if (
+          d.kind === "bought" ||
+          d.kind === "sold" ||
+          d.kind === "drop" ||
+          d.kind === "graduated"
+        ) {
           const known = curves.get(d.launchId)
           if (!known || (d.kind === "drop" && d.token !== known.token)) {
             if (!warnedLaunches.has(d.launchId)) {
@@ -503,6 +517,59 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
                 tx: log.transactionHash,
               })
             }
+            continue
+          }
+          if (d.kind === "graduated") {
+            // The graduating trade has already written 10,000 bps; moving tokens into the pool
+            // changes the supply, so it is read again at this block.
+            const [supply] = await chain.readTotalSupplies([known.token], blockNumber)
+            // v4 orders a pool's currencies by address, so either one can be the token.
+            const [currency0, currency1] =
+              known.token < known.quote ? [known.token, known.quote] : [known.quote, known.token]
+            const key: PoolKey = {
+              currency0,
+              currency1,
+              fee: 0,
+              tickSpacing: GRADUATED_TICK_SPACING,
+              hooks: HOOKIT_GRADUATED_FEE_HOOK,
+            }
+            if (poolIdOf(key) !== d.poolId)
+              logger("warn", "Hookit graduation pool id does not match its pool key", {
+                token: known.token,
+                poolId: d.poolId,
+                tx: log.transactionHash,
+              })
+            const pool: PoolEntry = {
+              poolId: d.poolId,
+              poolManager: UNISWAP_V4_POOL_MANAGER,
+              token: known.token,
+              launchId: hookitLaunchId(known.token),
+              launchpad: "hookit",
+              quoteAsset: known.quote,
+              tokenIsCurrency0: known.token < known.quote,
+              createdBlock: blockNumber,
+              hook: HOOKIT_GRADUATED_FEE_HOOK,
+              // The graduation position is full range, which the registry holds as no ticks.
+            }
+            pools.add(pool, supply!, blockNumber)
+            batch.pools.push(pool)
+            batch.bonds.push({ token: known.token, block: blockNumber, totalSupply: supply! })
+            batch.events.push({
+              event: hookitBondEvent(d, { token: known.token, quote: known.quote }, meta),
+              block: blockNumber,
+              blockHash,
+            })
+            known.progressBps = 10_000
+            const before = curveRows.get(known.token)
+            curveRows.set(known.token, {
+              token: known.token,
+              progressBps: 10_000,
+              curveValue: before?.curveValue ?? classicState(known.curve, known.sold).realQuote,
+              target: known.curve.graduationQuote,
+              marketCap:
+                before?.marketCap ?? classicMarketCap(known.curve, known.sold, known.supply),
+              updatedBlock: blockNumber,
+            })
             continue
           }
           known.sold =
