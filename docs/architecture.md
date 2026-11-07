@@ -91,7 +91,7 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 
 | Table | Key fields |
 | --- | --- |
-| `tokens` | address, launchpad, name, ticker, creator, created_at, phase, quote_asset, paired_stock, ath_market_cap, ath_block, dead_balance, dead_balance_block |
+| `tokens` | address, launchpad, name, ticker, creator, created_at, phase (`curve`, `bonded`, or `pool` for a token that starts in a pool), quote_asset, paired_stock, ath_market_cap, ath_block, dead_balance, dead_balance_block |
 | `curve_state` | token, progress_bps, curve_value, target, market_cap, updated_block |
 | `trades` | tx_hash, log_index, token, side, trader, amount_in, amount_out, block, venue, pool_id |
 | `pools` | pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0, created_block. The pool registry (ADR 0033) |

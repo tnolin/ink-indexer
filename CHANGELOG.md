@@ -11,7 +11,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Indexer: transfers of a Hookit token to the zero address lower its total supply once the token trades in a pool.
 - Events: optional `markets` on `launchpad.launch`, the quote asset and pool id of each market of a multi-market token, and optional `tokenLiquidity` on `launchpad.swap`, the token side inside the tick range of a pool that has one (`events-v4`).
 - SDK: Hookit decoding, module names, Classic curve math, range-aware reserves (`reservesInRange`), event builders, state reads and metadata parsing.
-- DB: migration 0018 adds the `hookit` hook kind, the Hookit hooks, per-pool hook, tick range and ath columns, `tokens.total_supply_block` and the `hookit_curves` table of Classic curve state. `target_raise` and `sale_supply` on tokens can now be null.
+- DB: migration 0018 adds the `hookit` hook kind, the Hookit hooks, per-pool hook, tick range and ath columns, `tokens.total_supply_block` and the `hookit_curves` table of Classic curve state. `tokens.phase` also accepts `pool`, which Master tokens are stored with because they start in a pool; Classic tokens are `curve` and then `bonded`. `target_raise` and `sale_supply` on tokens can now be null.
 
 ### Fixed
 

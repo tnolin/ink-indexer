@@ -293,6 +293,23 @@ it("a hookit hook row is accepted and an unknown kind is still refused", async (
   await expect(hook("0x00000000000000000000000000000000000000f5", "other")).rejects.toThrow()
 })
 
+it("tokens.phase accepts pool and still refuses another value", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const [hook] = HOOKIT_HOOKS[0]
+  const insert = (address: string, phase: string) => sql`
+    insert into indexer.tokens (address, launchpad, hook, launch_id, creator, created_block, created_at,
+      quote_asset, total_supply, target_raise, sale_supply, gain_bps, phase)
+    values (${address}, 'hookit', ${hook}, ${address}, ${hook}, 1, now(), ${QUOTE}, 1000, null, null, 0, ${phase})`
+  await insert(tokenAt(1), "pool")
+  await insert(tokenAt(2), "curve")
+  await insert(tokenAt(3), "bonded")
+  await expect(insert(tokenAt(4), "other")).rejects.toThrow()
+  expect(
+    (await sql`select phase from indexer.tokens order by address`).map((r) => r.phase),
+  ).toEqual(["pool", "curve", "bonded"])
+})
+
 it("pools gain nullable hook, tick range and ath columns", async () => {
   await sql`drop schema if exists indexer cascade`
   await migrate(sql)

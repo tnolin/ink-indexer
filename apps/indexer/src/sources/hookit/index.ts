@@ -78,6 +78,8 @@ export type HookitTokenRow = {
   /** Null for a Master token, which starts in a pool. */
   targetRaise: bigint | null
   saleSupply: bigint | null
+  /** `pool` for a Master token, which starts in a pool; `curve` for a Classic token. */
+  phase: "curve" | "pool"
 }
 export type ClassicRow = {
   token: Address
@@ -427,6 +429,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
             totalSupply: read.supply,
             targetRaise: null,
             saleSupply: null,
+            phase: "pool",
           })
           batch.events.push({ event, block: blockNumber, blockHash })
           // A launch with one market has no MarketLaunched; its only pool is the launch's own.
@@ -502,6 +505,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
             totalSupply: read.supply,
             targetRaise: d.graduationQuote,
             saleSupply: state.curveSupply,
+            phase: "curve",
           })
           batch.events.push({ event, block: blockNumber, blockHash })
           touch(known, blockNumber)

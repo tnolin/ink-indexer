@@ -235,6 +235,7 @@ describe("Hookit Master launches", () => {
         target_raise: null,
         sale_supply: null,
         total_supply_block: f.blockNumber.toString(),
+        phase: "pool",
         launchpad: "hookit",
       })
       const [stored] = await t.sql`select tick_lower, tick_upper, hook from indexer.pools`

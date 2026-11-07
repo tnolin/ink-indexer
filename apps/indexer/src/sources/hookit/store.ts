@@ -105,6 +105,7 @@ export async function writeRows(tx: Tx, batch: HookitBatch) {
       target_raise: t.targetRaise === null ? null : s(t.targetRaise),
       sale_supply: t.saleSupply === null ? null : s(t.saleSupply),
       gain_bps: null,
+      phase: t.phase,
     }))
     for (const part of chunks(rows))
       await tx`insert into indexer.tokens ${tx(part)} on conflict (address) do nothing`

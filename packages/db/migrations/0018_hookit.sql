@@ -4,6 +4,11 @@ alter table indexer.hooks drop constraint hooks_kind_check;
 alter table indexer.hooks add constraint hooks_kind_check
   check (kind in ('native', 'xstocks', 'inkfun', 'tsunami', 'hookit'));
 
+-- A token that starts in a pool never has a curve, so it gets its own phase.
+alter table indexer.tokens drop constraint tokens_phase_check;
+alter table indexer.tokens add constraint tokens_phase_check
+  check (phase in ('curve', 'bonded', 'pool'));
+
 alter table indexer.tokens
   alter column target_raise drop not null,
   alter column sale_supply drop not null,
