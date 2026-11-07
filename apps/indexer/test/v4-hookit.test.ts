@@ -11,6 +11,7 @@ import {
   poolPrice,
   quoteReserve,
   RIPTIDE_VAULT,
+  SWAP_TOPIC,
   TRANSFER_TOPIC,
   ZERO_ADDRESS,
 } from "@ink-indexer/sdk"
@@ -208,16 +209,42 @@ describe("v4 source: Hookit hook swaps", () => {
     expect(ev!.trader).not.toBe(f.sender)
   })
 
-  it("a trader the registry holds for a transaction replaces the transaction's sender", async () => {
+  it("a trader the registry holds for a transaction replaces the sender for the swaps of the contract it names", async () => {
     const f = loadHookitFixture("hookit-inky-launch")
     const t = setup("hookit-inky-launch", { supplyBlock: f.blockNumber - 1n })
     addFixture(t.chain, f)
     const buyer: Address = "0x00000000000000000000000000000000000000b7"
-    t.pools.setTraderOf(f.txHash, buyer)
+    const via: Address = "0x99c6f8921858660881186296c39a07d1b30dc039"
+    t.pools.setTraderOf(f.txHash, buyer, via)
     const batch = await t.run(f.blockNumber)
-    expect(batch.trades.length).toBeGreaterThan(0)
-    expect(batch.trades.every((tr) => tr.trader === buyer)).toBe(true)
-    expect(eventsOf(batch).every((e) => e.trader === buyer)).toBe(true)
+    // Only the swap the named contract made takes the registry's trader; the others keep the sender.
+    const mine = eventsOf(batch).filter((e) => e.trader === buyer)
+    expect(mine).toHaveLength(1)
+    expect(
+      eventsOf(batch)
+        .filter((e) => e.trader !== buyer)
+        .every((e) => e.trader === f.sender),
+    ).toBe(true)
+  })
+
+  it("a swap by another contract in the same transaction keeps the transaction's sender (synthetic)", async () => {
+    const f = loadHookitFixture("hookit-inky-launch")
+    const t = setup("hookit-inky-launch", { supplyBlock: f.blockNumber - 1n })
+    addFixture(t.chain, f)
+    const buyer: Address = "0x00000000000000000000000000000000000000b7"
+    const factory: Address = "0x99c6f8921858660881186296c39a07d1b30dc039"
+    t.pools.setTraderOf(f.txHash, buyer, factory)
+    const swap = t.chain.logs.find(
+      (l) => l.topics[0] === SWAP_TOPIC && l.topics[2]!.endsWith(factory.slice(2)),
+    )!
+    const router = `0x${"0".repeat(24)}00000000000000000000000000000000000000a9`
+    t.chain.add({
+      ...swap,
+      logIndex: swap.logIndex + 100,
+      topics: [swap.topics[0]!, swap.topics[1]!, router as Hash],
+    })
+    const traders = eventsOf(await t.run(f.blockNumber)).map((e) => e.trader)
+    expect(traders.sort()).toEqual([buyer, f.sender].sort())
   })
 
   it("a malformed Swap log is skipped and the span still completes", async () => {
@@ -832,6 +859,24 @@ describe("v4 source: Hookit state through the database", () => {
     } finally {
       await t.sql.end()
     }
+  })
+})
+
+describe("v4 source: reloads and the tokens a process registered itself", () => {
+  it("a reload does not re-read the supply of a token this process's launch source registered", async () => {
+    const launch = loadHookitFixture("hookit-hkt-launch")
+    const t = setup("hookit-hkt-launch", { supplyBlock: launch.blockNumber })
+    addFixture(t.chain, launch)
+    // The registry was filled by the launch source in this process, not by a reload.
+    await t.run(launch.blockNumber)
+    await t.source.reload()
+    await t.source.process([[], []], {
+      toBlock: launch.blockNumber + 1n,
+      live: false,
+      readStateAt: 61_000_000n,
+    })
+    expect(t.pools.marks(t.token)?.supplyBlock).toBe(launch.blockNumber)
+    expect(t.chain.supplyReads.filter((r) => r.block === 61_000_000n)).toEqual([])
   })
 })
 

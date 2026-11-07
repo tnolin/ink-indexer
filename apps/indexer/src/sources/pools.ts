@@ -67,7 +67,7 @@ export class PoolRegistry {
   private marksByToken = new Map<Address, TokenMarks>()
   private marksByPool = new Map<Hash, PoolMarks>()
   private poolsOfToken = new Map<Address, Set<Hash>>()
-  private traderByTx = new Map<Hash, Address>()
+  private traderByTx = new Map<Hash, { trader: Address; via: Address }>()
 
   byId(poolId: Hash): PoolEntry | undefined {
     return this.pools.get(poolId)
@@ -109,16 +109,19 @@ export class PoolRegistry {
   }
 
   /**
-   * Makes `trader` the trader of the pool swaps in a transaction, in place of the transaction's
-   * sender. A source that learns the real trader from another log of the transaction (a launch's
-   * dev buy, made by a factory on the creator's behalf) sets it before the swaps are processed.
+   * Makes `trader` the trader of the pool swaps `via` a contract in a transaction, in place of the
+   * transaction's sender. A source that learns the real trader from another log of the transaction
+   * (a launch's dev buy, made by a factory on the creator's behalf) sets it before the swaps are
+   * processed. Swaps by any other contract in the transaction keep the sender.
    */
-  setTraderOf(txHash: Hash, trader: Address): void {
-    this.traderByTx.set(txHash, trader)
+  setTraderOf(txHash: Hash, trader: Address, via: Address): void {
+    this.traderByTx.set(txHash, { trader, via })
   }
 
-  traderOf(txHash: Hash): Address | undefined {
-    return this.traderByTx.get(txHash)
+  /** The trader set for a swap made by `swapSender` in the transaction, if any. */
+  traderOf(txHash: Hash, swapSender: Address): Address | undefined {
+    const t = this.traderByTx.get(txHash)
+    return t && t.via === swapSender ? t.trader : undefined
   }
 
   forgetTraderOf(txHash: Hash): void {

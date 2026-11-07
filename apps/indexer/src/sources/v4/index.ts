@@ -123,7 +123,7 @@ export function v4Source(deps: {
     },
     async process([swapLogs = [], burnLogs = []], { toBlock, live, readStateAt }) {
       const late = await logsOfNewPools(toBlock)
-      return processLogs([...swapLogs, ...late.swaps], [...burnLogs, ...late.burns], {
+      const batch = await processLogs([...swapLogs, ...late.swaps], [...burnLogs, ...late.burns], {
         chain,
         pools,
         readDeadAt: readStateAt ?? (live ? toBlock : null),
@@ -131,6 +131,10 @@ export function v4Source(deps: {
         live,
         blockReads: deps.blockReads,
       })
+      // Tokens registered in this process (by a launch source) have their state from their own
+      // block, so a later reload must not read them again as if another process had added them.
+      for (const t of pools.tokens()) followed.add(t)
+      return batch
     },
     write: writeRows,
     async prepareRollback(fork) {
@@ -376,7 +380,8 @@ export async function processLogs(
       const trader =
         swap.sender === HOOKIT_BUYBACK
           ? HOOKIT_BUYBACK
-          : (pools.traderOf(log.transactionHash) ?? block.senders.get(log.transactionHash))
+          : (pools.traderOf(log.transactionHash, swap.sender) ??
+            block.senders.get(log.transactionHash))
       if (!trader) throw new BlockNotServedError(blockNumber)
       const event = swapEvent(
         swap,
