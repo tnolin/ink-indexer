@@ -18,6 +18,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import { droppedLogs } from "../dropped"
 import type { AthRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { blockSendersFor, servedAt } from "../senders"
@@ -92,8 +93,16 @@ export function v4Source(deps: {
   pools: PoolRegistry
   /** Block-sender reads a backfill span keeps in flight; tests lower it. */
   blockReads?: number
+  /** The clock the dropped-log warning limit reads; tests inject one. */
+  now?: () => number
 }): Source<V4Batch, RollbackReads> {
   const { sql, chain, pools } = deps
+  const dropped = droppedLogs({
+    source: "v4",
+    logger: deps.logger,
+    topics: [SWAP_TOPIC, TRANSFER_TOPIC],
+    now: deps.now,
+  })
   // The pool ids the last `filters` call asked for; null when the v4 group was not picked.
   let asked: Set<Hash> | null = null
   // The tokens whose burns that call asked for.
@@ -134,6 +143,7 @@ export function v4Source(deps: {
         readSinceWrite,
         live,
         blockReads: deps.blockReads,
+        dropped,
       })
       // Tokens registered in this process (by a launch source) have their state from their own
       // block, so a later reload must not read them again as if another process had added them.
@@ -237,6 +247,8 @@ export async function processLogs(
     /** The live tick reads each block's senders when it reaches it; a backfill span reads them up front. */
     live: boolean
     blockReads?: number
+    /** Called with a swap or transfer log that did not decode. */
+    dropped?: (log: ChainLog) => void
     /** Tokens with a stored dead balance to read again; the ones read are removed. */
     refresh?: Set<Address>
     /** Receives the tokens whose state this span read, until the batch is written. */
@@ -296,6 +308,7 @@ export async function processLogs(
   const kept: Kept[] = []
   for (const log of swapLogs) {
     const swap = decodeSwap(log)
+    if (!swap) deps.dropped?.(log)
     const pool = swap && pools.byId(swap.poolId)
     // A pool's swaps count only when its own PoolManager emits them.
     if (!swap || !pool || log.address.toLowerCase() !== pool.poolManager) continue
@@ -309,7 +322,10 @@ export async function processLogs(
   }
   for (const log of burnLogs) {
     const t = decodeTransfer(log)
-    if (!t) continue
+    if (!t) {
+      deps.dropped?.(log)
+      continue
+    }
     const token = log.address.toLowerCase() as Address
     if (t.to === DEAD_ADDRESS && deadReadAt.has(token))
       kept.push({ kind: "burn", log, token, value: t.value })

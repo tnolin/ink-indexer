@@ -35,6 +35,7 @@ import { fetchIpfsJson } from "../../ipfs"
 import type { Logger } from "../../log"
 import { isTransportError, type LogFilter } from "../../rpc"
 import type { Reporter } from "../../sentry"
+import { droppedLogs } from "../dropped"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { blockSendersFor } from "../senders"
@@ -126,6 +127,8 @@ export type HookitDeps = {
   ipfs: { gateway: string; fetch?: typeof fetch }
   /** Block-sender reads a backfill span keeps in flight; tests lower it. */
   blockReads?: number
+  /** The clock the dropped-log warning limit reads; tests inject one. */
+  now?: () => number
 }
 
 /** Every Hookit event: one topic0 position matching any of the event signatures. */
@@ -173,6 +176,12 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
   const curves = new Map<bigint, KnownClassic>()
   const knownHooks = new Set<Address>()
   const warned = new Set<Address>()
+  const dropped = droppedLogs({
+    source: "hookit",
+    logger,
+    topics: HOOKIT_LOG_TOPICS,
+    now: deps.now,
+  })
   let warnedTooMany = false
   const warnedLaunches = new Set<bigint>()
   const reportedFactories = new Set<Address>()
@@ -200,7 +209,10 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
     const items: Item[] = []
     for (const log of [...logs].sort(byPosition)) {
       const d = decodeHookitLog(log)
-      if (!d) continue
+      if (!d) {
+        dropped(log)
+        continue
+      }
       const trusted = MASTER_KINDS.has(d.kind)
         ? HOOKIT_MASTER_FACTORIES.has(log.address)
         : log.address === HOOKIT_BONDING_FACTORY

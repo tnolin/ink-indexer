@@ -31,6 +31,7 @@ import { BlockNotServedError } from "../../errors"
 import { fetchIpfsJson } from "../../ipfs"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import { droppedLogs } from "../dropped"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
@@ -87,6 +88,8 @@ export type InkfunDeps = {
   logger: Logger
   pools: PoolRegistry
   ipfs: { gateway: string; fetch?: typeof fetch }
+  /** The clock the dropped-log warning limit reads; tests inject one. */
+  now?: () => number
 }
 
 type Item = { log: ChainLog; d: InkfunLog }
@@ -109,6 +112,12 @@ const marketCapOf = (curve: InkfunCurve, sold: bigint, supply: bigint) =>
  */
 export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
   const { sql, chain, logger, pools } = deps
+  const dropped = droppedLogs({
+    source: "inkfun",
+    logger,
+    topics: INKFUN_LOG_TOPICS,
+    now: deps.now,
+  })
   const curves = new Map<Address, KnownCurve>()
   const byToken = new Map<Address, KnownCurve>()
   const warned = new Set<Address>()
@@ -141,7 +150,10 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
     const createdTokens = new Set<Address>()
     for (const log of [...logs].sort(byPosition)) {
       const d = decodeInkfunLog(log)
-      if (!d) continue
+      if (!d) {
+        dropped(log)
+        continue
+      }
       let ok: boolean
       switch (d.kind) {
         case "launchCreated":

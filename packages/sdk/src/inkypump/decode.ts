@@ -1,11 +1,4 @@
-import {
-  AbiEventSignatureNotFoundError,
-  type Address,
-  decodeEventLog,
-  type Hash,
-  type Hex,
-  toHex,
-} from "viem"
+import { type Address, decodeEventLog, type Hash, type Hex, toHex } from "viem"
 import { hookEventsAbi, XSTOCKS_HOOK_CREATED_TOPIC } from "./abi"
 
 export type LaunchCreated = {
@@ -77,13 +70,13 @@ function decodeHookEvent(log: { topics: readonly Hex[]; data: Hex }) {
       topics: log.topics as [Hex, ...Hex[]],
       data: log.data,
     })
-  } catch (err) {
-    if (err instanceof AbiEventSignatureNotFoundError) return null
-    throw err
+  } catch {
+    // An unknown signature, or data that does not decode: one malformed log must not fail a span.
+    return null
   }
 }
 
-/** Decodes one InkyPump V2 log. Returns null for a topic0 it doesn't know. Does not check the emitter. */
+/** Decodes one InkyPump V2 log. Returns null for a topic0 it doesn't know and for a log whose data doesn't decode. Does not check the emitter. */
 export function decodeLog(log: { topics: readonly Hex[]; data: Hex }): DecodedLog | null {
   const [topic0, t1, t2, t3] = log.topics
   if (topic0 === undefined) return null

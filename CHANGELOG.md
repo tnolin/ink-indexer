@@ -6,6 +6,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Added
 
+- Indexer: a log that carries a topic a source handles but does not decode is dropped with one warning naming its emitter, transaction hash and log index. Each emitter warns at most once every 10 minutes, with the number of logs dropped since its last warning, and warnings stop after 1,000 distinct emitters with one notice.
 - Indexer: Hookit launches, from the Master factories (tokens that trade in concentrated Uniswap v4 pools from their first block, with several pools for a multi-market token) and the Classic factory (a bonding curve that graduates into a pool). A launch's name and ticker come from the token's `name()` and `symbol()`, and its image, description and links from IPFS or inline metadata. Classic buys, sells, progress and graduation, and the swaps in every Hookit pool, are indexed too. The platform and backfill name is `hookit`; it also turns on `v4-swaps` and is part of the default `INDEXER_SOURCES`. `HOOKIT_IPFS_GATEWAY` sets the gateway for metadata. See ADR 0039.
 - Indexer: swaps in a concentrated pool carry `quoteLiquidity` inside the pool's tick range and `tokenLiquidity`; full-range pools are unchanged. A Hookit pool's own hook swaps update its state and are not events. Swaps by the protocol's buyback contract have that contract as their trader, and a Master launch's dev buy has the buyer named by `DevBuyExecuted` as its trader. `athMarketCap` is kept per pool for a token with several markets.
 - Indexer: with `SENTRY_DSN` set, a Hookit graduation whose pool id does not match its pool key is reported to Sentry as a warning, as well as logged.
@@ -19,6 +20,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 ### Fixed
 
 - SDK: `decodeSwap` and `decodeTransfer` return null for a log whose data does not decode, so one malformed log no longer fails a span.
+- SDK: the InkyPump `decodeLog` returns null for a log whose data does not decode, as the other decoders do, instead of throwing and failing the span.
 - Indexer: Tsunami image URLs built from the gateway are limited to 2,048 characters.
 - Indexer: a backfill or live span that starts with no pool registered now reads the swaps and burns of pools that other sources register in that span; they were skipped before, so a backfill on an empty database lost its first span's swaps.
 

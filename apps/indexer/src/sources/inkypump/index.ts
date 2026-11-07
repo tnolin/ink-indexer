@@ -25,6 +25,7 @@ import type { Chain } from "../../chain"
 import { BlockNotServedError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
+import { droppedLogs } from "../dropped"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { type EventRow, pick, type Source } from "../source"
 import { HookRegistry, type HookRow, nativeHookRows } from "./hooks"
@@ -100,6 +101,8 @@ export type SourceDeps = {
   pools: PoolRegistry
   logger: Logger
   loadLaunches(keys: LaunchKey[]): Promise<KnownLaunch[]>
+  /** Called with a log of a handled topic that did not decode. */
+  dropped?: (log: ChainLog) => void
 }
 
 type Item = { log: ChainLog; d: Exclude<DecodedLog, XStocksHookCreated> }
@@ -117,8 +120,11 @@ export function inkypumpSource(deps: {
   chain: SourceDeps["chain"]
   logger: Logger
   pools: PoolRegistry
+  /** The clock the dropped-log warning limit reads; tests inject one. */
+  now?: () => number
 }): Source<Batch, CurveRow[]> {
   const { sql, chain, logger, pools } = deps
+  const dropped = droppedLogs({ source: "inkypump", logger, topics: LOG_TOPICS, now: deps.now })
   let registry = new HookRegistry([], logger)
   return {
     name: "inkypump",
@@ -129,6 +135,7 @@ export function inkypumpSource(deps: {
         registry,
         pools,
         logger,
+        dropped,
         loadLaunches: (keys) => loadLaunches(sql, keys),
       }),
     write: writeRows,
@@ -431,6 +438,7 @@ async function trustAndDecode(logs: ChainLog[], deps: SourceDeps, batch: Batch):
       continue
     }
     const d = decodeLog(log)
+    if (!d) deps.dropped?.(log)
     if (!d || d.kind === "xstocksHookCreated") continue
     items.push({ log, d })
   }
