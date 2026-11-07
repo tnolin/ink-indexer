@@ -41,6 +41,41 @@ describe("PoolRegistry", () => {
       athBlock: 9n,
       deadBalance: null,
       deadBalanceBlock: null,
+      supplyBlock: null,
+    })
+  })
+
+  describe("with several markets", () => {
+    const WAAPLX: Address = "0x00000000000000000000000000000000000000c1"
+    const WNVDAX: Address = "0x00000000000000000000000000000000000000c2"
+    const P1: Hash = `0x${"01".repeat(32)}`
+    const P2: Hash = `0x${"02".repeat(32)}`
+    const hookEntry = (poolId: Hash, quoteAsset: Address): PoolEntry => ({
+      ...entry(T1),
+      poolId,
+      launchpad: "hookit",
+      quoteAsset,
+      hook: HOOK,
+      tickLower: -230_400,
+      tickUpper: 887_220,
+    })
+
+    it("keeps one ath per pool for a token with two markets and the token ath for a single market", () => {
+      const r = new PoolRegistry()
+      r.add(hookEntry(P1, WAAPLX), 1000n)
+      r.add(hookEntry(P2, WNVDAX), 1000n)
+      r.add(entry(T2), 1000n)
+      expect(r.bumpAth(T1, 900n, 5n, P1)).toBe(900n)
+      expect(r.bumpAth(T1, 40n, 6n, P2)).toBe(40n)
+      expect(r.bumpAth(T1, 30n, 7n, P2)).toBe(40n)
+      expect(r.bumpAth(T1, 50n, 8n, P2)).toBe(50n)
+      expect(r.poolMarks(P1)).toEqual({ ath: 900n, athBlock: 5n })
+      expect(r.poolMarks(P2)).toEqual({ ath: 50n, athBlock: 8n })
+      expect(r.marks(T1)).toMatchObject({ ath: 0n, athBlock: null })
+      expect(r.bumpAth(T2, 70n, 9n, POOL)).toBe(70n)
+      expect(r.bumpAth(T2, 60n, 10n, POOL)).toBe(70n)
+      expect(r.marks(T2)).toMatchObject({ ath: 70n, athBlock: 9n })
+      expect(r.poolMarks(POOL)).toBeUndefined()
     })
   })
 
@@ -95,6 +130,7 @@ describe("PoolRegistry.load", () => {
       athBlock: 5n,
       deadBalance: 12n,
       deadBalanceBlock: 6n,
+      supplyBlock: null,
     })
     expect(r.marks(T2)).toEqual({
       totalSupply: 1000n,
@@ -102,6 +138,7 @@ describe("PoolRegistry.load", () => {
       athBlock: 3n,
       deadBalance: null,
       deadBalanceBlock: null,
+      supplyBlock: null,
     })
     expect(r.tokens()).toEqual([T1])
   })
@@ -129,6 +166,72 @@ describe("PoolRegistry.load", () => {
     await now.load(sql)
     expect(now.marks(T1)).toMatchObject({ ath: 9n, athBlock: 300n })
     expect(now.marks(T2)).toMatchObject({ ath: 40n, athBlock: 250n })
+  })
+
+  describe("with several markets", () => {
+    const WAAPLX: Address = "0x00000000000000000000000000000000000000c1"
+    const WNVDAX: Address = "0x00000000000000000000000000000000000000c2"
+    const P1: Hash = `0x${"01".repeat(32)}`
+    const P2: Hash = `0x${"02".repeat(32)}`
+    const insertPool = (poolId: Hash, quote: Address, ath: [bigint, bigint] | null) =>
+      sql`insert into indexer.pools (pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0,
+          created_block, hook, tick_lower, tick_upper, ath_market_cap, ath_block)
+        values (${poolId}, ${entry(T1).poolManager}, ${T1}, 'inkypump', ${quote}, false, 7, ${HOOK}, -230400, 887220,
+          ${ath ? ath[0].toString() : null}, ${ath ? ath[1].toString() : null})`
+
+    it("reload restores ticks, hook and per-pool ath", async () => {
+      await insertPool(P1, WAAPLX, [900n, 5n])
+      await insertPool(P2, WNVDAX, [40n, 6n])
+      await insertPool(POOL, NATIVE, null)
+      await sql`update indexer.tokens set total_supply_block = 4 where address = ${T1}`
+      const r = new PoolRegistry()
+      await r.load(sql)
+      expect(r.byId(P1)).toMatchObject({ hook: HOOK, tickLower: -230_400, tickUpper: 887_220 })
+      expect(r.byId(POOL)).toMatchObject({ hook: HOOK, tickLower: -230_400, tickUpper: 887_220 })
+      expect(r.poolMarks(P1)).toEqual({ ath: 900n, athBlock: 5n })
+      expect(r.poolMarks(P2)).toEqual({ ath: 40n, athBlock: 6n })
+      expect(r.marks(T1)).toMatchObject({ supplyBlock: 4n })
+      // A bump after the reload continues from each pool's own stored ath.
+      expect(r.bumpAth(T1, 100n, 8n, P2)).toBe(100n)
+      expect(r.bumpAth(T1, 100n, 8n, P1)).toBe(900n)
+    })
+
+    it("a pool without a hook or ticks reloads without them", async () => {
+      const p = entry(T1)
+      await sql`insert into indexer.pools (pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0, created_block)
+        values (${p.poolId}, ${p.poolManager}, ${p.token}, ${p.launchpad}, ${p.quoteAsset}, ${p.tokenIsCurrency0}, ${p.createdBlock})`
+      const r = new PoolRegistry()
+      await r.load(sql)
+      expect(r.byId(POOL)).toEqual(p)
+    })
+
+    it("with athAsOf, gives each pool its own ath from its own swaps at or below that block", async () => {
+      // WAAPLX has 6 decimals and WNVDAX 18, so the larger raw number belongs to the other pool.
+      await insertPool(P1, WAAPLX, [4_000_000n, 300n])
+      await insertPool(P2, WNVDAX, [9_000_000_000_000_000_000n, 310n])
+      const swap = (n: number, poolId: Hash, block: number, marketCap: string) =>
+        sql`insert into indexer.events (type, entity, payload, block, block_hash, tx_hash, log_index, confirmed)
+          values ('launchpad.swap', ${T1}, ${sql.json({ marketCap, poolId })}, ${block}, ${`0x${"0".repeat(63)}1`}, ${`0x${n.toString(16).padStart(64, "0")}`}, 0, true)`
+      await swap(1, P1, 100, "2000000")
+      await swap(2, P2, 110, "7000000000000000000")
+      await swap(3, P1, 150, "3000000")
+      await swap(4, P2, 160, "1000000000000000000")
+      await swap(5, P1, 300, "4000000")
+      await swap(6, P2, 310, "9000000000000000000")
+      const r = new PoolRegistry()
+      await r.load(sql, { athAsOf: 200n })
+      expect(r.poolMarks(P1)).toEqual({ ath: 3_000_000n, athBlock: 150n })
+      expect(r.poolMarks(P2)).toEqual({ ath: 7_000_000_000_000_000_000n, athBlock: 110n })
+
+      const early = new PoolRegistry()
+      await early.load(sql, { athAsOf: 105n })
+      expect(early.poolMarks(P1)).toEqual({ ath: 2_000_000n, athBlock: 100n })
+      expect(early.poolMarks(P2)).toEqual({ ath: 0n, athBlock: null })
+
+      const now = new PoolRegistry()
+      await now.load(sql)
+      expect(now.poolMarks(P1)).toEqual({ ath: 4_000_000n, athBlock: 300n })
+    })
   })
 
   it("with athAsOf, keeps the stored ath of a token whose ath was set at or below that block", async () => {

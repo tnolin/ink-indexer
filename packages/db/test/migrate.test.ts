@@ -24,6 +24,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "0015_v4_pools.sql",
     "0016_inkfun.sql",
     "0017_tsunami.sql",
+    "0018_hookit.sql",
   ])
   expect(await migrate(sql)).toEqual([])
   const tables = await sql<{ table_name: string }[]>`
@@ -229,4 +230,81 @@ it("a tsunami hook row is accepted and an unknown kind is still refused", async 
   expect(
     await sql`select kind from indexer.hooks where address = '0x00000000000000000000000000000000000000f2'`,
   ).toEqual([{ kind: "tsunami" }])
+})
+
+const HOOKIT_HOOKS = [
+  // Creation blocks of the six Master hooks and the Classic graduation hook, from the explorer.
+  ["0xbd7e7815c640a67cabd9a93a15d1f250aaeeaac8", 56_517_960n],
+  ["0x7c629422e9ac982ce72323d48ead94fcc092aac8", 56_618_517n],
+  ["0x33200d9521ed99afbda8575f05348a583c7aaac8", 56_759_989n],
+  ["0x4b533c432516fc1be4b0baefe6bff0942ad87fff", 57_556_983n],
+  ["0x8a29b2c508007707bbff1814386aa968bbecbfff", 58_683_272n],
+  ["0x1eee7628d070280da1b676c04d358d68b36f3fff", 59_883_877n],
+  ["0xaac738f140d529bc0662bddd812964d843362088", 56_517_988n],
+] as const
+
+it("0018 seeds the seven Hookit hooks", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const rows =
+    await sql`select address, launchpad, kind, abi_family, quote_asset, quote_decimals, discovered_block
+    from indexer.hooks where launchpad = 'hookit' order by address`
+  expect(rows).toEqual(
+    [...HOOKIT_HOOKS]
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([address, discovered_block]) => ({
+        address,
+        launchpad: "hookit",
+        kind: "hookit",
+        abi_family: "hookit",
+        quote_asset: "0x0000000000000000000000000000000000000000",
+        quote_decimals: 18,
+        discovered_block,
+      })),
+  )
+})
+
+it("a Master token row with null target_raise and sale_supply is accepted", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const [hook] = HOOKIT_HOOKS[0]
+  const insert = (address: string, targetRaise: number | null) => sql`
+    insert into indexer.tokens (address, launchpad, hook, launch_id, creator, created_block, created_at,
+      quote_asset, total_supply, target_raise, sale_supply, gain_bps)
+    values (${address}, 'hookit', ${hook}, ${address}, ${hook}, 1, now(), ${QUOTE}, 1000, ${targetRaise}, ${targetRaise}, 0)`
+  await insert(tokenAt(1), null)
+  await insert(tokenAt(2), 5)
+  expect(
+    await sql`select target_raise::text, sale_supply::text, total_supply_block from indexer.tokens order by address`,
+  ).toEqual([
+    { target_raise: null, sale_supply: null, total_supply_block: null },
+    { target_raise: "5", sale_supply: "5", total_supply_block: null },
+  ])
+})
+
+it("a hookit hook row is accepted and an unknown kind is still refused", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const hook = (address: string, kind: string) => sql`insert into indexer.hooks
+    (address, launchpad, kind, abi_family, quote_asset, quote_decimals, discovered_block)
+    values (${address}, 'hookit', ${kind}, 'hookit', ${NATIVE}, 18, 1)`
+  await hook("0x00000000000000000000000000000000000000f4", "hookit")
+  await expect(hook("0x00000000000000000000000000000000000000f5", "other")).rejects.toThrow()
+})
+
+it("pools gain nullable hook, tick range and ath columns", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const rows = await sql<{ column_name: string; is_nullable: string }[]>`
+    select column_name, is_nullable from information_schema.columns
+    where table_schema = 'indexer' and table_name = 'pools'
+      and column_name in ('hook', 'tick_lower', 'tick_upper', 'ath_market_cap', 'ath_block')
+    order by column_name`
+  expect(rows.map((r) => [r.column_name, r.is_nullable])).toEqual([
+    ["ath_block", "YES"],
+    ["ath_market_cap", "YES"],
+    ["hook", "YES"],
+    ["tick_lower", "YES"],
+    ["tick_upper", "YES"],
+  ])
 })
