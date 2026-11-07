@@ -29,4 +29,5 @@ Hookit launches tokens through two kinds of factory. Master factories create a t
 - A Hookit launch adds no `eth_getLogs` request. A block that holds Hookit logs adds one block fetch for senders. A launch block adds one multicall each for total supply, name and symbol, and metadata URI, plus one `launches(id)` read for a Classic launch and, for an `ipfs://` URI, one gateway fetch.
 - A token's market cap uses its current supply, which falls as the token burns.
 - Concentrated liquidity is valued with the launch's tick range; positions a hook adds later at other ranges are counted as if they shared it.
+- A re-run over blocks already applied to a Classic curve leaves its trade rows as they are: the curve state is exact, and rows missing inside the range are not rewritten.
 - A dev buy made while a backfill runs beside `start` can be written by the live process first, with the transaction's sender as trader; the first copy stands.

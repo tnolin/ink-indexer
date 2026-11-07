@@ -13,6 +13,11 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - SDK: Hookit decoding, module names, Classic curve math, range-aware reserves (`reservesInRange`), event builders, state reads and metadata parsing.
 - DB: migration 0018 adds the `hookit` hook kind, the Hookit hooks, per-pool hook, tick range and ath columns, `tokens.total_supply_block` and the `hookit_curves` table of Classic curve state. `target_raise` and `sale_supply` on tokens can now be null.
 
+### Fixed
+
+- SDK: `decodeSwap` and `decodeTransfer` return null for a log whose data does not decode, so one malformed log no longer fails a span.
+- Indexer: Tsunami image URLs built from the gateway are limited to 2,048 characters.
+
 ## [indexer-v0.6.1] - 2026-11-02
 
 ### Added
