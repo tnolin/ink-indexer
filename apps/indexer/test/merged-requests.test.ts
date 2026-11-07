@@ -5,6 +5,7 @@ import {
   CHIMERA_FACTORY,
   type ChainLog,
   DEAD_ADDRESS,
+  HOOKIT_BONDING_FACTORY,
   LOG_TOPICS,
   NATIVE_QUOTE_ASSET,
   NFT_TOPICS,
@@ -13,7 +14,6 @@ import {
   SWAP_TOPIC,
   UNISWAP_V4_POOL_MANAGER,
   ZERO_TOPIC,
-  HOOKIT_BONDING_FACTORY,
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
@@ -25,8 +25,8 @@ import {
 } from "../../../packages/sdk/test/builders"
 import {
   loadChimeraCampaigns,
-  loadNftFixture,
   loadHookitFixture,
+  loadNftFixture,
   loadTsunamiFixture,
   NFT_FIXTURES,
 } from "../../../packages/sdk/test/fixtures"
@@ -34,12 +34,12 @@ import type { Chain } from "../src/chain"
 import { readLogs } from "../src/log-plan"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
+import { hookitSource } from "../src/sources/hookit/index"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { PoolRegistry } from "../src/sources/pools"
 import { BACKFILL_SOURCES, type BackfillSource } from "../src/sources/source"
-import { hookitSource } from "../src/sources/hookit/index"
 import { tsunamiSource } from "../src/sources/tsunami/index"
 import { v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
