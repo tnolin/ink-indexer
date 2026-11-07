@@ -26,6 +26,34 @@ Every event has `v` (schema version, currently `2`), `type`, `chainId` (57073), 
 
 `quoteAsset` is the zero address for ETH-quoted launches, or the xStocks wrapper token for stock-quoted launches. `startsInPool` is true for a token that trades in a Uniswap v4 pool from its first block; its `poolId`, `poolManager` and `hook` then describe that pool, and `targetRaise` is `null` because there is no bonding curve. `customHook` and `hookModules` are `null` where they do not apply.
 
+`markets` is optional. A token launched into several pools lists each as `{ "quoteAsset", "poolId" }` in launch order, market 0 first, and `quoteAsset` and `poolId` above describe market 0. It is `null` for a single-market token and for a curve token, and absent from rows written before the field existed, so read it with `markets ?? null`.
+
+A Hookit launch that starts in a pool with two markets:
+
+```json
+{
+  "v": 2, "type": "launchpad.launch", "chainId": 57073, "launchpad": "hookit",
+  "token": "0x00000000000000000000000000000000000000d2",
+  "launchId": "0x00000000000000000000000000000000000000000000000000000000000000d2",
+  "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "logIndex": 3, "blockNumber": "56521188", "blockTimestamp": 1790000000,
+  "hook": "0x00000000000000000000000000000000000000f2",
+  "creator": "0x00000000000000000000000000000000000000c1",
+  "name": "Example", "ticker": "EXM", "description": null, "imageUrl": null,
+  "links": { "telegram": null, "twitter": null, "website": null },
+  "quoteAsset": "0x00000000000000000000000000000000000000a1",
+  "targetRaise": null, "totalSupply": "1000000000000000000000000000",
+  "startsInPool": true,
+  "poolId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "poolManager": "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
+  "customHook": false, "hookModules": ["Anti-Snipe", "Auto-Burn"],
+  "markets": [
+    { "quoteAsset": "0x00000000000000000000000000000000000000a1", "poolId": "0x1111111111111111111111111111111111111111111111111111111111111111" },
+    { "quoteAsset": "0x00000000000000000000000000000000000000a2", "poolId": "0x2222222222222222222222222222222222222222222222222222222222222222" }
+  ]
+}
+```
+
 ## `launchpad.trade`
 
 ```json
@@ -87,6 +115,7 @@ A swap in the Uniswap v4 pool of a token that has bonded.
   "price": "7142857142857142", "marketCap": "7135714285714284858000000",
   "athMarketCap": "9000000000000000000000000",
   "quoteLiquidity": "4000000000000000000",
+  "tokenLiquidity": "9000000000000000000000000",
   "supply": "999000000000000000000000000"
 }
 ```
@@ -96,6 +125,7 @@ A swap in the Uniswap v4 pool of a token that has bonded.
 - `tokenAmount` and `quoteAmount` are the amounts of the pool manager's `Swap` event. They exclude any fee a hook takes, so `quoteAmount` is not necessarily what the wallet paid or received.
 - `supply` is the token's total supply minus the balance of the dead address (`0x…dEaD`), and `marketCap` is `price × supply / 10^18`.
 - `quoteLiquidity` is the pool's quote side after the swap, computed from the pool's in-range liquidity and price. It is exact for a full-range position and approximate when other positions exist.
+- `tokenLiquidity` is the pool's token side after the swap, in token base units, computed the same way. It is optional and absent from earlier rows. For a full-range pool the two sides are equal in value; a concentrated pool holds different amounts of each, so a pool's total liquidity is `quoteLiquidity` plus `tokenLiquidity` valued at `price`.
 - `athMarketCap` covers the token's whole history, curve and pool.
 
 ## Per launchpad
@@ -103,6 +133,8 @@ A swap in the Uniswap v4 pool of a token that has bonded.
 For `inkfun`, `launchId` is the curve contract's address left-padded to 32 bytes, and `hook` is the pool hook the token graduates into. On its trades, `curveValue` is the net quote the curve holds, `soldBps` and `progressBpsAfter` are both the net quote over `target`, and a buy's `quoteAmount` includes the curve fee. After graduation the `launchpad.bond` event carries the pool, and `launchpad.swap` events carry `supply`, the total supply after the graduation burn minus the dead address's balance.
 
 For `tsunami`, `launchId` is the curve contract's address left-padded to 32 bytes, and `hook` is the pool's hook. On its trades, `curveValue` is the net quote raised, `soldBps` and `progressBpsAfter` are the net quote raised over `target` (10,000 at the closing trade), and a buy's `quoteAmount` is the gross amount spent. Every amount, price, market cap and liquidity is in the quote currency's own base units, which can be 6, 8 or 18 decimals. `totalSupply` and the `supply` on swaps leave out any inventory the Riptide vault holds for a Riptide launch. After graduation the `launchpad.bond` event carries the pool in Calamari's PoolManager, and a pool that Tsunami later moves keeps indexing under the same token.
+
+For `hookit`, `launchId` is the token's address left-padded to 32 bytes, because the factories' numeric ids repeat. A token from a Master factory starts in a Uniswap v4 pool: its launch has `startsInPool: true`, `targetRaise: null`, the pool's `hook`, `customHook` and `hookModules` (the modules the launch enabled, such as `Anti-Snipe` or `Auto-Burn`), and `markets` when it launched into several pools. A token from the bonding factory starts on a curve under the graduated-fee hook: its trades carry `curveValue` (the quote raised), `target` (the graduation quote) and `soldBps` and `progressBpsAfter` (the quote raised over `target`, 10,000 at graduation), and its `launchpad.bond` event carries the pool it graduates into. Every amount, price, market cap and liquidity is in the quote currency's own base units, which can be 6, 8 or 18 decimals.
 
 ## Version 1 rows
 
@@ -113,6 +145,8 @@ Rows written before schema version 2 keep their original payloads with `"v": 1`.
 - `launchpad.trade`: `athMarketCap`.
 - `launchpad.bond`: `poolManager`.
 - `launchpad.swap`: a new event type.
+
+Two optional fields were added to version 2 without a new version: `launchpad.launch` `markets` and `launchpad.swap` `tokenLiquidity`. Rows without them decode as before.
 
 `nft.*` payloads did not change. The package exports `LaunchEventV1`, `TradeEventV1` and `BondEventV1` for the old shapes, and `StoredEvent` for any payload that can be in the table. A reader branches on `v`.
 
