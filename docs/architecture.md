@@ -29,7 +29,8 @@ All sources are on Ink mainnet (chain ID 57073).
  ┌───────────────────────────────────────┐
  │  apps/indexer: sources/*              │
  │  one module per source:               │
- │  InkyPump · ink.fun · Tsunami · Hookit│
+ │  InkyPump · ink.fun · Tsunami         │
+ │  Hookit                               │
  │  NFTs · OpenSea                       │
  └───────────────────────────────────────┘
                     │
@@ -54,8 +55,8 @@ Each source is a module in `apps/indexer/src/sources/`. Adding a protocol means 
 | InkyPump V2 | Launches, curve buys and sells, curve progress, bond to Uniswap V4 | V2 hook events (`LaunchCreated`, `LaunchMetadata`, `Trade`, `LaunchFinalized`) read with `eth_getLogs`. See the [integration guide](https://docs.inkyswap.com/api-reference/contracts/integration-guide.md) |
 | ink.fun | Launches with their IPFS metadata, curve buys and sells, curve progress, migration into a Uniswap v4 pool | One topic-only filter merged with InkyPump's (`LaunchCreated`, `Bought`, `Sold`, `Migrated`), trusted by emitter: the factory, a known curve or the migration module. See ADR 0035 |
 | Tsunami | Launches with their IPFS metadata, curve buys and sells, curve progress, graduation into a Calamari pool, and the move of a pool to a new one | One topic-only filter merged with the other launchpads' (`TokenLaunched` in both signatures, `TokenBought`, `TokenSold`, `TokenMigrated`, `CreatorPoolMigrated`, and the Calamari `Initialize` of a launch's own pool), trusted by emitter: either factory, a curve seen launched, or Calamari's PoolManager. See ADR 0036 |
-| Hookit | Master launches that trade in concentrated Uniswap v4 pools from their first block (one pool per market), Classic launches on a bonding curve with their buys, sells, progress and graduation into a pool, and each launch's IPFS or inline metadata | One topic-only filter merged with the other launchpads' (Master `TokenLaunched`, `MarketLaunched`, `LaunchConfigured` and `DevBuyExecuted`; Classic `TokenLaunched`, `Bought`, `Sold`, `HktHolderDrop` and `Graduated`), trusted by emitter: the five Master factories, the Classic factory or a Classic curve seen launched. See ADR 0039 |
-| Uniswap v4 pools | Swaps in the pools of tracked tokens, with the trader, market cap, all-time-high market cap and pool liquidity; transfers of those tokens to the dead address | PoolManager `Swap` logs filtered to the pool ids in the pool registry, and `Transfer` logs to the dead address, read with `eth_getLogs`. See ADR 0033 |
+| Hookit | Master launches that trade in concentrated Uniswap v4 pools from their first block (one pool per market), Classic launches on a bonding curve with their buys, sells, progress and graduation into a pool, and each launch's IPFS or inline metadata | One topic-only filter merged with the other launchpads' (Master `TokenLaunched`, `MarketLaunched`, `LaunchConfigured` and `DevBuyExecuted`; Classic `TokenLaunched`, `Bought`, `Sold`, `HktHolderDrop` and `Graduated`), trusted by emitter: the five Master factories for Master events, the Classic factory for Classic events. See ADR 0039 |
+| Uniswap v4 pools | Swaps in the pools of tracked tokens, with the trader, market cap, all-time-high market cap and pool liquidity; transfers of those tokens to the dead address (and, for Hookit tokens, to the zero address) | PoolManager `Swap` logs filtered to the pool ids in the pool registry, and `Transfer` logs to the dead address, read with `eth_getLogs`. See ADR 0033 |
 | NFTs (chain) | ERC-721 and ERC-1155 mints and burns, SeaDrop drops and mint progress, Seaport sales, Chimera collection launches | `Transfer`, SeaDrop, `OrderFulfilled` and `CampaignCreated` logs on Ink. See ADR 0016 |
 | OpenSea | Collection pages, drop schedules, floors and stats, listings, item ranks, creator accounts | API v2 with chain slug `ink`, and the Stream API for listings, both drawing on one shared request budget. See ADR 0017 and ADR 0019 |
 

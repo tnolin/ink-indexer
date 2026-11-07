@@ -6,14 +6,12 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Added
 
-- Indexer: Hookit launches, from the Master factories (tokens that trade in concentrated Uniswap v4 pools from their first block, with several pools for a multi-market token) and the Classic factory (a bonding curve that graduates into a pool), with name, image, description and links read from IPFS or inline metadata. Classic buys, sells, progress and graduation, and the swaps in every Hookit pool, are indexed too. The platform and backfill name is `hookit`; it also turns on `v4-swaps` and is part of the default `INDEXER_SOURCES`. `HOOKIT_IPFS_GATEWAY` sets the gateway for metadata. See ADR 0039.
-- Events: optional `markets` on `launchpad.launch`, the quote asset and pool id of each market of a multi-market token, and optional `tokenLiquidity` on `launchpad.swap`, the pool's token side inside its tick range (`events-v4`).
-- DB: migration 0018 adds the `hookit` hook kind, the Hookit hooks, per-pool tick range, hook and ath columns, and the table of Classic curve state. `target_raise` and `sale_supply` on tokens can now be null.
-
-### Changed
-
-- Indexer: `quoteLiquidity` on a swap is the quote amount inside the pool's tick range, which differs from the earlier full-range figure for concentrated pools. A swap made by a Hookit pool's own hook updates the pool's state and is not an event.
-- Indexer: transfers of a Hookit token to the zero address lower its total supply, so `supply` and market cap follow burns.
+- Indexer: Hookit launches, from the Master factories (tokens that trade in concentrated Uniswap v4 pools from their first block, with several pools for a multi-market token) and the Classic factory (a bonding curve that graduates into a pool). A launch's name and ticker come from the token's `name()` and `symbol()`, and its image, description and links from IPFS or inline metadata. Classic buys, sells, progress and graduation, and the swaps in every Hookit pool, are indexed too. The platform and backfill name is `hookit`; it also turns on `v4-swaps` and is part of the default `INDEXER_SOURCES`. `HOOKIT_IPFS_GATEWAY` sets the gateway for metadata. See ADR 0039.
+- Indexer: swaps in a concentrated pool carry `quoteLiquidity` inside the pool's tick range and `tokenLiquidity`; full-range pools are unchanged. A Hookit pool's own hook swaps update its state and are not events. Swaps by the protocol's buyback contract have that contract as their trader, and a Master launch's dev buy has the buyer named by `DevBuyExecuted` as its trader. `athMarketCap` is kept per pool for a token with several markets.
+- Indexer: transfers of a Hookit token to the zero address lower its total supply once the token trades in a pool.
+- Events: optional `markets` on `launchpad.launch`, the quote asset and pool id of each market of a multi-market token, and optional `tokenLiquidity` on `launchpad.swap`, the token side inside the tick range of a pool that has one (`events-v4`).
+- SDK: Hookit decoding, module names, Classic curve math, range-aware reserves (`reservesInRange`), event builders, state reads and metadata parsing.
+- DB: migration 0018 adds the `hookit` hook kind, the Hookit hooks, per-pool hook, tick range and ath columns, `tokens.total_supply_block` and the `hookit_curves` table of Classic curve state. `target_raise` and `sale_supply` on tokens can now be null.
 
 ## [indexer-v0.6.1] - 2026-11-02
 
