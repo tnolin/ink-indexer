@@ -238,6 +238,7 @@ export const HOOKIT_FIXTURES = [
   "hookit-inky-launch",
   "hookit-inky-usdg-wmstrx",
   "hookit-stock-pool-swap",
+  "hookit-a18-launch",
   "hookit-kbtc-launch",
   "hookit-quill-launch",
   "hookit-bloop-launch",
