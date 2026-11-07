@@ -92,6 +92,16 @@ describe("parseHookitMetadata", () => {
     ).toEqual(EMPTY_LINKS)
   })
 
+  it.each([
+    ["a leading space", " javascript:x"],
+    ["a tab inside the scheme", "java\tscript:x"],
+    ["a newline inside the scheme", "java\nscript:x"],
+    ["a carriage return inside the scheme", "java\rscript:x"],
+    ["a leading newline", "\njavascript:x"],
+  ])("drops a link with %s", (_name, website) => {
+    expect(parseHookitMetadata({ website }, GATEWAY)?.links.website).toBeNull()
+  })
+
   it("ignores fields of the wrong type", () => {
     expect(
       parseHookitMetadata(
@@ -111,6 +121,15 @@ describe("parseHookitMetadata", () => {
     ["a 3000-character url", `https://images.example/${"a".repeat(3_000)}`],
   ])("drops an image that is %s", (_name, image) => {
     expect(parseHookitMetadata({ image }, GATEWAY)?.imageUrl).toBeNull()
+  })
+
+  it("drops an ipfs:// image over 2,048 characters", () => {
+    const cid = "b".repeat(5_000)
+    expect(parseHookitMetadata({ image: `ipfs://${cid}` }, GATEWAY)?.imageUrl).toBeNull()
+    const fits = "b".repeat(2_048 - `${GATEWAY}/ipfs/`.length)
+    expect(parseHookitMetadata({ image: `ipfs://${fits}` }, GATEWAY)?.imageUrl).toBe(
+      `${GATEWAY}/ipfs/${fits}`,
+    )
   })
 
   it("keeps an https image", () => {

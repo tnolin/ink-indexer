@@ -57,7 +57,7 @@ export function classicMarketCap(c: ClassicCurve, sold: bigint, supply: bigint):
  * launch and reports 10,000, since the reserves' rounding can leave the raise a wei short.
  */
 export function classicProgressBps(c: ClassicCurve, sold: bigint): number {
-  if (c.graduationQuote <= 0n) return 0
+  if (c.graduationQuote <= 0n || sold <= 0n) return 0
   if (sold >= c.curveSupply) return 10_000
   const bps = (classicState(c, sold).realQuote * 10_000n) / c.graduationQuote
   return bps > 10_000n ? 10_000 : Number(bps)

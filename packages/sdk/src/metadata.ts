@@ -47,5 +47,14 @@ export function httpsImage(v: string): string | null {
   }
 }
 
+/** An image served by `gateway` for an `ipfs://` URI, or an `https:` image; null for anything else or a URL over 2,048 characters. */
+export function launchImage(image: string | null, gateway: string): string | null {
+  if (image === null) return null
+  const cid = ipfsCid(image)
+  if (cid === null) return httpsImage(image)
+  const url = `${gateway}/ipfs/${cid}`
+  return url.length <= MAX_LINK ? url : null
+}
+
 export const object = (v: unknown): Record<string, unknown> | null =>
   typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null

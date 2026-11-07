@@ -1,20 +1,21 @@
 import {
-  httpsImage,
-  ipfsCid,
   type LaunchMetadataFields,
+  launchImage,
   MAX_DESCRIPTION,
   MAX_LINK,
   object,
   textField,
 } from "../metadata"
 
-// shortcut: a fixed bound on the length of an inline URI; Hookit's agent launches use 120 to 300 bytes of JSON, and a larger document would be fetched from IPFS instead.
+// shortcut: a fixed bound on the length of an inline URI; Hookit's agent launches use 120 to 300 bytes of JSON, and a `data:` URI over this length is refused rather than decoded. Raise the bound if a launch needs more.
 const MAX_INLINE_URI = 8_192
 const INLINE_PREFIX = "data:application/json;base64,"
 // Buffer.from(..., "base64") never throws and skips any other character, so the body is checked first.
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
-// shortcut: recorded documents nest two levels deep; deeper input is refused rather than walked.
+// shortcut: recorded documents nest two levels deep; deeper input is refused rather than walked. Raise the bound if a launch records deeper documents.
 const MAX_DEPTH = 8
+const LEADING_CONTROL = new RegExp(`^[${String.fromCharCode(1)}-${String.fromCharCode(32)}]+`)
+const TAB_NEWLINE_CR = /[\t\n\r]/g
 const URI_SCHEME = /^[a-z][a-z0-9+.-]*:/i
 const HTTPS_PREFIX = /^https:/i
 
@@ -52,7 +53,10 @@ function tooDeep(v: unknown): boolean {
 /** A link as written, unless it carries a scheme other than `https:`: creators type links freely, but `javascript:` must not reach a button. */
 const link = (v: unknown): string | null => {
   const s = textField(v, MAX_LINK, false)
-  return s === null || (URI_SCHEME.test(s) && !HTTPS_PREFIX.test(s)) ? null : s
+  if (s === null) return null
+  // URL parsers strip leading whitespace and tab, newline and CR anywhere, so the scheme is read the same way.
+  const seen = s.replace(TAB_NEWLINE_CR, "").replace(LEADING_CONTROL, "")
+  return URI_SCHEME.test(seen) && !HTTPS_PREFIX.test(seen) ? null : s
 }
 
 /**
@@ -64,10 +68,9 @@ export function parseHookitMetadata(json: unknown, gateway: string): LaunchMetad
   const doc = object(json)
   if (doc === null || tooDeep(doc)) return null
   const image = typeof doc.image === "string" ? doc.image : null
-  const cid = image === null ? null : ipfsCid(image)
   return {
     description: textField(doc.description, MAX_DESCRIPTION, true),
-    imageUrl: cid !== null ? `${gateway}/ipfs/${cid}` : image === null ? null : httpsImage(image),
+    imageUrl: launchImage(image, gateway),
     links: {
       telegram: link(doc.telegram),
       twitter: link(doc.twitter),

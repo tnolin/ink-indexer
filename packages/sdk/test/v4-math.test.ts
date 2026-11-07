@@ -46,6 +46,23 @@ describe("reservesInRange", () => {
     expect(bounded.amount0).toBe(open.amount0)
   })
 
+  it("an inverted range holds nothing", () => {
+    const p = pools[0]
+    if (!p) throw new Error("no pool")
+    expect(reservesInRange(p.sqrtPriceX96, p.liquidity, 200_000, 100_000)).toEqual({
+      amount0: 0n,
+      amount1: 0n,
+    })
+  })
+
+  it("ticks beyond the valid range are clamped to it", () => {
+    const p = pools[0]
+    if (!p) throw new Error("no pool")
+    expect(reservesInRange(p.sqrtPriceX96, p.liquidity, -2_000_000, 2_000_000)).toEqual(
+      reservesInRange(p.sqrtPriceX96, p.liquidity, -887_272, 887_272),
+    )
+  })
+
   it("an uninitialized pool holds nothing", () => {
     expect(reservesInRange(0n, 10n ** 20n, -60, 60)).toEqual({ amount0: 0n, amount1: 0n })
   })

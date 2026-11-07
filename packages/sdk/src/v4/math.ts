@@ -85,11 +85,15 @@ export function sqrtRatioAtTick(tick: number): bigint {
   return (ratio >> 32n) + ((ratio & 0xffffffffn) === 0n ? 0n : 1n)
 }
 
+const MAX_TICK = 887_272
+const clampTick = (tick: number) => Math.max(-MAX_TICK, Math.min(MAX_TICK, tick))
+
 /**
  * The amounts of currency0 and currency1 that `liquidity` holds in the tick range `[tickLower,
  * tickUpper]` at the current price. The price is clamped to the range, so a price at or beyond an
  * edge leaves one side at zero and neither amount is ever negative. A null tick leaves that side
- * of the range open, so two nulls give the full-range amounts `quoteReserve` returns.
+ * of the range open, so two nulls give the full-range amounts `quoteReserve` returns. An inverted
+ * range holds nothing, and ticks beyond the valid tick range are clamped to it.
  */
 export function reservesInRange(
   sqrtPriceX96: bigint,
@@ -98,8 +102,10 @@ export function reservesInRange(
   tickUpper: number | null,
 ): { amount0: bigint; amount1: bigint } {
   if (sqrtPriceX96 <= 0n) return { amount0: 0n, amount1: 0n }
-  const lower = tickLower === null ? null : sqrtRatioAtTick(tickLower)
-  const upper = tickUpper === null ? null : sqrtRatioAtTick(tickUpper)
+  if (tickLower !== null && tickUpper !== null && tickLower > tickUpper)
+    return { amount0: 0n, amount1: 0n }
+  const lower = tickLower === null ? null : sqrtRatioAtTick(clampTick(tickLower))
+  const upper = tickUpper === null ? null : sqrtRatioAtTick(clampTick(tickUpper))
   let p = sqrtPriceX96
   if (lower !== null && p < lower) p = lower
   if (upper !== null && p > upper) p = upper

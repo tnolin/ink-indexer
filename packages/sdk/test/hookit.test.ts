@@ -180,12 +180,7 @@ describe("decodeHookitLog", () => {
 
   it("decodes the wNVDAx Classic launch with its own quote and graduation quote", () => {
     const launched = one("hookit-classic-wnvdax", "classicLaunched")
-    expect(launched.quote).toBe(
-      "0xa8dd0b0a8a2ae78f3b8c0eb7b1b2f1f9e2f850d5".replace(
-        "0xa8dd0b0a8a2ae78f3b8c0eb7b1b2f1f9e2f850d5",
-        launched.quote,
-      ),
-    )
+    expect(launched.quote).toBe("0xa8ddb5cd96b5222afe198316e9a57caa642850d5")
     expect(whole(launched.graduationQuote)).toBeCloseTo(51.0218, 3)
   })
 
@@ -348,6 +343,11 @@ describe("Classic curve", () => {
 
   it("HOOC's progress is 475 bps", () => {
     expect(classicProgressBps(curve, replay())).toBe(475)
+  })
+
+  it("progress is 0 when nothing, or a negative amount, is sold", () => {
+    expect(classicProgressBps(curve, 0n)).toBe(0)
+    expect(classicProgressBps(curve, -(10n ** 24n))).toBe(0)
   })
 
   it("prices and values the market cap from the virtual reserves", () => {

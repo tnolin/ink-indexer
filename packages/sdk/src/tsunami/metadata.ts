@@ -1,7 +1,7 @@
 import {
-  httpsImage,
   ipfsCid,
   type LaunchMetadataFields,
+  launchImage,
   MAX_DESCRIPTION,
   MAX_LINK,
   object,
@@ -30,10 +30,9 @@ export function parseTsunamiMetadata(json: unknown, gateway: string): LaunchMeta
   if (doc === null) return null
   const socials = object(doc.socials) ?? {}
   const image = typeof doc.image === "string" ? doc.image : null
-  const cid = image === null ? null : ipfsCid(image)
   return {
     description: textField(doc.description, MAX_DESCRIPTION, true),
-    imageUrl: cid !== null ? `${gateway}/ipfs/${cid}` : image === null ? null : httpsImage(image),
+    imageUrl: launchImage(image, gateway),
     links: {
       telegram: textField(socials.telegram, MAX_LINK, false),
       twitter: textField(socials.x, MAX_LINK, false),
