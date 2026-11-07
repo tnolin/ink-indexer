@@ -196,6 +196,25 @@ describe("PoolRegistry.load", () => {
       expect(r.bumpAth(T1, 100n, 8n, P1)).toBe(900n)
     })
 
+    it("a single-market token keeps no per-pool mark after a reload", async () => {
+      await insertPool(POOL, NATIVE, [50n, 5n])
+      const r = new PoolRegistry()
+      await r.load(sql)
+      expect(r.poolMarks(POOL)).toBeUndefined()
+    })
+
+    it("a multi-market token's ath as of a block is not derived from its mixed-unit swaps", async () => {
+      await insertPool(P1, WAAPLX, [4_000_000n, 300n])
+      await insertPool(P2, WNVDAX, [9_000_000_000_000_000_000n, 310n])
+      await sql`update indexer.tokens set ath_market_cap = 9000000000000000000, ath_block = 310 where address = ${T1}`
+      await sql`insert into indexer.events (type, entity, payload, block, block_hash, tx_hash, log_index, confirmed)
+        values ('launchpad.swap', ${T1}, ${sql.json({ marketCap: "7000000000000000000", poolId: P2 })}, 110, ${`0x${"0".repeat(63)}1`}, ${`0x${"1".padStart(64, "0")}`}, 0, true)`
+      const r = new PoolRegistry()
+      await r.load(sql, { athAsOf: 200n })
+      // Its pools hold the ath of each market; the token-level ath keeps the stored value.
+      expect(r.marks(T1)).toMatchObject({ ath: 9_000_000_000_000_000_000n, athBlock: 310n })
+    })
+
     it("a pool without a hook or ticks reloads without them", async () => {
       const p = entry(T1)
       await sql`insert into indexer.pools (pool_id, pool_manager, token, launchpad, quote_asset, token_is_currency0, created_block)
@@ -206,7 +225,7 @@ describe("PoolRegistry.load", () => {
     })
 
     it("with athAsOf, gives each pool its own ath from its own swaps at or below that block", async () => {
-      // WAAPLX has 6 decimals and WNVDAX 18, so the larger raw number belongs to the other pool.
+      // The WAAPLX market is quoted in USDG (6 decimals) and WNVDAX in an 18-decimal asset, so the larger raw number belongs to the other pool.
       await insertPool(P1, WAAPLX, [4_000_000n, 300n])
       await insertPool(P2, WNVDAX, [9_000_000_000_000_000_000n, 310n])
       const swap = (n: number, poolId: Hash, block: number, marketCap: string) =>
