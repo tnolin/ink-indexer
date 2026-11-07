@@ -1,5 +1,6 @@
 import type {
   ChainLog,
+  ClassicLaunch,
   InkfunLaunchState,
   LaunchKey,
   LaunchState,
@@ -77,6 +78,12 @@ export class FakeChain implements Chain {
   /** Per Tsunami curve address, what `readTsunamiCurves` answers; a function gives it per block. A curve with no entry throws. */
   tsunamiCurves = new Map<string, TsunamiCurveState | ((block: bigint) => TsunamiCurveState)>()
   tsunamiCurveReads: { curves: Address[]; block: bigint }[] = []
+  /** Per Hookit Classic launch id, what `readClassicLaunches` answers; a function gives it per block. An id with no entry throws. */
+  classicLaunches = new Map<bigint, ClassicLaunch | ((block: bigint) => ClassicLaunch)>()
+  classicLaunchReads: { ids: bigint[]; block: bigint }[] = []
+  /** Per token, what `metadataURI()` answers; a token with no entry (or null) reverts. */
+  metadataUris = new Map<string, string | null>()
+  metadataUriReads: { tokens: Address[]; block: bigint }[] = []
   /** Every readTotalSupplies call. */
   supplyReads: { tokens: Address[]; block: bigint }[] = []
   /** Every getBlock call. */
@@ -198,6 +205,20 @@ export class FakeChain implements Chain {
       if (v === undefined) throw new Error(`no fake tokensSold for ${c}`)
       return typeof v === "function" ? v(block) : v
     })
+  }
+
+  async readClassicLaunches(ids: bigint[], block: bigint) {
+    this.classicLaunchReads.push({ ids, block })
+    return ids.map((id) => {
+      const v = this.classicLaunches.get(id)
+      if (v === undefined) throw new Error(`no fake Classic launch ${id}`)
+      return typeof v === "function" ? v(block) : v
+    })
+  }
+
+  async readMetadataUris(tokens: Address[], block: bigint) {
+    this.metadataUriReads.push({ tokens, block })
+    return tokens.map((t) => this.metadataUris.get(t) ?? null)
   }
 
   async readTsunamiCurves(curves: Address[], block: bigint) {

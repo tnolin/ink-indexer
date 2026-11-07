@@ -12,6 +12,7 @@ import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { createCollectionsFromSales } from "./sources/nft/write"
 import { PoolRegistry } from "./sources/pools"
+import { hookitSource } from "./sources/hookit/index"
 import { tsunamiSource } from "./sources/tsunami/index"
 import { v4Source } from "./sources/v4/index"
 import { startStallWatch } from "./stall"
@@ -121,6 +122,7 @@ try {
         ipfs: { gateway: ipfs.tsunami },
         blockReads,
       }),
+      hookitSource({ sql, chain, logger: log, pools, ipfs: { gateway: ipfs.hookit }, blockReads }),
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools, blockReads }),
       nftSource({ sql, chain, logger: log }),

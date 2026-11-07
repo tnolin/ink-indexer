@@ -1,5 +1,6 @@
 import {
   type ChainLog,
+  type ClassicLaunch,
   type CodeReader,
   hasCodeAt,
   type InkfunLaunchState,
@@ -7,12 +8,14 @@ import {
   type LaunchState,
   type NftReader,
   readBalances,
+  readClassicLaunches,
   readCurveSold,
   readErc20Meta,
   readErc20Names,
   readInkfunLaunches,
   readLaunchStates,
   readMaxSupply,
+  readMetadataUris,
   readMintStats,
   readNftTotalSupply,
   readTotalSupplies,
@@ -59,6 +62,10 @@ export type Chain = {
   ): Promise<InkfunLaunchState[]>
   /** `curve()` of each Tsunami curve at a block, in the order given. */
   readTsunamiCurves(curves: Address[], block: bigint): Promise<TsunamiCurveState[]>
+  /** `launches(id)` of each Hookit Classic launch at a block, in the order given. */
+  readClassicLaunches(ids: bigint[], block: bigint): Promise<ClassicLaunch[]>
+  /** `metadataURI()` of each Hookit token at a block, in the order given. A call that reverts gives null. */
+  readMetadataUris(tokens: Address[], block: bigint): Promise<(string | null)[]>
   /** `tokensSold()` of each ink.fun curve at a block, in the order given. */
   readCurveSold(curves: Address[], block: bigint): Promise<bigint[]>
   readErc20Meta(token: Address): Promise<{ decimals: number; symbol: string }>
@@ -184,6 +191,10 @@ export function viemChain(
       retry("readInkfunLaunches", () => readInkfunLaunches(client, launches, block)),
     readTsunamiCurves: (curves, block) =>
       retry("readTsunamiCurves", () => readTsunamiCurves(client, curves, block)),
+    readClassicLaunches: (ids, block) =>
+      retry("readClassicLaunches", () => readClassicLaunches(client, ids, block)),
+    readMetadataUris: (tokens, block) =>
+      retry("readMetadataUris", () => readMetadataUris(client, tokens, block)),
     readCurveSold: (curves, block) =>
       retry("readCurveSold", () => readCurveSold(client, curves, block)),
     readErc20Meta: (token) => retry("readErc20Meta", () => readErc20Meta(client, token)),

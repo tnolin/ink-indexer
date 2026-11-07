@@ -16,6 +16,17 @@ alter table indexer.pools
   add column ath_market_cap numeric(78,0),
   add column ath_block bigint;
 
+-- A Classic curve's starting reserves and net tokens sold. Every later state is derived from them.
+create table indexer.hookit_curves (
+  token text primary key references indexer.tokens (address) on delete cascade,
+  launch_number numeric(78,0) not null unique,
+  virtual_quote numeric(78,0) not null,
+  virtual_tokens numeric(78,0) not null,
+  curve_supply numeric(78,0) not null,
+  tokens_sold numeric(78,0) not null,
+  updated_block bigint not null
+);
+
 -- tokens.hook references indexer.hooks, so each Hookit hook needs a row. quote_asset and
 -- quote_decimals are not null there but are not read for Hookit: each token's quote is on its tokens row.
 insert into indexer.hooks (address, launchpad, kind, abi_family, quote_asset, quote_decimals, discovered_block)
