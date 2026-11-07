@@ -373,6 +373,11 @@ describe("v4 source: Hookit liquidity", () => {
 
 const GOLDEN_INKYPUMP_LIQUIDITY = "2940999000000000023"
 
+/** A transaction that accepts every statement, for a written batch whose rows the test does not read. */
+const committedTx = (async () => []) as unknown as Parameters<
+  ReturnType<typeof v4Source>["write"]
+>[0]
+
 describe("v4 source: Hookit burns", () => {
   const first = loadHookitFixture("hookit-hkt-first-swap")
   const sell = loadHookitFixture("hookit-hkt-sell")
@@ -543,6 +548,7 @@ describe("v4 source: Hookit burns", () => {
     t.chain.supplies.set(HKT_TOKEN, first.tokens[0]!.totalSupply)
     await t.source.reload()
     const batch = await t.run(first.blockNumber)
+    await t.source.write(committedTx, batch)
     expect(t.chain.supplyReads).toEqual([{ tokens: [HKT_TOKEN], block: first.blockNumber }])
     // The burn is in the value read at its own block, so it is not taken off again.
     expect(batch.supply).toEqual([
@@ -877,6 +883,29 @@ describe("v4 source: reloads and the tokens a process registered itself", () => 
     })
     expect(t.pools.marks(t.token)?.supplyBlock).toBe(launch.blockNumber)
     expect(t.chain.supplyReads.filter((r) => r.block === 61_000_000n)).toEqual([])
+  })
+})
+
+describe("v4 source: a span that fails after its reads", () => {
+  it("a reload after a failed span reads the supply again, and the retried swaps use it", async () => {
+    const launch = loadHookitFixture("hookit-hkt-first-swap")
+    const t = setup("hookit-hkt-launch", { supplyBlock: 10n })
+    addFixture(t.chain, launch)
+    const stale = ONE_E27
+    const fresh = ONE_E27 - 10n ** 24n
+    let reads = 0
+    t.chain.supplies.set(t.token, () => (reads++ === 0 ? stale : fresh))
+    // A reload that finds the token newly followed flags it for a supply read.
+    await t.source.reload()
+    await t.run(launch.blockNumber)
+    expect(t.chain.supplyReads).toHaveLength(1)
+    // The span failed before it was written, so its read is lost; the next reload flags it again.
+    await t.source.reload()
+    const batch = await t.run(launch.blockNumber)
+    expect(t.chain.supplyReads).toHaveLength(2)
+    const swaps = eventsOf(batch)
+    expect(swaps.length).toBeGreaterThan(0)
+    for (const e of swaps) expect(e.supply).toBe(fresh.toString())
   })
 })
 

@@ -54,6 +54,11 @@ function setup(head = B + 20n, registered: PoolEntry[] = [entry(1)], blockReads?
   return { chain, pools, source, run }
 }
 
+/** A transaction that accepts every statement, for a written batch whose rows the test does not read. */
+const committedTx = (async () => []) as unknown as Parameters<
+  ReturnType<typeof v4Source>["write"]
+>[0]
+
 describe("v4 source", () => {
   it("emits launchpad.swap for a registered pool with trader from the block", async () => {
     const f = loadV4Fixture("v4-inkypump-buy")
@@ -245,7 +250,8 @@ describe("v4 source", () => {
     pools.setDead(TOKEN, 0n, B - 50n)
     // The first reload follows the token for the first time, so it is read once.
     await source.reload()
-    await run(B + 100n)
+    // The span is written, so its read is kept.
+    await source.write(committedTx, await run(B + 100n))
     expect(chain.balanceReads).toHaveLength(1)
     await source.reload()
     await source.reload()

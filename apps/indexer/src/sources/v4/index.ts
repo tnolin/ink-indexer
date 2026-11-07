@@ -103,6 +103,8 @@ export function v4Source(deps: {
   // read again. A reload that leaves the registry as it was adds none.
   const followed = new Set<Address>()
   const refresh = new Set<Address>()
+  // Tokens read since the last write: a span that fails after its reads loses them, so a reload puts them back.
+  const readSinceWrite = new Set<Address>()
   return {
     name: "v4",
     filters(only) {
@@ -112,7 +114,7 @@ export function v4Source(deps: {
       askedTokens = new Set(tokens)
       // Topic filters keep each response to tracked swaps and burns. Their topics past position 0
       // differ from every other filter's, so each is its own request.
-      // shortcut: no request is made while the registry is empty, so on a fresh database the swaps of the first bonded pool that fall in its bond's span are missed; a seeded database is unaffected. Always emit the filters once a pool can appear in the span to close the gap.
+      // shortcut: no request is made while the registry is empty, so on a fresh database the swaps of the first registered pool (a bond or a Hookit launch) that fall in its span are missed; a seeded database is unaffected. Always emit the filters once a pool can appear in the span to close the gap.
       // shortcut: the poolId list grows with every bonded token and is sent on every request. Split it into several requests if an endpoint rejects the list's length.
       return [
         poolIds.length > 0
@@ -128,6 +130,7 @@ export function v4Source(deps: {
         pools,
         readDeadAt: readStateAt ?? (live ? toBlock : null),
         refresh,
+        readSinceWrite,
         live,
         blockReads: deps.blockReads,
       })
@@ -136,7 +139,10 @@ export function v4Source(deps: {
       for (const t of pools.tokens()) followed.add(t)
       return batch
     },
-    write: writeRows,
+    write: async (tx, batch) => {
+      await writeRows(tx, batch)
+      readSinceWrite.clear()
+    },
     async prepareRollback(fork) {
       const tokens = await deadAbove(sql, fork)
       const balances =
@@ -166,6 +172,8 @@ export function v4Source(deps: {
           (pools.marks(t)?.deadBalance != null || pools.launchpadOf(t) === "hookit")
         )
           refresh.add(t)
+      for (const t of readSinceWrite) if (now.has(t)) refresh.add(t)
+      readSinceWrite.clear()
       for (const t of [...refresh]) if (!now.has(t)) refresh.delete(t)
       followed.clear()
       for (const t of now) followed.add(t)
@@ -230,6 +238,8 @@ export async function processLogs(
     blockReads?: number
     /** Tokens with a stored dead balance to read again; the ones read are removed. */
     refresh?: Set<Address>
+    /** Receives the tokens whose state this span read, until the batch is written. */
+    readSinceWrite?: Set<Address>
   },
 ): Promise<V4Batch> {
   const { chain, pools } = deps
@@ -266,7 +276,10 @@ export async function processLogs(
       pools.setSupply(token, totals[i]!, at)
       supplies.set(token, { token, totalSupply: totals[i]!, block: at })
     })
-    for (const token of [...unread, ...unreadSupply]) deps.refresh?.delete(token)
+    for (const token of [...unread, ...unreadSupply]) {
+      deps.refresh?.delete(token)
+      deps.readSinceWrite?.add(token)
+    }
   }
   // A burn at or below the block its balance or supply was read at is already in that value.
   const deadReadAt = new Map(
