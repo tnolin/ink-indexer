@@ -20,6 +20,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 - SDK: `decodeSwap` and `decodeTransfer` return null for a log whose data does not decode, so one malformed log no longer fails a span.
 - Indexer: Tsunami image URLs built from the gateway are limited to 2,048 characters.
+- Indexer: a backfill or live span that starts with no pool registered now reads the swaps and burns of pools that other sources register in that span; they were skipped before, so a backfill on an empty database lost its first span's swaps.
 
 ## [indexer-v0.6.1] - 2026-11-02
 

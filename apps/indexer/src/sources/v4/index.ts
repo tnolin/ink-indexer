@@ -114,7 +114,7 @@ export function v4Source(deps: {
       askedTokens = new Set(tokens)
       // Topic filters keep each response to tracked swaps and burns. Their topics past position 0
       // differ from every other filter's, so each is its own request.
-      // shortcut: no request is made while the registry is empty, so on a fresh database the swaps of the first registered pool (a bond or a Hookit launch) that fall in its span are missed; a seeded database is unaffected. Always emit the filters once a pool can appear in the span to close the gap.
+      // With no pool registered a filter would match nothing useful, so none is sent; `readsLate` keeps `process` running so the pools other sources register in the span are read by `logsOfNewPools`.
       // shortcut: the poolId list grows with every bonded token and is sent on every request. Split it into several requests if an endpoint rejects the list's length.
       return [
         poolIds.length > 0
@@ -123,6 +123,7 @@ export function v4Source(deps: {
         tokens.length > 0 ? pick(only, "v4-swaps", burnFilter(tokens)) : null,
       ]
     },
+    readsLate: (only) => only === undefined || only.includes("v4-swaps"),
     async process([swapLogs = [], burnLogs = []], { toBlock, live, readStateAt }) {
       const late = await logsOfNewPools(toBlock)
       const batch = await processLogs([...swapLogs, ...late.swaps], [...burnLogs, ...late.burns], {

@@ -25,6 +25,12 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
    */
   filters(only?: readonly BackfillSource[]): (LogFilter | null)[]
   /**
+   * True when `process` has work for the span even if every filter is null: it reads logs itself
+   * for pools that earlier sources register in the span. The loop then still calls `process`, with
+   * an empty array per filter, and makes no request for it.
+   */
+  readsLate?(only?: readonly BackfillSource[]): boolean
+  /**
    * One log array per filter, same order. Network reads allowed; no DB writes. `live` is true for
    * the live tick's spans and false for a backfill's. `readStateAt` is the block to read state
    * that is not tied to a log at, a block the endpoints serve: the span's end for the live tick,
