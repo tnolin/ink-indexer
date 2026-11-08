@@ -1,0 +1,109 @@
+{
+  "name": "hookit-launch-configs",
+  "reads": [
+    {
+      "txHash": "0x9923d58f6cc0b902f1dd2276b7ba1a685ef4cd62b039b73027aee65ee5421f42",
+      "blockNumber": "56519919n",
+      "factory": "0xab6eae3092ae574bef0a16505fdf137072dcafdd",
+      "launchId": "2n",
+      "config": {
+        "token": "0xcf010ba185fd6ee6027b141e2c32614d673f8258",
+        "bitmask": "6292022814506776745799151275553243441181887561733n",
+        "quote": "0x0000000000000000000000000000000000000000",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    },
+    {
+      "txHash": "0xd22d394736667d1b133e25c13a457db6047312245bd603539c72a42dd8bc2e2a",
+      "blockNumber": "56521188n",
+      "factory": "0xab6eae3092ae574bef0a16505fdf137072dcafdd",
+      "launchId": "3n",
+      "config": {
+        "token": "0xe6584337bfbbef47311c16bf000ca585b1279f58",
+        "bitmask": "6292022814444461395051445541769434689486291206160n",
+        "quote": "0x943bf64d566c32a2bcd41ac92fb63c111cc9de8f",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    },
+    {
+      "txHash": "0xdc7665e86fd12bd14a43a0011b9d37bd1e6a329f8dd84e2e9664f65e1a4b37e2",
+      "blockNumber": "56549293n",
+      "factory": "0xab6eae3092ae574bef0a16505fdf137072dcafdd",
+      "launchId": "18n",
+      "config": {
+        "token": "0x85eb05a22e32c84677cec962c007b454d13d8408",
+        "bitmask": "388223232006969213043205463313949292952338775312746639036560698169648143n",
+        "quote": "0x30987adf0b11dc698438a99ba04ec3a1ab2c7eab",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    },
+    {
+      "txHash": "0x435445ba1b97d233606773298e3126c99a5e9f063316c643142afe645594a21d",
+      "blockNumber": "56640592n",
+      "factory": "0x2851cb70a6784ae69b45e6b7065908a00176322f",
+      "launchId": "2n",
+      "config": {
+        "token": "0xc666b985f35b3b63d03093e8cca43d277fa6f968",
+        "bitmask": "37269430272669044452147682102356804054482771932709369558581553299269359888n",
+        "quote": "0x73e0c0d45e048d25fc26fa3159b0aa04bfa4db98",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    },
+    {
+      "txHash": "0x7626e54e08f7b4ef08617ae71ee0347057593990136474edf4f4b4b9e1215baf",
+      "blockNumber": "56801122n",
+      "factory": "0x99c6f8921858660881186296c39a07d1b30dc039",
+      "launchId": "6n",
+      "config": {
+        "token": "0xd58106c950019a196a0ea9a4142004eb34b2aa68",
+        "bitmask": "388223232006969213043205374111104622163507344440030379947567278641401873n",
+        "quote": "0xe343167631d89b6ffc58b88d6b7fb0228795491d",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    },
+    {
+      "txHash": "0xd0db98a61b76fbfb49207cd0ad20c142f3a5e958e8f881ae89e48bf05bcefed0",
+      "blockNumber": "58774376n",
+      "factory": "0x145c3f3560c23fda93ea79f2efeb7f33d8a9ff3e",
+      "launchId": "21n",
+      "config": {
+        "token": "0xb0ff8207ebb8cc285fc53e4e3020592742636fa8",
+        "bitmask": "51925564733789349615326402653399835650n",
+        "quote": "0x0000000000000000000000000000000000000000",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    },
+    {
+      "txHash": "0x65625a701bfd890a298f346c4c18629f17c4c588f22118918ba1c0c1aefc24bd",
+      "blockNumber": "58090378n",
+      "factory": "0x145c3f3560c23fda93ea79f2efeb7f33d8a9ff3e",
+      "launchId": "12n",
+      "config": {
+        "token": "0x4f02a2e7b1ac335101a28e3fecd5909aeae7ffa8",
+        "bitmask": "129407744002323071014401672462295717630907757507586079708802417732616197n",
+        "quote": "0x0000000000000000000000000000000000000000",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    },
+    {
+      "txHash": "0x27c8a179438f9c7ba98e7a1107a0642d2db908589aa5701a9e1a123c78fd9f19",
+      "blockNumber": "59915868n",
+      "factory": "0x670415f86826912e1dd167a41650da1a02aae7d6",
+      "launchId": "1n",
+      "config": {
+        "token": "0xed3affd713421a2c2fadacd9fbf53b938a3c4968",
+        "bitmask": "324259173170675763216n",
+        "quote": "0x0000000000000000000000000000000000000000",
+        "tickSpacing": 60,
+        "fee": 0
+      }
+    }
+  ]
+}

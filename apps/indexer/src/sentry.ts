@@ -1,12 +1,20 @@
 import * as Sentry from "@sentry/node"
 import { REDACTED, secretsFor } from "./redact"
 
-/** Where fatal errors go. The indexer reports only what stops it; retries stay in the logs. */
-export type Reporter = { capture(err: unknown): void; flush(ms: number): Promise<boolean> }
+/**
+ * Where fatal errors go, and the rare warnings that need a person to look. The indexer reports only
+ * what stops it or what it cannot index; retries stay in the logs.
+ */
+export type Reporter = {
+  capture(err: unknown): void
+  /** A warning message. Callers send each distinct warning once, so this is not rate limited here. */
+  warn(message: string, context?: Record<string, unknown>): void
+  flush(ms: number): Promise<boolean>
+}
 
-export const noopReporter: Reporter = { capture() {}, flush: async () => true }
+export const noopReporter: Reporter = { capture() {}, warn() {}, flush: async () => true }
 
-type Sdk = Pick<typeof Sentry, "init" | "captureException" | "flush">
+type Sdk = Pick<typeof Sentry, "init" | "captureException" | "captureMessage" | "flush">
 
 const DROPPED_CATEGORIES = new Set(["http", "fetch", "console"])
 const MAX_DEPTH = 12
@@ -76,5 +84,10 @@ export function initSentry(env: Record<string, string | undefined>, sdk: Sdk = S
       }
     },
   })
-  return { capture: (err) => void sdk.captureException(err), flush: (ms) => sdk.flush(ms) }
+  return {
+    capture: (err) => void sdk.captureException(err),
+    warn: (message, context) =>
+      void sdk.captureMessage(message, { level: "warning", extra: context }),
+    flush: (ms) => sdk.flush(ms),
+  }
 }

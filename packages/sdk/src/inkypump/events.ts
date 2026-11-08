@@ -9,7 +9,7 @@ import {
 import type { Address, Hash } from "viem"
 import { UNISWAP_V4_POOL_MANAGER } from "../v4/constants"
 import type { V4Swap } from "../v4/decode"
-import { poolMarketCap, poolPrice, quoteReserve, swapLegs } from "../v4/math"
+import { poolMarketCap, poolPrice, quoteReserve, reservesInRange, swapLegs } from "../v4/math"
 import { type CurveParams, curveValue, marketCap, progressBps, soldBps } from "./curve"
 import type { LaunchCreated, LaunchFinalized, LaunchMetadata, Trade } from "./decode"
 
@@ -128,10 +128,31 @@ export function swapEvent(
     /** Total supply minus the dead address's balance. */
     supply: bigint
     athMarketCap: bigint
+    /**
+     * The tick range the pool's liquidity was added in. With either edge given, liquidity is valued
+     * in that range and the event carries both sides; without, the pool is full range and only the
+     * quote side is reported.
+     */
+    tickLower?: number
+    tickUpper?: number
   },
   m: LogMeta,
 ): SwapEvent {
   const legs = swapLegs(swap, ctx.tokenIsCurrency0)
+  const ranged = ctx.tickLower !== undefined || ctx.tickUpper !== undefined
+  const held = ranged
+    ? reservesInRange(
+        swap.sqrtPriceX96,
+        swap.liquidity,
+        ctx.tickLower ?? null,
+        ctx.tickUpper ?? null,
+      )
+    : null
+  const [quoteSide, tokenSide] = held
+    ? ctx.tokenIsCurrency0
+      ? [held.amount1, held.amount0]
+      : [held.amount0, held.amount1]
+    : [quoteReserve(swap.liquidity, swap.sqrtPriceX96, ctx.tokenIsCurrency0), null]
   return {
     type: "launchpad.swap",
     ...base(ctx.launchpad, ctx.token, ctx.launchId, m),
@@ -146,11 +167,8 @@ export function swapEvent(
     price: poolPrice(swap.sqrtPriceX96, ctx.tokenIsCurrency0).toString(),
     marketCap: poolMarketCap(swap.sqrtPriceX96, ctx.tokenIsCurrency0, ctx.supply).toString(),
     athMarketCap: ctx.athMarketCap.toString(),
-    quoteLiquidity: quoteReserve(
-      swap.liquidity,
-      swap.sqrtPriceX96,
-      ctx.tokenIsCurrency0,
-    ).toString(),
+    quoteLiquidity: quoteSide.toString(),
+    ...(tokenSide !== null && { tokenLiquidity: tokenSide.toString() }),
     supply: ctx.supply.toString(),
   }
 }

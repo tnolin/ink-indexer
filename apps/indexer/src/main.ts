@@ -7,6 +7,7 @@ import { applyMark } from "./mark-cli"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
+import { hookitSource } from "./sources/hookit/index"
 import { inkfunSource } from "./sources/inkfun/index"
 import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
@@ -119,6 +120,15 @@ try {
         logger: log,
         pools,
         ipfs: { gateway: ipfs.tsunami },
+        blockReads,
+      }),
+      hookitSource({
+        sql,
+        chain,
+        logger: log,
+        report: reporter,
+        pools,
+        ipfs: { gateway: ipfs.hookit },
         blockReads,
       }),
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.

@@ -1,7 +1,11 @@
 import type { Sql } from "@ink-indexer/db"
 import { INKYPUMP_START_BLOCK } from "@ink-indexer/sdk"
 import type { Chain } from "./chain"
-import { DEFAULT_IPFS_GATEWAY, DEFAULT_TSUNAMI_IPFS_GATEWAY } from "./ipfs"
+import {
+  DEFAULT_HOOKIT_IPFS_GATEWAY,
+  DEFAULT_IPFS_GATEWAY,
+  DEFAULT_TSUNAMI_IPFS_GATEWAY,
+} from "./ipfs"
 import type { Logger } from "./log"
 import {
   BLOCK_S,
@@ -41,6 +45,7 @@ const PLATFORMS = {
   chimera: { groups: ["nft-launches"], openSea: false },
   inkfun: { groups: ["inkfun", "v4-swaps"], openSea: false },
   tsunami: { groups: ["tsunami", "v4-swaps"], openSea: false },
+  hookit: { groups: ["hookit", "v4-swaps"], openSea: false },
 } as const satisfies Record<string, { groups: readonly BackfillSource[]; openSea: boolean }>
 type Platform = keyof typeof PLATFORMS
 
@@ -185,12 +190,18 @@ function httpsOrigin(value: string): string | null {
 }
 
 /**
- * `IPFS_GATEWAY` and `TSUNAMI_IPFS_GATEWAY`: the HTTPS origins that serve ink.fun and Tsunami token
+ * `IPFS_GATEWAY`, `TSUNAMI_IPFS_GATEWAY` and `HOOKIT_IPFS_GATEWAY`: the HTTPS origins that serve ink.fun, Tsunami and Hookit token
  * metadata and images. Empty uses the default gateway. A value that is not an `https://` origin logs
  * one warning, never the value, and uses the default.
  */
-export function readIpfsSettings(env: Env, log: Logger): { inkfun: string; tsunami: string } {
-  const read = (variable: "IPFS_GATEWAY" | "TSUNAMI_IPFS_GATEWAY", fallback: string): string => {
+export function readIpfsSettings(
+  env: Env,
+  log: Logger,
+): { inkfun: string; tsunami: string; hookit: string } {
+  const read = (
+    variable: "IPFS_GATEWAY" | "TSUNAMI_IPFS_GATEWAY" | "HOOKIT_IPFS_GATEWAY",
+    fallback: string,
+  ): string => {
     const v = env[variable]?.trim()
     if (!v) return fallback
     const origin = httpsOrigin(v)
@@ -205,6 +216,7 @@ export function readIpfsSettings(env: Env, log: Logger): { inkfun: string; tsuna
   return {
     inkfun: read("IPFS_GATEWAY", DEFAULT_IPFS_GATEWAY),
     tsunami: read("TSUNAMI_IPFS_GATEWAY", DEFAULT_TSUNAMI_IPFS_GATEWAY),
+    hookit: read("HOOKIT_IPFS_GATEWAY", DEFAULT_HOOKIT_IPFS_GATEWAY),
   }
 }
 

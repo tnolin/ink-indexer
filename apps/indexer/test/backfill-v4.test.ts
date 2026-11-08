@@ -20,7 +20,7 @@ afterEach(() => sql.end())
 /** A launch at B, a curve trade, the bond that registers the pool, and two swaps. */
 function chainWithSwaps() {
   const chain = new FakeChain(B + 30n)
-  // The v4 source joins a run after the span that registers the pool, so the swaps lie in later spans.
+  // The pool is registered in the first span and its swaps lie in later spans.
   chain.maxSpan = 4n
   launch(chain, { n: 1, block: B })
   trade(chain, { n: 1, block: B + 1n, sold: 1n, price: 1000n })
@@ -131,11 +131,35 @@ describe("backfill values and reads", () => {
     })
     await idx.init()
     await expect(idx.backfill(B, B + 9n, ["inkypump", "v4-swaps"])).rejects.toThrow(
-      `block ${B + 30n} was not served for 10 minutes; resume with --from ${B + 4n} --to ${B + 9n} --sources inkypump,v4-swaps`,
+      `block ${B + 30n} was not served for 10 minutes; resume with --from ${B} --to ${B + 9n} --sources inkypump,v4-swaps`,
     )
     expect(clock.now).toBeGreaterThanOrEqual(600_000)
     expect(clock.now).toBeLessThan(600_000 + 30_000)
     expect(Math.max(...waits)).toBe(30_000)
+  })
+
+  it("names the later span to resume from when a block is refused after earlier spans were written", async () => {
+    const chain = chainWithSwaps()
+    const refused = B + 5n
+    const read = chain.getBlockSenders.bind(chain)
+    chain.getBlockSenders = async (n: bigint) => {
+      if (n === refused) throw Object.assign(new Error("header not found"), { code: -32000 })
+      return read(n)
+    }
+    const clock = { now: 0 }
+    const idx = indexerOn(sql, chain, {
+      sleep: async (ms) => {
+        clock.now += ms
+      },
+      now: () => clock.now,
+    })
+    await idx.init()
+    await expect(idx.backfill(B, B + 9n, ["inkypump", "v4-swaps"])).rejects.toThrow(
+      `block ${refused} was not served for 10 minutes; resume with --from ${B + 4n} --to ${B + 9n} --sources inkypump,v4-swaps`,
+    )
+    // The first span's rows were kept.
+    const [row] = await sql`select count(*)::int as n from indexer.events`
+    expect(row!.n).toBeGreaterThan(0)
   })
 
   it("reads the dead balance at the live cursor block when the cursor is past the span", async () => {

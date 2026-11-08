@@ -471,3 +471,121 @@ describe("viemChain Tsunami reads", () => {
     expect(sleeps).toEqual([1_000])
   })
 })
+
+describe("viemChain Hookit reads", () => {
+  it("readMasterLaunchConfigs reads a launch from its factory in one multicall and retries a transport error", async () => {
+    const factory = "0x145c3f3560c23fda93ea79f2efeb7f33d8a9ff3e"
+    const seen: unknown[] = []
+    let calls = 0
+    const client = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => {
+        throw new Error("not used")
+      },
+      multicall: async (args: {
+        blockNumber: bigint
+        allowFailure: boolean
+        contracts: { address: string; functionName: string; args: unknown[] }[]
+      }) => {
+        if (++calls === 1) throw socketError()
+        seen.push([
+          args.blockNumber,
+          args.allowFailure,
+          args.contracts.map((c) => [c.address, c.functionName, c.args]),
+        ])
+        return [
+          { status: "success", result: ["0xB0Ff8207EbB8Cc285fC53e4E3020592742636fa8"] },
+          { status: "success", result: 5n },
+          { status: "success", result: "0x0000000000000000000000000000000000000000" },
+          { status: "success", result: 60 },
+          { status: "success", result: 3000 },
+        ]
+      },
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const sleeps: number[] = []
+    const chain = viemChain(client, {} as LogRouter, {
+      logger: () => {},
+      sleep: async (ms) => {
+        sleeps.push(ms)
+      },
+    })
+    expect(await chain.readMasterLaunchConfigs([{ factory, launchId: 21n }], 58_774_376n)).toEqual([
+      {
+        token: "0xb0ff8207ebb8cc285fc53e4e3020592742636fa8",
+        bitmask: 5n,
+        quote: "0x0000000000000000000000000000000000000000",
+        tickSpacing: 60,
+        fee: 3000,
+      },
+    ])
+    expect(seen).toEqual([
+      [
+        58_774_376n,
+        true,
+        ["launches", "launchBitmasks", "launchQuote", "launchTickSpacing", "launchFeeFlag"].map(
+          (fn) => [factory, fn, [21n]],
+        ),
+      ],
+    ])
+    expect(sleeps).toEqual([1_000])
+  })
+
+  it("readMetadataUris and readClassicLaunches read in one multicall and retry a transport error", async () => {
+    const token = "0x00000000000000000000000000000000000000c1"
+    const seen: unknown[] = []
+    let calls = 0
+    const classic = [
+      "0xC332CDD032ACB24225EE273E3E27CFB297CD24A8",
+      "0x8224c388250DA458f4A9710de40D1da6A0e980D6",
+      "0x0000000000000000000000000000000000000000",
+      0,
+      0,
+      10n,
+      8n,
+      3n,
+      2n,
+      5n,
+      7n,
+      9n,
+      `0x${"AB".repeat(32)}`,
+    ]
+    const client = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => {
+        throw new Error("not used")
+      },
+      multicall: async (args: {
+        blockNumber: bigint
+        allowFailure: boolean
+        contracts: { functionName: string }[]
+      }) => {
+        if (++calls % 2 === 1) throw socketError()
+        seen.push([args.blockNumber, args.contracts.map((c) => c.functionName)])
+        return args.contracts[0]!.functionName === "launches"
+          ? [classic]
+          : [{ status: "success", result: "ipfs://x" }, { status: "failure" }]
+      },
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const sleeps: number[] = []
+    const chain = viemChain(client, {} as LogRouter, {
+      logger: () => {},
+      sleep: async (ms) => {
+        sleeps.push(ms)
+      },
+    })
+    expect(await chain.readMetadataUris([token, token], 10n)).toEqual(["ipfs://x", null])
+    const [launch] = await chain.readClassicLaunches([1n], 11n)
+    expect(launch).toMatchObject({
+      token: "0xc332cdd032acb24225ee273e3e27cfb297cd24a8",
+      totalSupply: 10n,
+      tokensSold: 3n,
+      graduationQuote: 9n,
+      poolId: `0x${"ab".repeat(32)}`,
+    })
+    expect(seen).toEqual([
+      [10n, ["metadataURI", "metadataURI"]],
+      [11n, ["launches"]],
+    ])
+    expect(sleeps).toEqual([1_000, 1_000])
+  })
+})

@@ -1,8 +1,10 @@
 import {
   ipfsCid,
   type LaunchMetadataFields,
+  launchImage,
   MAX_DESCRIPTION,
   MAX_LINK,
+  object,
   textField,
 } from "../metadata"
 
@@ -18,20 +20,6 @@ export function gatewayCid(uri: string): string | null {
   return m?.[1] === undefined ? null : ipfsCid(`ipfs://${m[1]}`)
 }
 
-/** An `https:` image URL of at most 2,048 characters without credentials, in its normalized form. */
-function httpsImage(v: string): string | null {
-  try {
-    const u = new URL(v)
-    if (u.protocol !== "https:" || u.username !== "" || u.password !== "") return null
-    return u.href.length <= MAX_LINK ? u.href : null
-  } catch {
-    return null
-  }
-}
-
-const object = (v: unknown): Record<string, unknown> | null =>
-  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
-
 /**
  * The description, image and links of a Tsunami token's metadata JSON. The image is kept when it is
  * an `https:` URL, or an `ipfs://` link served through `gateway`; anything else is null. Links are
@@ -42,10 +30,9 @@ export function parseTsunamiMetadata(json: unknown, gateway: string): LaunchMeta
   if (doc === null) return null
   const socials = object(doc.socials) ?? {}
   const image = typeof doc.image === "string" ? doc.image : null
-  const cid = image === null ? null : ipfsCid(image)
   return {
     description: textField(doc.description, MAX_DESCRIPTION, true),
-    imageUrl: cid !== null ? `${gateway}/ipfs/${cid}` : image === null ? null : httpsImage(image),
+    imageUrl: launchImage(image, gateway),
     links: {
       telegram: textField(socials.telegram, MAX_LINK, false),
       twitter: textField(socials.x, MAX_LINK, false),

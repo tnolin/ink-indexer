@@ -8,6 +8,9 @@ export const DEFAULT_IPFS_GATEWAY = "https://cracker.mypinata.cloud"
 /** A gateway that serves Tsunami's metadata CIDs. */
 export const DEFAULT_TSUNAMI_IPFS_GATEWAY = "https://burning-aqua-planarian.myfilebase.com"
 
+/** A gateway that serves Hookit's metadata CIDs. */
+export const DEFAULT_HOOKIT_IPFS_GATEWAY = "https://ipfs.filebase.io"
+
 const MAX_BODY_BYTES = 64 * 1024
 const RETRY_DELAY_MS = 500
 
@@ -20,6 +23,8 @@ export type IpfsDeps = {
   attempts?: number
   sleep?: (ms: number) => Promise<void>
   log?: Logger
+  /** Accept `ipfs://` URIs only, not gateway URLs: no Hookit token names a gateway URL. */
+  ipfsOnly?: boolean
   /** Named in the warning when every attempt fails. */
   launchpad?: string
   token?: Address
@@ -54,7 +59,7 @@ async function readBounded(res: Response): Promise<string | null> {
  * failure, with one warning that names the token and never the gateway URL.
  */
 export async function fetchIpfsJson(uri: string, deps: IpfsDeps): Promise<unknown | null> {
-  const cid = ipfsCid(uri) ?? gatewayCid(uri)
+  const cid = ipfsCid(uri) ?? (deps.ipfsOnly ? null : gatewayCid(uri))
   if (cid === null) return null
   const doFetch = deps.fetch ?? fetch
   const sleep = deps.sleep ?? wait

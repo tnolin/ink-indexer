@@ -1,0 +1,18 @@
+{
+  "name": "hookit-pool-state",
+  "blockNumber": "60145125n",
+  "pools": [
+    {
+      "poolId": "0xdc2f8c6d0a436fd2fb35c1003caf4acb25da7b58bd1475c7039917a30cb3ad59",
+      "sqrtPriceX96": "146338654764264073409937209457542n",
+      "tick": 150434,
+      "liquidity": "43819337836949184032898n"
+    },
+    {
+      "poolId": "0xced50060d055523063d2dd7d4d497314cb8859928eebfac62c9563b1453bb13f",
+      "sqrtPriceX96": "1456211284013338515336897862436591n",
+      "tick": 196390,
+      "liquidity": "46321140157684498464045n"
+    }
+  ]
+}

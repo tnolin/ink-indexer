@@ -1,0 +1,12 @@
+{
+  "name": "hookit-pool-key",
+  "launchId": "1n",
+  "blockNumber": "60555590n",
+  "poolKey": {
+    "currency0": "0x0000000000000000000000000000000000000000",
+    "currency1": "0xc332cdd032acb24225ee273e3e27cfb297cd24a8",
+    "fee": 0,
+    "tickSpacing": 60,
+    "hooks": "0xaac738f140d529bc0662bddd812964d843362088"
+  }
+}

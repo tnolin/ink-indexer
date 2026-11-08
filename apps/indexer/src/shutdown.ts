@@ -18,7 +18,7 @@ export function createShutdown(deps: {
   /** How long to wait for the in-flight tick before closing anyway. */
   waitMs?: number
   /** Receives the error behind a fatal or stall exit; flushed before the process exits. */
-  report?: Reporter
+  report?: Pick<Reporter, "capture" | "flush">
 }) {
   const { stop, inFlight, end, exit, logger, waitMs = 10_000, report } = deps
   let stopping = false

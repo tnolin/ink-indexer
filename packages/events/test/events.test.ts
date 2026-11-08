@@ -189,4 +189,74 @@ describe("@ink-indexer/events", () => {
     expectTypeOf<NftStatsEvent["listedCount"]>().toEqualTypeOf<number | null>()
     expectTypeOf<NftStatsEvent["listedCapped"]>().toEqualTypeOf<boolean>()
   })
+
+  it("a v2 launch row without markets and a swap row without tokenLiquidity still parse", () => {
+    const launch = JSON.parse(
+      JSON.stringify({
+        v: 2,
+        type: "launchpad.launch",
+        chainId: 57073,
+        launchpad: "inkypump",
+        token: "0x01",
+        launchId: "0x02",
+        txHash: "0x03",
+        logIndex: 0,
+        blockNumber: "1",
+        blockTimestamp: 1,
+        hook: "0x04",
+        creator: "0x05",
+        name: null,
+        ticker: null,
+        description: null,
+        imageUrl: null,
+        links: { telegram: null, twitter: null, website: null },
+        quoteAsset: "0x06",
+        targetRaise: "1",
+        totalSupply: "1",
+        startsInPool: false,
+        poolId: null,
+        poolManager: null,
+        customHook: null,
+        hookModules: null,
+      }),
+    ) as LaunchEvent
+    const swap = JSON.parse(
+      JSON.stringify({
+        v: 2,
+        type: "launchpad.swap",
+        chainId: 57073,
+        launchpad: "inkypump",
+        token: "0x01",
+        launchId: "0x02",
+        txHash: "0x03",
+        logIndex: 0,
+        blockNumber: "1",
+        blockTimestamp: 1,
+        poolId: "0x07",
+        poolManager: "0x08",
+        side: "buy",
+        trader: "0x09",
+        router: "0x0a",
+        tokenAmount: "1",
+        quoteAmount: "1",
+        quoteAsset: "0x06",
+        price: "1",
+        marketCap: "1",
+        athMarketCap: "1",
+        quoteLiquidity: "1",
+        supply: "1",
+      }),
+    ) as SwapEvent
+    const stored: StoredEvent[] = [launch, swap]
+    expect(stored).toHaveLength(2)
+    expect(launch.markets ?? null).toBeNull()
+    expect(swap.tokenLiquidity ?? null).toBeNull()
+  })
+
+  it("markets and tokenLiquidity are optional additions", () => {
+    expectTypeOf<LaunchEvent["markets"]>().toEqualTypeOf<
+      { quoteAsset: Address; poolId: Hash }[] | null | undefined
+    >()
+    expectTypeOf<SwapEvent["tokenLiquidity"]>().toEqualTypeOf<string | undefined>()
+  })
 })

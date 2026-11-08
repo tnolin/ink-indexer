@@ -130,4 +130,34 @@ describe("decodeLog", () => {
   it("returns null for an unrelated topic0", () => {
     expect(decodeLog({ topics: [pad("0x1234", { size: 32 })], data: "0x" })).toBeNull()
   })
+
+  it("returns null for a trade whose type is neither buy nor sell", () => {
+    const log = tradeLog({
+      launchId: ID,
+      trader: TRADER,
+      side: "buy",
+      price: 1n,
+      sold: 1n,
+      timestamp: 1,
+      tokenAmount: 1n,
+      quoteAmount: 1n,
+    })
+    const odd = { ...log, data: `0x${"00".repeat(31)}02${log.data.slice(66)}` as typeof log.data }
+    expect(decodeLog(odd)).toBeNull()
+  })
+
+  it("returns null for a hook-created log with missing topics", () => {
+    const log = xstocksHookCreatedLog({
+      assetId: pad("0x1"),
+      wrapper: "0x00000000000000000000000000000000000000d1",
+      hook: "0x00000000000000000000000000000000000000d2",
+    })
+    for (const n of [1, 2, 3])
+      expect(decodeLog({ ...log, topics: log.topics.slice(0, n) })).toBeNull()
+  })
+
+  it("returns null for a log with data that does not decode", () => {
+    const log = launchCreatedLog({ launchId: ID, creator: CREATOR, token: TOKEN, targetRaise: 1n })
+    expect(decodeLog({ ...log, data: "0x" })).toBeNull()
+  })
 })

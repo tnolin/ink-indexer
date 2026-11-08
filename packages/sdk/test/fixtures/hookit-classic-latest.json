@@ -1,0 +1,76 @@
+{
+  "name": "hookit-classic-latest",
+  "txHash": "0xc8e29bf8fcd19a1b0daa86fce9880e3742ff9126bdd232dd0fce4ebbee2f8ad2",
+  "blockNumber": "59944963n",
+  "blockHash": "0x2d36c658c95b754242f18087b7c04129f0d597cb365ee9cab3decde79ba9227b",
+  "timestamp": 1793443374,
+  "logs": [
+    {
+      "address": "0x6180780ba0a0c28dd12a1a335e2020d6dffc4308",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "0x00000000000000000000000034bd9dec982167036a12ddf6ed2e7d71d5113dd6"
+      ],
+      "data": "0x0000000000000000000000000000000000000000033b2e3c9fd0803ce8000000",
+      "blockNumber": "59944963n",
+      "blockHash": "0x2d36c658c95b754242f18087b7c04129f0d597cb365ee9cab3decde79ba9227b",
+      "transactionHash": "0xc8e29bf8fcd19a1b0daa86fce9880e3742ff9126bdd232dd0fce4ebbee2f8ad2",
+      "logIndex": 5
+    },
+    {
+      "address": "0x34bd9dec982167036a12ddf6ed2e7d71d5113dd6",
+      "topics": [
+        "0x97594ef5a8d12cb83cb0eac6982834dbb6247609abd0efbb557b5545ccc03310",
+        "0x000000000000000000000000000000000000000000000000000000000000000b",
+        "0x0000000000000000000000006180780ba0a0c28dd12a1a335e2020d6dffc4308",
+        "0x000000000000000000000000d88b2d4b5febf8d5f440de9f4e5e216f56fea1ba"
+      ],
+      "data": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003a4965bf58a40000",
+      "blockNumber": "59944963n",
+      "blockHash": "0x2d36c658c95b754242f18087b7c04129f0d597cb365ee9cab3decde79ba9227b",
+      "transactionHash": "0xc8e29bf8fcd19a1b0daa86fce9880e3742ff9126bdd232dd0fce4ebbee2f8ad2",
+      "logIndex": 6
+    }
+  ],
+  "sender": "0xd88b2d4b5febf8d5f440de9f4e5e216f56fea1ba",
+  "tokens": [
+    {
+      "token": "0x6180780ba0a0c28dd12a1a335e2020d6dffc4308",
+      "metadataURI": "ipfs://Qmbkq6UQEAYaKSFB49VePeNKKnKJqQomDkRSQqGzfX2TWD",
+      "totalSupply": "1000000000000000000000000000n",
+      "totalSupplyBefore": null
+    }
+  ],
+  "classic": [
+    {
+      "id": "11n",
+      "at": {
+        "token": "0x6180780ba0a0c28dd12a1a335e2020d6dffc4308",
+        "creator": "0xd88b2d4b5febf8d5f440de9f4e5e216f56fea1ba",
+        "quote": "0x0000000000000000000000000000000000000000",
+        "totalSupply": "1000000000000000000000000000n",
+        "curveSupply": "800000000000000000000000000n",
+        "tokensSold": "0n",
+        "realQuote": "0n",
+        "virtualQuote": "1400000000000000000n",
+        "virtualToken": "1066666666666666666666666666n",
+        "graduationQuote": "4200000000000000000n",
+        "poolId": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "before": {
+        "token": "0x0000000000000000000000000000000000000000",
+        "creator": "0x0000000000000000000000000000000000000000",
+        "quote": "0x0000000000000000000000000000000000000000",
+        "totalSupply": "0n",
+        "curveSupply": "0n",
+        "tokensSold": "0n",
+        "realQuote": "0n",
+        "virtualQuote": "0n",
+        "virtualToken": "0n",
+        "graduationQuote": "0n",
+        "poolId": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ]
+}

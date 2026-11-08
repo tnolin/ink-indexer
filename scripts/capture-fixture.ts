@@ -6,22 +6,38 @@
 // With --topics tsunami it records the transaction's Tsunami logs, the transaction's sender and, for every curve
 // it touches, the token, the curve state, and the token's total supply and Riptide vault balance at the
 // transaction's block, plus the curve state at the chain head when the fixture was recorded.
-// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami]
+// With --topics hookit it records the transaction's Hookit logs, PoolManager Swap and Initialize logs and the
+// ERC-20 Transfers of every Hookit token it touches, the transaction's sender, and for each of those tokens the
+// total supply (at the block and the block before), the metadata URI and, for a bonding launch, launches(id).
+// --topics hookit-history <name> <launchId> <fromBlock> <toBlock> [httpRpcUrl] records every bonding event of one
+// launch in a block range with launches(id) at the last event's block.
+// --topics hookit-state <name> <block> <poolId>... [--rpc url] records StateView slot0 and liquidity at a block.
+// --topics hookit-config <name> <txHash>... records, for every Master launch in those transactions, what the
+// launching factory's views answer (token, bitmask, quote, tick spacing, fee) at the launch block.
+// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami|hookit]
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   type ChainLog,
+  decodeHookitLog,
   decodeInkfunLog,
   decodeLog,
+  HOOKIT_BONDING_FACTORY,
+  HOOKIT_LOG_TOPICS,
+  HOOKIT_MASTER_FACTORIES,
+  HOOKIT_TOPICS,
   INKFUN_LOG_TOPICS,
   type LaunchKey,
   type LaunchState,
   LOG_TOPICS,
   RIPTIDE_VAULT,
   readBalances,
+  readClassicLaunches,
   readCurveSold,
   readInkfunLaunches,
   readLaunchStates,
+  readMasterLaunchConfigs,
+  readMetadataUris,
   readTotalSupplies,
   readTsunamiCurves,
   SWAP_TOPIC,
@@ -30,20 +46,170 @@ import {
   TSUNAMI_TOPICS,
   tsunamiCurveAbi,
 } from "@ink-indexer/sdk"
-import { type Address, createPublicClient, type Hash, type Hex, http, parseAbi } from "viem"
+import {
+  type Address,
+  createPublicClient,
+  type Hash,
+  type Hex,
+  http,
+  pad,
+  parseAbi,
+  toHex,
+} from "viem"
 import { ink } from "viem/chains"
 
+// PoolManager `Initialize`.
+const INITIALIZE_TOPIC: Hex = TSUNAMI_TOPICS.initialize
 const argv = process.argv.slice(2)
 const topicsAt = argv.indexOf("--topics")
 const mode = topicsAt === -1 ? "inkypump" : argv.splice(topicsAt, 2)[1]
-if (mode !== "inkypump" && mode !== "v4" && mode !== "inkfun" && mode !== "tsunami")
+if (
+  mode !== "inkypump" &&
+  mode !== "v4" &&
+  mode !== "inkfun" &&
+  mode !== "tsunami" &&
+  mode !== "hookit" &&
+  mode !== "hookit-history" &&
+  mode !== "hookit-state" &&
+  mode !== "hookit-config"
+)
   throw new Error(`unknown --topics ${mode}`)
-const [name, txHash, url = "https://rpc-gel.inkonchain.com"] = argv
+const rpcAt = argv.indexOf("--rpc")
+const rpcFlag = rpcAt === -1 ? undefined : argv.splice(rpcAt, 2)[1]
+const [name, txHash] = argv
+const url =
+  rpcFlag ?? (mode.startsWith("hookit-") ? undefined : argv[2]) ?? "https://rpc-gel.inkonchain.com"
 if (!name || !txHash)
   throw new Error(
-    "usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami]",
+    "usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami|hookit]",
   )
 const client = createPublicClient({ chain: ink, transport: http(url, { retryCount: 5 }) })
+
+const dir = join(import.meta.dirname, "../packages/sdk/test/fixtures")
+mkdirSync(dir, { recursive: true })
+const save = (fixture: object, summary: string) => {
+  const json = JSON.stringify(fixture, (_k, v) => (typeof v === "bigint" ? `${v}n` : v), 2)
+  writeFileSync(join(dir, `${name}.json`), `${json}\n`)
+  console.log(`wrote ${name}.json: ${summary}`)
+}
+const toChainLog = (l: {
+  address: Address
+  topics: readonly Hex[]
+  data: Hex
+  blockNumber: bigint
+  blockHash: Hash
+  transactionHash: Hash
+  logIndex: number
+}): ChainLog => ({
+  address: l.address.toLowerCase() as Address,
+  topics: [...l.topics],
+  data: l.data,
+  blockNumber: l.blockNumber,
+  blockHash: l.blockHash,
+  transactionHash: l.transactionHash,
+  logIndex: l.logIndex,
+})
+
+if (mode === "hookit-history") {
+  // <name> <launchId> <fromBlock> <toBlock>: the range is scanned in chunks the node accepts.
+  const [, launchId, from, to] = argv
+  if (!from || !to) throw new Error("usage: <name> <launchId> <fromBlock> <toBlock> [--rpc url]")
+  const classic = [
+    HOOKIT_TOPICS.classicLaunched,
+    HOOKIT_TOPICS.bought,
+    HOOKIT_TOPICS.sold,
+    HOOKIT_TOPICS.drop,
+    HOOKIT_TOPICS.graduated,
+  ]
+  const chunk = rpcFlag ? 9_999n : 999n
+  const history: ChainLog[] = []
+  for (let a = BigInt(from); a <= BigInt(to); a += chunk + 1n) {
+    const found = await client.request({
+      method: "eth_getLogs",
+      params: [
+        {
+          address: HOOKIT_BONDING_FACTORY,
+          topics: [classic, pad(toHex(BigInt(launchId as string)), { size: 32 })],
+          fromBlock: toHex(a),
+          toBlock: toHex(a + chunk > BigInt(to) ? BigInt(to) : a + chunk),
+        },
+      ],
+    })
+    for (const l of found)
+      history.push(
+        toChainLog({
+          ...l,
+          blockNumber: BigInt(l.blockNumber as Hex),
+          logIndex: Number(l.logIndex),
+        } as Parameters<typeof toChainLog>[0]),
+      )
+  }
+  const last = history.at(-1)
+  if (!last) throw new Error("no events in range")
+  const [at] = await readClassicLaunches(client, [BigInt(launchId as string)], last.blockNumber)
+  save(
+    {
+      name,
+      launchId: BigInt(launchId as string),
+      blockNumber: last.blockNumber,
+      logs: history,
+      state: at,
+    },
+    `${history.length} logs`,
+  )
+  process.exit(0)
+}
+
+if (mode === "hookit-config") {
+  // <name> <txHash>...
+  const reads = []
+  for (const hash of argv.slice(1) as Hash[]) {
+    const receipt = await client.getTransactionReceipt({ hash })
+    for (const l of receipt.logs) {
+      const d = decodeHookitLog(l)
+      const factory = l.address.toLowerCase() as Address
+      if (d?.kind !== "masterLaunched" || !HOOKIT_MASTER_FACTORIES.has(factory)) continue
+      const [config] = await readMasterLaunchConfigs(
+        client,
+        [{ factory, launchId: d.launchId }],
+        receipt.blockNumber,
+      )
+      reads.push({
+        txHash: hash,
+        blockNumber: receipt.blockNumber,
+        factory,
+        launchId: d.launchId,
+        config,
+      })
+    }
+  }
+  save({ name, reads }, `${reads.length} launch configurations`)
+  process.exit(0)
+}
+
+if (mode === "hookit-state") {
+  // <name> <block> <poolId>...
+  const STATE_VIEW: Address = "0x76fd297e2d437cd7f76d50f01afe6160f86e9990"
+  const stateViewAbi = parseAbi([
+    "function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
+    "function getLiquidity(bytes32 poolId) view returns (uint128 liquidity)",
+  ])
+  const at = BigInt(txHash)
+  const pools = []
+  for (const poolId of argv.slice(2) as Hash[]) {
+    const [slot0, liquidity] = await client.multicall({
+      allowFailure: false,
+      blockNumber: at,
+      contracts: [
+        { address: STATE_VIEW, abi: stateViewAbi, functionName: "getSlot0", args: [poolId] },
+        { address: STATE_VIEW, abi: stateViewAbi, functionName: "getLiquidity", args: [poolId] },
+      ],
+    })
+    pools.push({ poolId, sqrtPriceX96: slot0[0], tick: slot0[1], liquidity })
+  }
+  save({ name, blockNumber: at, pools }, `${pools.length} pools`)
+  process.exit(0)
+}
 
 const kept: Hex[] =
   mode === "inkfun"
@@ -52,7 +218,9 @@ const kept: Hex[] =
       ? [...TSUNAMI_LOG_TOPICS]
       : mode === "v4"
         ? [...LOG_TOPICS, SWAP_TOPIC, TRANSFER_TOPIC]
-        : [...LOG_TOPICS]
+        : mode === "hookit"
+          ? [...HOOKIT_LOG_TOPICS, SWAP_TOPIC, TRANSFER_TOPIC, INITIALIZE_TOPIC]
+          : [...LOG_TOPICS]
 const receipt = await client.getTransactionReceipt({ hash: txHash as Hash })
 const block = await client.getBlock({ blockNumber: receipt.blockNumber })
 const logs: ChainLog[] = receipt.logs
@@ -67,12 +235,56 @@ const logs: ChainLog[] = receipt.logs
     logIndex: l.logIndex,
   }))
 
-const dir = join(import.meta.dirname, "../packages/sdk/test/fixtures")
-mkdirSync(dir, { recursive: true })
-const save = (fixture: object, summary: string) => {
-  const json = JSON.stringify(fixture, (_k, v) => (typeof v === "bigint" ? `${v}n` : v), 2)
-  writeFileSync(join(dir, `${name}.json`), `${json}\n`)
-  console.log(`wrote ${name}.json: ${summary}`)
+if (mode === "hookit") {
+  // A Hookit token answers metadataURI(); the Transfer emitters that do are the tokens the transaction touches.
+  const emitters = [
+    ...new Set(logs.filter((l) => l.topics[0] === TRANSFER_TOPIC).map((l) => l.address)),
+  ]
+  const uris = await readMetadataUris(client, emitters, block.number)
+  const tokens = emitters.filter((_, i) => uris[i] !== null)
+  const tokenUris = uris.filter((u) => u !== null)
+  const hookitLogs = logs.filter(
+    (l) => l.topics[0] !== TRANSFER_TOPIC || tokens.includes(l.address),
+  )
+  const supplies = await readTotalSupplies(client, tokens, block.number)
+  const suppliesBefore = await readTotalSupplies(client, tokens, block.number - 1n).catch(
+    () => null,
+  )
+  const classicIds = [
+    ...new Set(
+      hookitLogs.flatMap((l) =>
+        l.address === HOOKIT_BONDING_FACTORY && l.topics[1] ? [BigInt(l.topics[1])] : [],
+      ),
+    ),
+  ]
+  const launches = await readClassicLaunches(client, classicIds, block.number)
+  const launchesBefore = await readClassicLaunches(client, classicIds, block.number - 1n).catch(
+    () => null, // the launch did not exist yet
+  )
+  save(
+    {
+      name,
+      txHash: receipt.transactionHash,
+      blockNumber: block.number,
+      blockHash: block.hash,
+      timestamp: Number(block.timestamp),
+      logs: hookitLogs,
+      sender: receipt.from.toLowerCase(),
+      tokens: tokens.map((token, i) => ({
+        token,
+        metadataURI: tokenUris[i],
+        totalSupply: supplies[i],
+        totalSupplyBefore: suppliesBefore?.[i] ?? null,
+      })),
+      classic: classicIds.map((id, i) => ({
+        id,
+        at: launches[i],
+        before: launchesBefore?.[i] ?? null,
+      })),
+    },
+    `${hookitLogs.length} logs, ${tokens.length} tokens, ${classicIds.length} bonding launches`,
+  )
+  process.exit(0)
 }
 
 if (mode === "inkfun") {
