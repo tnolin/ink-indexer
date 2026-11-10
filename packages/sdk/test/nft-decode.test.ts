@@ -8,7 +8,7 @@ import {
   toFunctionSelector,
   toHex,
 } from "viem"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
   CHIMERA_FACTORY,
   CHIMERA_FACTORY_START_BLOCK,
@@ -19,6 +19,7 @@ import {
   decodeNftTransfers,
   decodeOrderFulfilled,
   decodeSeaDropLog,
+  MAX_STORED_QTY,
   mergeMatchedSales,
   NFT_SELECTORS,
   NFT_TOPICS,
@@ -633,5 +634,37 @@ describe("mergeMatchedSales", () => {
     const [m, ...rest] = mergeMatchedSales(sales)
     expect(rest).toEqual([])
     expect(m).toMatchObject({ buyer: BOB, seller: ALICE, priceWei: 100n })
+  })
+})
+
+describe("stored-size bound", () => {
+  const MAX_UINT = 2n ** 256n - 1n
+  const batchLog = (ids: bigint[], values: bigint[]) =>
+    makeLog({
+      address: NFT_A,
+      topics: eventTopics({
+        abi: parseAbi([
+          "event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)",
+        ]),
+        eventName: "TransferBatch",
+        args: { operator: BOB, from: ZERO_ADDR, to: ALICE },
+      }),
+      data: encodeAbiParameters([{ type: "uint256[]" }, { type: "uint256[]" }], [ids, values]),
+    })
+
+  it("drops a batch whose summed quantity does not fit numeric(78, 0), and warns", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const ids = Array(9).fill(1n)
+    expect(decodeNftTransfers(batchLog(ids, Array(9).fill(MAX_UINT)))).toEqual([])
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it("keeps a transfer whose summed quantity still fits and drops one whose sum does not", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(MAX_STORED_QTY).toBe(10n ** 78n - 1n)
+    expect(decodeNftTransfers(batchLog(Array(8).fill(1n), Array(8).fill(MAX_UINT)))).toHaveLength(1)
+    expect(decodeNftTransfers(batchLog(Array(9).fill(1n), Array(9).fill(MAX_UINT)))).toEqual([])
+    warn.mockRestore()
   })
 })

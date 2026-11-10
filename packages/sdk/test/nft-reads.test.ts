@@ -4,6 +4,8 @@ import {
   encodeAbiParameters,
   type Hex,
   HttpRequestError,
+  InvalidInputRpcError,
+  LimitExceededRpcError,
 } from "viem"
 import { describe, expect, it } from "vitest"
 import {
@@ -132,5 +134,29 @@ describe("hasCodeAt", () => {
   it("is false for no code", async () => {
     expect(await hasCodeAt(code(undefined).client, CONTRACT, 99n)).toBe(false)
     expect(await hasCodeAt(code("0x").client, CONTRACT, 99n)).toBe(false)
+  })
+})
+
+describe("RPC error responses", () => {
+  const rpcError = (E: typeof InvalidInputRpcError | typeof LimitExceededRpcError) =>
+    new CallExecutionError(new E(new Error("rpc") as never), {})
+
+  it("a -32000 error response such as an invalid opcode reads as no answer", async () => {
+    const { client } = stub(rpcError(InvalidInputRpcError))
+    expect(await readMintStats(client, CONTRACT, MINTER, 1n)).toBeNull()
+  })
+
+  it("a node that does not have the block yet is still thrown, so the read is retried", async () => {
+    const lag = new CallExecutionError(
+      new InvalidInputRpcError(new Error("header not found") as never),
+      {},
+    )
+    const { client } = stub(lag)
+    await expect(readMintStats(client, CONTRACT, MINTER, 1n)).rejects.toThrow()
+  })
+
+  it("a rate-limit error response is still thrown", async () => {
+    const { client } = stub(rpcError(LimitExceededRpcError))
+    await expect(readMintStats(client, CONTRACT, MINTER, 1n)).rejects.toThrow()
   })
 })

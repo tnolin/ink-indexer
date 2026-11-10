@@ -21,7 +21,30 @@ function isRevert(err: unknown): boolean {
   return false
 }
 
-/** The return data of an eth_call at a block, or null when it reverted or returned nothing. */
+/** The error code geth-style nodes give for a call that fails while executing: an invalid opcode, out of gas, a stack underflow, an aborted execution. */
+const EXECUTION_FAILED_CODE = -32000
+/** -32000 is also what a node answers when it does not have the block yet or no longer has its state; those pass, so the read is retried. */
+const NODE_LAG =
+  /header not found|missing trie node|unknown block|block .*not found|pruned|state .*not available|syncing/i
+
+/**
+ * True when the node answered the call with the execution-failure error of a contract that cannot
+ * run from the zero address, as one that hits an invalid opcode does. Retrying gives the same answer.
+ * Other JSON-RPC errors (rate limits, internal errors, a node without the block) and connection
+ * failures are not included.
+ */
+function isExecutionFailure(err: unknown): boolean {
+  let failed = false
+  for (let e = err as { cause?: unknown } | undefined, depth = 0; e && depth < 8; depth++) {
+    const { code, message, details } = e as { code?: number; message?: string; details?: string }
+    if (NODE_LAG.test(`${message ?? ""} ${details ?? ""}`)) return false
+    if (code === EXECUTION_FAILED_CODE) failed = true
+    e = e.cause as typeof e
+  }
+  return failed
+}
+
+/** The return data of an eth_call at a block, or null when it reverted, the node reported an execution failure, or it returned nothing. */
 async function callAt(
   client: NftReader,
   to: Address,
@@ -32,7 +55,7 @@ async function callAt(
     const { data: out } = await client.call({ to, data, blockNumber })
     return out && out !== "0x" ? out : null
   } catch (err) {
-    if (isRevert(err)) return null
+    if (isRevert(err) || isExecutionFailure(err)) return null
     throw err
   }
 }

@@ -35,7 +35,17 @@ export function stateFor(token: Address, sold: bigint): LaunchState {
 }
 
 /** LaunchCreated (logIndex 0) and LaunchMetadata (logIndex 1) in one tx. */
-export function launch(chain: FakeChain, a: { n: number; block: bigint; hook?: Address }) {
+export function launch(
+  chain: FakeChain,
+  a: {
+    n: number
+    block: bigint
+    hook?: Address
+    name?: string
+    ticker?: string
+    description?: string
+  },
+) {
   const hook = a.hook ?? HOOK
   const transactionHash = nextTx()
   const launchId = BigInt(launchIdOf(a.n))
@@ -47,7 +57,12 @@ export function launch(chain: FakeChain, a: { n: number; block: bigint; hook?: A
   )
   chain.add(
     launchMetadataLog(
-      { launchId, name: `Token ${a.n}`, ticker: `T${a.n}` },
+      {
+        launchId,
+        name: a.name ?? `Token ${a.n}`,
+        ticker: a.ticker ?? `T${a.n}`,
+        description: a.description,
+      },
       { address: hook, blockNumber: a.block, transactionHash, logIndex: 1 },
     ),
   )

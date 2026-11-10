@@ -62,6 +62,22 @@ const knownLaunch = (n: number, progressBps: number): KnownLaunch => ({
 })
 
 describe("processLogs", () => {
+  it("stores launch text without NUL or lone surrogates, cut to a bounded length", async () => {
+    const { chain, run } = setup()
+    launch(chain, {
+      n: 1,
+      block: B,
+      name: "Bad\u0000Name",
+      ticker: "T\ud800K",
+      description: `d\u0000${"x".repeat(10_000)}`,
+    })
+    const batch = await run()
+    expect(batch.tokens[0]).toMatchObject({ name: "BadName", ticker: "T\ufffdK" })
+    const ev = batch.events[0]!.event as { description: string }
+    expect(ev.description).not.toContain("\u0000")
+    expect(ev.description.length).toBeLessThanOrEqual(4_000)
+  })
+
   it("turns a launch with metadata and a buy into token, curve, trade and events", async () => {
     const { chain, run } = setup()
     launch(chain, { n: 1, block: B })

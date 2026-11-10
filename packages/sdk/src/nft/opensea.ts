@@ -4,6 +4,10 @@
  * input that is not usable at all gives null. None of them throws.
  */
 
+import { cleanText, MAX_LINK, MAX_TOKEN_TEXT, textField } from "../metadata"
+
+const MAX_HANDLE = 100
+
 export type OsContract = { slug: string | null; standard: string }
 
 export type OsCollection = {
@@ -77,9 +81,11 @@ function obj(v: unknown): Obj | null {
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null
 }
 
-/** A non-empty string, else null. */
+/** A non-empty string made safe to store (no NUL, no lone surrogates), else null. */
 function str(v: unknown): string | null {
-  return typeof v === "string" && v !== "" ? v : null
+  if (typeof v !== "string") return null
+  const s = cleanText(v)
+  return s === "" ? null : s
 }
 
 /** A finite number, or a string of digits that parses to one, else null. */
@@ -129,23 +135,23 @@ export function parseContract(j: unknown): OsContract | null {
 /** `GET /collections/{slug}`, or one entry of a page of collections. Null without a slug. */
 export function parseCollection(j: unknown): OsCollection | null {
   const o = obj(j)
-  const slug = o ? str(o.collection) : null
+  const slug = o ? textField(o.collection, MAX_TOKEN_TEXT, false) : null
   if (!o || !slug) return null
   const rarity = obj(o.rarity)
   return {
     slug,
-    name: str(o.name),
-    imageUrl: str(o.image_url),
-    twitter: str(o.twitter_username),
-    website: str(o.project_url),
-    discord: str(o.discord_url),
-    safelist: str(o.safelist_status),
-    createdDate: str(o.created_date),
+    name: textField(o.name, MAX_TOKEN_TEXT, true),
+    imageUrl: textField(o.image_url, MAX_LINK, false),
+    twitter: textField(o.twitter_username, MAX_HANDLE, false),
+    website: textField(o.project_url, MAX_LINK, false),
+    discord: textField(o.discord_url, MAX_LINK, false),
+    safelist: textField(o.safelist_status, MAX_HANDLE, false),
+    createdDate: textField(o.created_date, MAX_HANDLE, false),
     totalSupply: num(o.total_supply),
     rarityCalculatedAt: rarity ? str(rarity.calculated_at) : null,
     maxRank: rarity ? num(rarity.max_rank) : null,
-    openseaUrl: str(o.opensea_url),
-    owner: str(o.owner)?.toLowerCase() ?? null,
+    openseaUrl: textField(o.opensea_url, MAX_LINK, false),
+    owner: textField(o.owner, MAX_HANDLE, false)?.toLowerCase() ?? null,
   }
 }
 

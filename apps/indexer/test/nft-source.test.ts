@@ -13,7 +13,16 @@ import {
   SEAPORT_1_6,
   ZERO_TOPIC,
 } from "@ink-indexer/sdk"
-import { type Address, encodeAbiParameters, encodeEventTopics, type Hex, pad, parseAbi } from "viem"
+import {
+  type Address,
+  encodeAbiParameters,
+  encodeEventTopics,
+  type Hex,
+  HttpRequestError,
+  InvalidInputRpcError,
+  pad,
+  parseAbi,
+} from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import {
   loadChimeraCampaigns,
@@ -786,5 +795,101 @@ describe("collections from sales", () => {
       { contract: SWEEP_COLLECTION, slug: null, due: true },
     ])
     expect(await createCollectionsFromSales(sql)).toBe(0)
+  })
+
+  it("a contract whose getMintStats call fails with an RPC error is skipped and the batch commits", async () => {
+    const logs = loadNftFixture("hornet-mints")
+    const warnings: string[] = []
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    chain.mintStats.set(HORNET, () => {
+      throw new InvalidInputRpcError(new Error("invalid opcode: INVALID") as never)
+    })
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: () => {},
+      sources: [
+        nftSource({
+          sql,
+          chain,
+          logger: (level, msg) => void (level === "warn" && warnings.push(msg)),
+        }),
+      ],
+    })
+    await idx.init()
+    await idx.backfill(firstBlock(logs), chain.head)
+    expect(await count("nft_mints")).toBeGreaterThan(0)
+    expect(warnings.join()).toContain("milestone")
+  })
+
+  it("a transport failure in a milestone read still fails the batch so it is retried", async () => {
+    const logs = loadNftFixture("hornet-mints")
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    chain.mintStats.set(HORNET, () => {
+      throw new HttpRequestError({ url: "http://rpc.test", status: 503 })
+    })
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: () => {},
+      sources: [nftSource({ sql, chain, logger: () => {} })],
+    })
+    await idx.init()
+    await expect(idx.backfill(firstBlock(logs), chain.head)).rejects.toThrow()
+  })
+
+  describe("hostile quantities", () => {
+    const MAX_UINT = 2n ** 256n - 1n
+    const live = async (logs: ChainLog[]) => {
+      const first = firstBlock(logs)
+      const chain = new FakeChain(lastBlock(logs) + 5n)
+      for (const l of logs) chain.add(l)
+      const idx = new Indexer({
+        chain,
+        store,
+        logger: () => {},
+        sources: [nftSource({ sql, chain, logger: () => {} })],
+      })
+      await idx.init()
+      await store.writeBatch([], [], {
+        cursor: { block: first - 1n, hash: chain.hashOf(first - 1n) },
+        head: chain.head,
+      })
+      await idx.trigger()
+      return (await store.getCursor())!.block
+    }
+
+    it("commits and advances past a TransferBatch whose quantities overflow numeric(78, 0)", async () => {
+      const topics = encodeEventTopics({
+        abi: parseAbi([
+          "event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)",
+        ]),
+        eventName: "TransferBatch",
+        args: { operator: BOB, from: "0x0000000000000000000000000000000000000000", to: ALICE },
+      }) as Hex[]
+      const data = encodeAbiParameters(
+        [{ type: "uint256[]" }, { type: "uint256[]" }],
+        [Array(9).fill(1n), Array(9).fill(MAX_UINT)],
+      )
+      const log: ChainLog = {
+        address: NFT_A,
+        topics,
+        data,
+        blockNumber: 58_000_000n,
+        blockHash: `0x${"11".repeat(32)}`,
+        transactionHash: `0x${"22".repeat(32)}`,
+        logIndex: 0,
+      }
+      expect(await live([log])).toBeGreaterThan(log.blockNumber)
+      expect(await count("nft_mints")).toBe(0)
+    })
+
+    it("commits and advances past a Seaport order whose repeated lines merge past the bound", async () => {
+      const log = orderLog(Array(9).fill(nft1155(1n, MAX_UINT)), 1n)
+      expect(await live([log])).toBeGreaterThan(log.blockNumber)
+      expect(await count("nft_sales")).toBe(0)
+    })
   })
 })
