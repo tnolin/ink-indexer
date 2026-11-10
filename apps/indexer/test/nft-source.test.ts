@@ -787,4 +787,57 @@ describe("collections from sales", () => {
     ])
     expect(await createCollectionsFromSales(sql)).toBe(0)
   })
+
+  describe("hostile quantities", () => {
+    const MAX_UINT = 2n ** 256n - 1n
+    const live = async (logs: ChainLog[]) => {
+      const first = firstBlock(logs)
+      const chain = new FakeChain(lastBlock(logs) + 5n)
+      for (const l of logs) chain.add(l)
+      const idx = new Indexer({
+        chain,
+        store,
+        logger: () => {},
+        sources: [nftSource({ sql, chain, logger: () => {} })],
+      })
+      await idx.init()
+      await store.writeBatch([], [], {
+        cursor: { block: first - 1n, hash: chain.hashOf(first - 1n) },
+        head: chain.head,
+      })
+      await idx.trigger()
+      return (await store.getCursor())!.block
+    }
+
+    it("commits and advances past a TransferBatch whose quantities overflow numeric(78, 0)", async () => {
+      const topics = encodeEventTopics({
+        abi: parseAbi([
+          "event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)",
+        ]),
+        eventName: "TransferBatch",
+        args: { operator: BOB, from: "0x0000000000000000000000000000000000000000", to: ALICE },
+      }) as Hex[]
+      const data = encodeAbiParameters(
+        [{ type: "uint256[]" }, { type: "uint256[]" }],
+        [Array(9).fill(1n), Array(9).fill(MAX_UINT)],
+      )
+      const log: ChainLog = {
+        address: NFT_A,
+        topics,
+        data,
+        blockNumber: 58_000_000n,
+        blockHash: `0x${"11".repeat(32)}`,
+        transactionHash: `0x${"22".repeat(32)}`,
+        logIndex: 0,
+      }
+      expect(await live([log])).toBeGreaterThan(log.blockNumber)
+      expect(await count("nft_mints")).toBe(0)
+    })
+
+    it("commits and advances past a Seaport order whose repeated lines merge past the bound", async () => {
+      const log = orderLog(Array(9).fill(nft1155(1n, MAX_UINT)), 1n)
+      expect(await live([log])).toBeGreaterThan(log.blockNumber)
+      expect(await count("nft_sales")).toBe(0)
+    })
+  })
 })

@@ -6,6 +6,7 @@ import {
   decodeChimeraCampaign,
   decodeNftTransfers,
   decodeOrderFulfilled,
+  MAX_STORED_QTY,
   decodeSeaDropLog,
   INK_CHAIN_ID,
   mergeMatchedSales,
@@ -501,10 +502,12 @@ function linesToSales(log: ChainLog, decoded: SeaportSale[]): SaleRow[] {
       })
     }
   }
-  return [...merged.values()].map(({ line, ...row }) => ({
-    ...row,
-    priceWei: row.qty > 1n ? line / row.qty : line,
-  }))
+  return [...merged.values()]
+    .filter(({ qty, line }) => qty <= MAX_STORED_QTY && line <= MAX_STORED_QTY)
+    .map(({ line, ...row }) => ({
+      ...row,
+      priceWei: row.qty > 1n ? line / row.qty : line,
+    }))
 }
 
 type SaleItem = {

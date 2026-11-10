@@ -50,6 +50,9 @@ function tryDecode<A extends readonly unknown[]>(abi: A, log: ChainLog) {
 
 // ---- transfers ----
 
+/** The largest value the `numeric(78, 0)` columns hold. Anything above it, summed from a hostile log, is dropped rather than stored. */
+export const MAX_STORED_QTY = 10n ** 78n - 1n
+
 export type NftTransfer = {
   kind: "mint" | "burn"
   standard: "erc721" | "erc1155"
@@ -106,7 +109,14 @@ function movement(
   const toZero = lower(to) === zero
   if (fromZero === toZero) return []
   return items
-    .filter(([, qty]) => qty > 0n)
+    .filter(([tokenId, qty]) => {
+      if (qty <= 0n) return false
+      if (qty > MAX_STORED_QTY || tokenId > MAX_STORED_QTY) {
+        console.warn(`ignoring a transfer from ${contract} with a quantity or id too large to store`)
+        return false
+      }
+      return true
+    })
     .map(([tokenId, qty]) => ({
       kind: fromZero ? "mint" : "burn",
       standard,
