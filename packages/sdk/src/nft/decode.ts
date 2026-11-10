@@ -112,7 +112,9 @@ function movement(
     .filter(([tokenId, qty]) => {
       if (qty <= 0n) return false
       if (qty > MAX_STORED_QTY || tokenId > MAX_STORED_QTY) {
-        console.warn(`ignoring a transfer from ${contract} with a quantity or id too large to store`)
+        console.warn(
+          `ignoring a transfer from ${contract} with a quantity or id too large to store`,
+        )
         return false
       }
       return true

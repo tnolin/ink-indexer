@@ -405,3 +405,36 @@ describe("parseStreamFrame", () => {
       expect(parseStreamFrame(bad)).toBeNull()
   })
 })
+
+describe("parseCollection with hostile strings", () => {
+  const page = (over: Record<string, unknown>) => ({
+    collection: "c",
+    ...(body("collections/ink-hornet") as object),
+    ...over,
+  })
+
+  it("strips NUL and replaces lone surrogates in every text field", () => {
+    const c = parseCollection(
+      page({
+        collection: "s\u0000lug",
+        name: "a\u0000b\ud800c",
+        image_url: "https://x.test/\u0000i.png",
+        twitter_username: "t\u0000w",
+        project_url: "https://x.test/\ud800",
+      }),
+    )!
+    expect(c.slug).toBe("slug")
+    expect(c.name).toBe("ab\ufffdc")
+    expect(c.imageUrl).toBe("https://x.test/i.png")
+    expect(c.twitter).toBe("tw")
+    expect(c.website).toBe("https://x.test/\ufffd")
+  })
+
+  it("cuts a 3 KB name and drops a 3 KB link", () => {
+    const c = parseCollection(
+      page({ name: "n".repeat(3_000), project_url: `https://x.test/${"p".repeat(3_000)}` }),
+    )!
+    expect(c.name).toHaveLength(200)
+    expect(c.website).toBeNull()
+  })
+})

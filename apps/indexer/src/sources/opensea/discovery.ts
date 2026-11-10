@@ -213,7 +213,14 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
           ? { next_drops_at: new Date(t) }
           : {}),
       }
-      await snapshots.emitSnapshotIfChanged(contract, patch)
+      try {
+        await snapshots.emitSnapshotIfChanged(contract, patch)
+      } catch (err) {
+        // The page was fetched but cannot be stored. Counting it moves the contract out of the way of
+        // the others instead of retrying it on every tick.
+        await failed(contract)
+        throw err
+      }
       return accountFailed ? commonOutcome(accountFailed) : undefined
     },
   }
@@ -279,17 +286,22 @@ export function createMetadataJob(deps: OsJobDeps): Job {
       const changed = (Object.keys(columns) as (keyof typeof columns)[]).some(
         (k) => !same(row[k], columns[k]),
       )
-      await snapshots.emitSnapshotIfChanged(contract, {
-        ...columns,
-        ...supplyColumn(page.value),
-        next_metadata_at: new Date(
-          now() +
-            (accountFailed ? accountRetryMs(accountFailed) : await refreshDelay(sql, contract)),
-        ),
-        ...(changed || (account?.ok && account.value.verified !== (cached?.verified ?? false))
-          ? { verdict_dirty: true }
-          : {}),
-      })
+      try {
+        await snapshots.emitSnapshotIfChanged(contract, {
+          ...columns,
+          ...supplyColumn(page.value),
+          next_metadata_at: new Date(
+            now() +
+              (accountFailed ? accountRetryMs(accountFailed) : await refreshDelay(sql, contract)),
+          ),
+          ...(changed || (account?.ok && account.value.verified !== (cached?.verified ?? false))
+            ? { verdict_dirty: true }
+            : {}),
+        })
+      } catch (err) {
+        await errored(contract)
+        throw err
+      }
       return accountFailed ? commonOutcome(accountFailed) : undefined
     },
   }

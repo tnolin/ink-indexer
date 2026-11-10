@@ -126,6 +126,58 @@ const touch = (contract: string, over: object = {}) => ({
   ...over,
 })
 
+describe("hostile collection pages", () => {
+  const hostile = (contract: string) => {
+    const routes = discoveryRoutes(contract, "ink-hornet")
+    const page = recorded("collections/ink-hornet")
+    return {
+      ...routes,
+      "/collections/ink-hornet": {
+        ...page,
+        body: { ...(page.body as object), name: `a\u0000b\ud800${"x".repeat(3_000)}` },
+      },
+    }
+  }
+
+  it("a NUL, a lone surrogate and a 3 KB name are stored cleaned and capped", async () => {
+    const s = setup(hostile(HORNET))
+    await addCollection(HORNET)
+    await s.scheduler.tick()
+    const row = await rowOf(HORNET)
+    expect(row.slug).toBe("ink-hornet")
+    expect(row.name).toHaveLength(200)
+    expect(row.name.startsWith("ab\ufffdx")).toBe(true)
+  })
+
+  it("a failed write after the fetch is counted and the contract is rescheduled", async () => {
+    const s = setup(hostile(HORNET))
+    await addCollection(HORNET)
+    const boom = {
+      ...s.snapshots,
+      emitSnapshotIfChanged: async () => void (await Promise.reject(new Error("write failed"))),
+    }
+    const jobs = [createDiscoveryJob({ ...s.deps, snapshots: boom })]
+    await createScheduler(jobs, { sql, log, report, now }).tick()
+    const row = await rowOf(HORNET)
+    expect(row.discovery_attempts).toBe(1)
+    expect(row.next_discovery_at.getTime()).toBeGreaterThan(T0)
+  })
+
+  it("a failed write in the metadata job backs the contract off", async () => {
+    const s = setup(discoveryRoutes(HORNET, "ink-hornet"))
+    await addCollection(HORNET)
+    await s.scheduler.tick()
+    await sql`update indexer.nft_collections set next_metadata_at = ${new Date(clock)} where contract = ${HORNET}`
+    const boom = {
+      ...s.snapshots,
+      emitSnapshotIfChanged: async () => void (await Promise.reject(new Error("write failed"))),
+    }
+    const jobs = [createMetadataJob({ ...s.deps, snapshots: boom })]
+    await createScheduler(jobs, { sql, log, report, now }).tick()
+    expect((await rowOf(HORNET)).next_metadata_at.getTime()).toBeGreaterThan(clock)
+  })
+})
+
 describe("discovery", () => {
   it("a new contract is discovered: slug, socials stored, nft.collection written once", async () => {
     const s = setup(discoveryRoutes(HORNET, "ink-hornet"))
