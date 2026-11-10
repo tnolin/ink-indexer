@@ -1,7 +1,7 @@
 # 0033. Uniswap v4 swaps and the pool registry
 
 Date: 2026-10-29
-Status: Accepted
+Status: Accepted. The request-size part is superseded by [ADR 0040](0040-bounded-log-filter-lists.md).
 
 ## Context
 

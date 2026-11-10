@@ -130,7 +130,7 @@ export function v4Source(deps: {
       // With no pool registered a filter would match nothing useful, so none is sent; `readsLate` keeps `process` running so the pools other sources register in the span are read by `logsOfNewPools`.
       // The poolId and token lists grow with every registered pool, including those of permissionless
       // launches that never bond. Each filter stays one request here; the log router sends a long list
-      // as several requests of bounded size (ADR 0035).
+      // as several requests of bounded size (ADR 0040).
       return [
         poolIds.length > 0
           ? pick(only, "v4-swaps", swapFilter(managersOf(pools, poolIds), poolIds))

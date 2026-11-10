@@ -2,6 +2,17 @@
 
 Notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- Indexer: an ERC-1155 `TransferBatch` or Seaport order whose summed quantity is larger than the database stores (more than 78 digits) is skipped with a warning instead of failing the whole batch. Such a log from any contract used to stop ingestion for every source.
+- Indexer: a SeaDrop contract whose `getMintStats` or `totalSupply` call fails with a JSON-RPC error, such as an invalid opcode, is skipped with a warning and its milestones are left out, instead of failing the batch. Rate-limit and connection errors are still retried.
+- Indexer: InkyPump launch text and token names and symbols read for Chimera launches are stripped of NUL bytes and lone surrogates and cut to a fixed length before they are stored.
+- Indexer: OpenSea collection names, links and handles are cleaned and length-limited. When a collection page is fetched but cannot be stored, the contract is counted as a failed attempt and retried later, so one bad collection no longer takes every discovery slot.
+- Indexer: a topic or address list of more than 50 entries in an `eth_getLogs` filter is sent as several requests, and a provider that refuses a list's size makes the chunks smaller. With many registered pools the `v4-swaps` requests used to be retried without end. See ADR 0040.
+- SDK: `parseCollection` strips NUL bytes and lone surrogates and bounds the length of every text field. `MAX_STORED_QTY` is the largest quantity the database stores.
+
 ## [indexer-v0.7.0] - 2026-11-08
 
 ### Added

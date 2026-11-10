@@ -1,4 +1,4 @@
-# 0035. Bounded log filter lists
+# 0040. Bounded log filter lists
 
 Date: 2026-11-10
 Status: Accepted
