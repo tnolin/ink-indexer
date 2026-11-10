@@ -7,6 +7,7 @@ import type {
   MasterLaunchConfig,
   TsunamiCurveState,
 } from "@ink-indexer/sdk"
+import { readErc20Names } from "@ink-indexer/sdk"
 import { type Address, type Hash, pad, toHex } from "viem"
 import type { Chain } from "../src/chain"
 import type { LogFilter } from "../src/rpc"
@@ -269,7 +270,21 @@ export class FakeChain implements Chain {
 
   async readErc20Names(tokens: Address[], block: bigint) {
     this.nameReads.push({ tokens, block })
-    return tokens.map((t) => this.erc20Names.get(t) ?? { symbol: null, name: null })
+    // Through the SDK read, so what a token answers is cleaned as it is in production.
+    const answer = (t: string, fn: "symbol" | "name") => {
+      const m = this.erc20Names.get(t as Address)
+      return m
+        ? { status: "success", result: fn === "symbol" ? m.symbol : m.name }
+        : { status: "failure" }
+    }
+    const client = {
+      multicall: async ({
+        contracts,
+      }: {
+        contracts: { address: string; functionName: "symbol" | "name" }[]
+      }) => contracts.map((c) => answer(c.address, c.functionName)),
+    } as unknown as Parameters<typeof readErc20Names>[0]
+    return readErc20Names(client, tokens, block)
   }
 
   async readMintStats(contract: Address, _minter: Address, block: bigint) {

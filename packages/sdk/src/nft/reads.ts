@@ -21,27 +21,30 @@ function isRevert(err: unknown): boolean {
   return false
 }
 
-/** JSON-RPC codes that mean "slow down" rather than "this call failed": -32005 (limit exceeded), 429 and -32007. */
-const RATE_LIMIT_CODES = new Set([-32005, 429, -32007])
-const TRANSPORT_ERRORS = new Set(["HttpRequestError", "TimeoutError", "WebSocketRequestError"])
+/** The error code geth-style nodes give for a call that fails while executing: an invalid opcode, out of gas, a stack underflow, an aborted execution. */
+const EXECUTION_FAILED_CODE = -32000
+/** -32000 is also what a node answers when it does not have the block yet or no longer has its state; those pass, so the read is retried. */
+const NODE_LAG =
+  /header not found|missing trie node|unknown block|block .*not found|pruned|state .*not available|syncing/i
 
 /**
- * True when the node answered the call with a JSON-RPC error object that is not a rate limit, as it
- * does for a contract that hits an invalid opcode or runs out of gas when called from the zero
- * address. Retrying gives the same answer; connection failures and rate limits are not included.
+ * True when the node answered the call with the execution-failure error of a contract that cannot
+ * run from the zero address, as one that hits an invalid opcode does. Retrying gives the same answer.
+ * Other JSON-RPC errors (rate limits, internal errors, a node without the block) and connection
+ * failures are not included.
  */
-function isRpcErrorResponse(err: unknown): boolean {
-  let answered = false
+function isExecutionFailure(err: unknown): boolean {
+  let failed = false
   for (let e = err as { cause?: unknown } | undefined, depth = 0; e && depth < 8; depth++) {
-    const { name, code } = e as { name?: string; code?: number }
-    if ((name && TRANSPORT_ERRORS.has(name)) || RATE_LIMIT_CODES.has(code as number)) return false
-    if (typeof code === "number" && name?.endsWith("RpcError")) answered = true
+    const { code, message, details } = e as { code?: number; message?: string; details?: string }
+    if (NODE_LAG.test(`${message ?? ""} ${details ?? ""}`)) return false
+    if (code === EXECUTION_FAILED_CODE) failed = true
     e = e.cause as typeof e
   }
-  return answered
+  return failed
 }
 
-/** The return data of an eth_call at a block, or null when it reverted, the node answered with an RPC error, or it returned nothing. */
+/** The return data of an eth_call at a block, or null when it reverted, the node reported an execution failure, or it returned nothing. */
 async function callAt(
   client: NftReader,
   to: Address,
@@ -52,7 +55,7 @@ async function callAt(
     const { data: out } = await client.call({ to, data, blockNumber })
     return out && out !== "0x" ? out : null
   } catch (err) {
-    if (isRevert(err) || isRpcErrorResponse(err)) return null
+    if (isRevert(err) || isExecutionFailure(err)) return null
     throw err
   }
 }

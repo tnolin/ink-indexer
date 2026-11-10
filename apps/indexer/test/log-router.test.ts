@@ -673,4 +673,50 @@ describe("LogRouter with long topic lists", () => {
     expect(Math.max(...seen)).toBeLessThanOrEqual(100)
     expect(seen.reduce((a, b) => a + b, 0)).toBe(250)
   })
+
+  it("a rate-limit answer slows down but does not shorten the lists", async () => {
+    const t = transport("t", 1_000, (_f, _t, call) => call === 1)
+    t.getLogs = async ({ fromBlock, toBlock }) => {
+      t.calls.push([fromBlock, toBlock])
+      if (t.calls.length === 1)
+        throw new RpcRequestError({
+          body: {},
+          error: { code: -32005, message: "limit exceeded" },
+          url: "http://x",
+        })
+      return []
+    }
+    const warnings: string[] = []
+    const router = new LogRouter(
+      [t],
+      fakeClock(),
+      (level, msg) => void (level === "warn" && warnings.push(msg)),
+    )
+    await router.getLogs(5n, 5n, { topics: [SWAP, ids(40)] })
+    expect(warnings).not.toContain("getLogs refused a long filter list; sending shorter ones")
+  })
+
+  it("sends a repeated entry once, so a log is returned once", async () => {
+    const { t } = limited(100, "exceed max topics")
+    const router = new LogRouter([t], fakeClock(), quiet)
+    const list = [...ids(60), ...ids(60)]
+    const { logs } = await router.getLogs(5n, 5n, { topics: [SWAP, list] })
+    expect(logs).toHaveLength(60)
+  })
+
+  it("a size refusal at the tip is not mistaken for a node that has not reached the block", async () => {
+    const { t } = limited(10, "exceed max topics")
+    t.head = 8n
+    const router = new LogRouter([t], fakeClock(), quiet)
+    const { logs } = await router.getLogs(5n, 8n, { topics: [SWAP, ids(100)] })
+    expect(logs).toHaveLength(100)
+  })
+
+  it("a refusal at the tip that never clears and names nothing is eventually treated as a failure", async () => {
+    const { t } = limited(10, "Temporary internal error. Please retry", 4)
+    t.head = 8n
+    const router = new LogRouter([t], fakeClock(), quiet)
+    const { logs } = await router.getLogs(5n, 8n, { topics: [SWAP, ids(100)] })
+    expect(logs).toHaveLength(100)
+  })
 })

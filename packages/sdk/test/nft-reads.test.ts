@@ -146,6 +146,15 @@ describe("RPC error responses", () => {
     expect(await readMintStats(client, CONTRACT, MINTER, 1n)).toBeNull()
   })
 
+  it("a node that does not have the block yet is still thrown, so the read is retried", async () => {
+    const lag = new CallExecutionError(
+      new InvalidInputRpcError(new Error("header not found") as never),
+      {},
+    )
+    const { client } = stub(lag)
+    await expect(readMintStats(client, CONTRACT, MINTER, 1n)).rejects.toThrow()
+  })
+
   it("a rate-limit error response is still thrown", async () => {
     const { client } = stub(rpcError(LimitExceededRpcError))
     await expect(readMintStats(client, CONTRACT, MINTER, 1n)).rejects.toThrow()

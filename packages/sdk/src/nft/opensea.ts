@@ -145,13 +145,13 @@ export function parseCollection(j: unknown): OsCollection | null {
     twitter: textField(o.twitter_username, MAX_HANDLE, false),
     website: textField(o.project_url, MAX_LINK, false),
     discord: textField(o.discord_url, MAX_LINK, false),
-    safelist: str(o.safelist_status),
-    createdDate: str(o.created_date),
+    safelist: textField(o.safelist_status, MAX_HANDLE, false),
+    createdDate: textField(o.created_date, MAX_HANDLE, false),
     totalSupply: num(o.total_supply),
     rarityCalculatedAt: rarity ? str(rarity.calculated_at) : null,
     maxRank: rarity ? num(rarity.max_rank) : null,
-    openseaUrl: str(o.opensea_url),
-    owner: str(o.owner)?.toLowerCase() ?? null,
+    openseaUrl: textField(o.opensea_url, MAX_LINK, false),
+    owner: textField(o.owner, MAX_HANDLE, false)?.toLowerCase() ?? null,
   }
 }
 

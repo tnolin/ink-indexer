@@ -288,7 +288,7 @@ export async function processLogs(
   const saleLogs: { log: ChainLog; sales: SaleRow[] }[] = []
   for (const [l, items] of byLog) {
     seen(l)
-    saleLogs.push({ log: l, sales: linesToSales(l, items) })
+    saleLogs.push({ log: l, sales: linesToSales(l, items, logger) })
   }
   saleLogs.sort((a, b) =>
     a.log.blockNumber === b.log.blockNumber
@@ -477,7 +477,7 @@ function launchEvent(
  * One row per (contract, token) of an order. Lines of the same token merge, so the unique keys
  * never drop a line. The decoder's price is the line's share of the payment; the row's is one unit's.
  */
-function linesToSales(log: ChainLog, decoded: SeaportSale[]): SaleRow[] {
+function linesToSales(log: ChainLog, decoded: SeaportSale[], logger: Logger): SaleRow[] {
   const merged = new Map<string, SaleRow & { line: bigint }>()
   for (const d of decoded) {
     const key = `${d.contract}:${d.tokenId}`
@@ -503,7 +503,15 @@ function linesToSales(log: ChainLog, decoded: SeaportSale[]): SaleRow[] {
     }
   }
   return [...merged.values()]
-    .filter(({ qty, line }) => qty <= MAX_STORED_QTY && line <= MAX_STORED_QTY)
+    .filter(({ qty, line, contract }) => {
+      if (qty <= MAX_STORED_QTY && line <= MAX_STORED_QTY) return true
+      logger("warn", "ignoring a sale whose merged quantity or price is too large to store", {
+        contract,
+        txHash: log.transactionHash,
+        logIndex: log.logIndex,
+      })
+      return false
+    })
     .map(({ line, ...row }) => ({
       ...row,
       priceWei: row.qty > 1n ? line / row.qty : line,

@@ -13,7 +13,7 @@ The `v4-swaps` source reads swaps with a PoolManager filter on `[Swap, poolIds]`
 
 **The router splits long lists.** `LogRouter.getLogs` sends a filter whose address or topic list has more than 50 entries as several requests over the same blocks, one per chunk, and merges the logs in block and log order. If the chunks are served to different heights, the span is the lowest. Callers see one request and one result, so every source and the backfill benefit.
 
-**A size refusal shrinks the chunks.** A failure that names a size, or a failure at the smallest block range with a list longer than one entry, halves the router's list limit and splits the filter again, instead of halving the block range. The limit doubles back toward 50 after a run of successful requests.
+**A size refusal shrinks the chunks.** A failure whose message names the number of topics or addresses, or the size of the request, halves the router's list limit and splits the filter again, instead of halving the block range; the limit grows back toward 50 after a run of successful requests. A failure at the smallest block range with no recognisable message, on a list longer than one entry, also halves the limit, and that limit stays down until restart. Rate-limit answers never shorten the lists. Repeated entries are sent once.
 
 **The v4 filters stay whole in the source.** `v4Source.filters` still returns one filter for swaps and one for burns; the router decides how to send them.
 

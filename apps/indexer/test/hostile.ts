@@ -1,6 +1,7 @@
 import type { Sql } from "@ink-indexer/db"
 import {
   type ChainLog,
+  decodeChimeraCampaign,
   NATIVE_QUOTE_ASSET,
   SEADROP_V1,
   SEAPORT_1_6,
@@ -14,6 +15,7 @@ import {
   InvalidInputRpcError,
   parseAbi,
 } from "viem"
+import { expect } from "vitest"
 import { loadChimeraCampaigns, loadHookitFixture } from "../../../packages/sdk/test/fixtures"
 import type { Logger } from "../src/log"
 import { hookitSource } from "../src/sources/hookit/index"
@@ -37,7 +39,7 @@ export const NUL_TEXT = "name\u0000with\u0000nul"
 export const LONE_SURROGATE_TEXT = "half\ud800pair"
 export const TEN_KB = "x".repeat(10 * 1024)
 /** A pool list far past what one eth_getLogs request carries. */
-export const LONG_POOL_COUNT = 1_500
+export const LONG_POOL_COUNT = 400
 
 /** A JSON-RPC error response that is neither a revert nor a transport failure. */
 export const oddRpcError = () =>
@@ -56,7 +58,13 @@ const GATEWAY = "https://ipfs.test"
 
 export type HostileEnv = { sql: Sql; logger: Logger }
 /** A chain holding the hostile logs and reads, the sources that read it, and the block before the first log. */
-export type HostileScenario = { chain: FakeChain; sources: Source[]; from: bigint }
+export type HostileScenario = {
+  chain: FakeChain
+  sources: Source[]
+  from: bigint
+  /** What the sources must have stored once the batch commits; the hostile parts are cleaned or skipped, the rest is kept. */
+  check?: (sql: Sql) => Promise<void>
+}
 
 /**
  * Every source's hostile scenario. A new source adds one line here and gets the same checks:
@@ -179,13 +187,24 @@ async function nftScenario({ sql, logger }: HostileEnv): Promise<HostileScenario
     throw oddRpcError()
   })
   // A Chimera launch whose token has a hostile name.
-  const campaign = loadChimeraCampaigns()[0]!
+  const campaign = loadChimeraCampaigns().find((l) => decodeChimeraCampaign(l) !== null)!
   chain.add({ ...campaign, blockNumber: B + 1n })
-  chain.erc20Names.set(campaign.address.toLowerCase() as Address, {
+  chain.erc20Names.set(decodeChimeraCampaign(campaign)!.token, {
     name: NUL_TEXT,
     symbol: LONE_SURROGATE_TEXT,
   })
-  return { chain, sources: [nftSource({ sql, chain, logger })], from: B - 1n }
+  return {
+    chain,
+    sources: [nftSource({ sql, chain, logger })],
+    from: B - 1n,
+    check: async (db) => {
+      expect(await db`select count(*)::int as n from indexer.nft_mints`).toEqual([{ n: 0 }])
+      expect(await db`select count(*)::int as n from indexer.nft_sales`).toEqual([{ n: 0 }])
+      expect(
+        await db`select payload->>'tokenName' as name, payload->>'tokenSymbol' as symbol from indexer.events where type = 'nft.launch'`,
+      ).toEqual([{ name: "namewithnul", symbol: "half\ufffdpair" }])
+    },
+  }
 }
 
 async function inkypumpScenario({ sql, logger }: HostileEnv): Promise<HostileScenario> {
@@ -198,7 +217,16 @@ async function inkypumpScenario({ sql, logger }: HostileEnv): Promise<HostileSce
     ticker: LONE_SURROGATE_TEXT,
     description: TEN_KB,
   })
-  return { chain, sources: [inkypumpSource({ sql, chain, logger, pools })], from: B - 1n }
+  return {
+    chain,
+    sources: [inkypumpSource({ sql, chain, logger, pools })],
+    from: B - 1n,
+    check: async (db) => {
+      expect(await db`select name, ticker from indexer.tokens`).toEqual([
+        { name: "namewithnul", ticker: "half\ufffdpair" },
+      ])
+    },
+  }
 }
 
 async function inkfunScenario({ sql, logger }: HostileEnv): Promise<HostileScenario> {

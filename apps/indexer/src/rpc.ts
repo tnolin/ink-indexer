@@ -95,9 +95,9 @@ const realClock: Clock = {
 }
 /** Most topics (or addresses) one position of an eth_getLogs filter carries before the router splits it. */
 export const LIST_SEED = 50
-/** Messages a provider gives for a filter list it refuses on size. Not relied on: see `LogRouter`. */
+/** What a provider says when it refuses the number of topics or addresses, or the size, of a filter. */
 const SIZE_REFUSAL =
-  /too many|exceed|too large|too long|max(imum)? (topics|addresses|number|size)|payload|request entity/i
+  /(too many|exceeds?|maximum|limit)\b.*\b(topics?|addresses|address list|filter)|\b(topics?|addresses|filter)\b.*\b(too many|exceeds?|maximum|limit)|payload too large|request entity too large|body size/i
 const GROW_AFTER = 20
 const BENCH_AFTER = 5
 const BENCH_MS = 60_000
@@ -110,6 +110,8 @@ const HEAD_TTL_MS = 1_000
  * covers it. A span this short is far below any endpoint's range limit, so a size refusal cannot hide here.
  */
 const TIP_BLOCKS = 32n
+/** Refusals of one span at the tip that are read as lag; past this the span is treated as failing, so a refusal that never clears (a filter the provider will not take) is not waited on for ever. */
+const MAX_TIP_REFUSALS = 5
 
 type TransportState = {
   t: LogTransport
@@ -121,6 +123,16 @@ type TransportState = {
   benchedUntil: number
   head: bigint
   headAt: number
+}
+
+/** A rate-limit answer: an RPC error code or an HTTP 429. Slowing down is the cure, not shorter lists. */
+function isRateLimit(err: unknown): boolean {
+  for (let e = err, depth = 0; e && typeof e === "object" && depth < 8; depth++) {
+    if (RATE_LIMIT_CODES.has((e as { code?: unknown }).code as number)) return true
+    if (e instanceof HttpRequestError && e.status === 429) return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
 }
 
 /** Raised inside the router when the list limit has shrunk, so the caller splits the filter again. */
@@ -135,15 +147,27 @@ function longestList(f: LogFilter): number {
 
 /** The filter as requests whose lists hold at most `max` entries each; the filter itself when none is longer. */
 export function splitFilter(f: LogFilter, max: number): LogFilter[] {
+  return longestList(f) <= max ? [f] : splitDistinct(dedupe(f), max)
+}
+
+/** Repeated entries of a list match the same logs; a request that held them once returns each log once, and so must the chunks. */
+function dedupe(f: LogFilter): LogFilter {
+  const unique = <T>(v: T) => (Array.isArray(v) ? ([...new Set(v)] as T) : v)
+  return { ...f, address: unique(f.address), topics: f.topics.map(unique) }
+}
+
+function splitDistinct(f: LogFilter, max: number): LogFilter[] {
   const address = listOf(f.address)
   if (address && address.length > max) {
-    return chunks(address as Address[], max).flatMap((a) => splitFilter({ ...f, address: a }, max))
+    return chunks(address as Address[], max).flatMap((a) =>
+      splitDistinct({ ...f, address: a }, max),
+    )
   }
   for (let i = 0; i < f.topics.length; i++) {
     const t = listOf(f.topics[i])
     if (t && t.length > max) {
       return chunks(t as Hex[], max).flatMap((c) =>
-        splitFilter({ ...f, topics: f.topics.map((x, j) => (j === i ? c : x)) }, max),
+        splitDistinct({ ...f, topics: f.topics.map((x, j) => (j === i ? c : x)) }, max),
       )
     }
   }
@@ -158,7 +182,9 @@ function chunks<T>(list: T[], size: number): T[][] {
 
 /**
  * Sends each eth_getLogs to the healthy transport with the largest range.
- * Any error halves that transport's range; the message is never parsed (dRPC's are unreliable).
+ * Any error halves that transport's range; the message is not relied on (providers' are unreliable).
+ * The one use of it is a filter list that is refused for its size: that fails at every range, so
+ * the router shortens the lists it sends instead (see `getLogs`).
  * The one exception is position: a refusal (see isTipRefusal) on a span that lies within TIP_BLOCKS of
  * that transport's own head means the blocks are not there yet. Such a refusal does not count toward
  * the repeated-failure error either.
@@ -172,6 +198,8 @@ export class LogRouter {
   /** The longest topic or address list sent in one request. Shrinks when a provider refuses a size. */
   private listLimit = LIST_SEED
   private listSuccesses = 0
+  /** Whether the limit may grow back: only when a message named the size, since a guess could make it fight the block range. */
+  private listRegrows = false
 
   constructor(
     transports: LogTransport[],
@@ -233,7 +261,7 @@ export class LogRouter {
                 : 1,
           )
         }
-        if (this.listLimit < LIST_SEED && ++this.listSuccesses >= GROW_AFTER) {
+        if (this.listRegrows && this.listLimit < LIST_SEED && ++this.listSuccesses >= GROW_AFTER) {
           this.listSuccesses = 0
           this.listLimit = Math.min(LIST_SEED, this.listLimit * 2)
         }
@@ -251,6 +279,7 @@ export class LogRouter {
     filter: LogFilter,
   ): Promise<{ logs: ChainLog[]; toBlock: bigint }> {
     let wait = 1_000
+    let tipRefusals = 0
     for (;;) {
       const now = this.clock.now()
       let failed = false
@@ -269,7 +298,15 @@ export class LogRouter {
           }
           return { logs, toBlock: end }
         } catch (err) {
-          if (isTipRefusal(err) && s.head - from < TIP_BLOCKS) {
+          // A refusal that names the size of the lists is not about the tip, wherever the span lies.
+          const listLength = longestList(filter)
+          const named = listLength > 1 && !isRateLimit(err) && SIZE_REFUSAL.test(String(err))
+          if (
+            !named &&
+            isTipRefusal(err) &&
+            s.head - from < TIP_BLOCKS &&
+            ++tipRefusals <= MAX_TIP_REFUSALS
+          ) {
             this.logger("debug", "getLogs at the tip not served yet", {
               transport: s.t.name,
               from,
@@ -292,10 +329,13 @@ export class LogRouter {
           } else {
             // A list the provider will not take fails at every range, so halving the range cannot help:
             // that is either a message that says so, or a failure at the smallest range.
-            const listLength = longestList(filter)
-            if (listLength > 1 && (SIZE_REFUSAL.test(String(err)) || s.range === 1)) {
+            // shortcut: a failure at the smallest range with no recognisable message also shortens
+            // the lists, and the limit then stays down until restart; an outage that lasts past the
+            // range's collapse can leave it small. Per-transport limits would avoid that.
+            if (listLength > 1 && !isRateLimit(err) && (named || s.range === 1)) {
               this.listLimit = Math.max(1, Math.floor(listLength / 2))
               this.listSuccesses = 0
+              this.listRegrows = named
               this.logger("warn", "getLogs refused a long filter list; sending shorter ones", {
                 transport: s.t.name,
                 listLimit: this.listLimit,

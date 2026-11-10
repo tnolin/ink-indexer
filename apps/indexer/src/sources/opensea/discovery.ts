@@ -218,7 +218,7 @@ export function createDiscoveryJob(deps: OsJobDeps): Job {
       } catch (err) {
         // The page was fetched but cannot be stored. Counting it moves the contract out of the way of
         // the others instead of retrying it on every tick.
-        await failed(contract)
+        await failed(contract).catch(() => {})
         throw err
       }
       return accountFailed ? commonOutcome(accountFailed) : undefined
@@ -299,7 +299,7 @@ export function createMetadataJob(deps: OsJobDeps): Job {
             : {}),
         })
       } catch (err) {
-        await errored(contract)
+        await errored(contract).catch(() => {})
         throw err
       }
       return accountFailed ? commonOutcome(accountFailed) : undefined

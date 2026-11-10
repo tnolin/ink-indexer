@@ -660,7 +660,7 @@ describe("stored-size bound", () => {
     warn.mockRestore()
   })
 
-  it("keeps a sum that still fits and drops the first one that does not", () => {
+  it("keeps a transfer whose summed quantity still fits and drops one whose sum does not", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     expect(MAX_STORED_QTY).toBe(10n ** 78n - 1n)
     expect(decodeNftTransfers(batchLog(Array(8).fill(1n), Array(8).fill(MAX_UINT)))).toHaveLength(1)

@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs"
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
@@ -13,8 +14,8 @@ beforeEach(async () => {
 })
 afterEach(() => sql.end())
 
-/** A provider that refuses a request with more than 100 topics or addresses in one position. */
-const MAX_LIST = 100
+/** A provider that refuses a request with more than 20 topics or addresses in one position. */
+const MAX_LIST = 20
 
 describe.each(Object.entries(HOSTILE_SOURCES))("hostile input: %s", (_name, scenario) => {
   it("commits the batch and moves the cursor to the head", async () => {
@@ -28,7 +29,7 @@ describe.each(Object.entries(HOSTILE_SOURCES))("hostile input: %s", (_name, scen
         )
       if (level === "error") errors.push(msg)
     }
-    const { chain, sources, from } = await scenario({ sql, logger })
+    const { chain, sources, from, check } = await scenario({ sql, logger })
 
     // Reads go through the real router, over a provider with a list cap, as in production.
     const router = new LogRouter(
@@ -39,13 +40,20 @@ describe.each(Object.entries(HOSTILE_SOURCES))("hostile input: %s", (_name, scen
           getBlockNumber: async () => chain.head,
           getLogs: async (p: GetLogsParams) => {
             const lists = [p.address, ...p.topics].map((l) => (Array.isArray(l) ? l.length : 0))
-            if (Math.max(...lists) > MAX_LIST) throw new Error("exceeds the maximum list size")
+            if (Math.max(...lists) > MAX_LIST)
+              throw new Error("exceeds the maximum number of topics")
             return chain.logsIn(p.fromBlock, p.toBlock).filter((l) => matchesFilter(l, p))
           },
         },
       ],
       { now: () => 0, sleep: async () => {} },
-      () => {},
+      (level, msg, f) => {
+        if (process.env.DBG)
+          appendFileSync(
+            "/tmp/router.log",
+            `${level} ${msg} ${JSON.stringify(f, (_k, v) => (typeof v === "bigint" ? String(v) : v))?.slice(0, 200)}\n`,
+          )
+      },
     )
     chain.getLogs = (f, t, filter) => router.getLogs(f, t, filter)
 
@@ -61,6 +69,7 @@ describe.each(Object.entries(HOSTILE_SOURCES))("hostile input: %s", (_name, scen
     if (process.env.DBG) console.log(_name, chain.getLogsCalls.length)
     expect((await store.getCursor())?.block).toBe(chain.head)
     expect(errors).toEqual([])
+    await check?.(sql)
   })
 })
 
