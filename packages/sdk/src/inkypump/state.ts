@@ -1,4 +1,5 @@
 import { type Address, erc20Abi, type Hash, type PublicClient } from "viem"
+import { cleanText, MAX_TOKEN_TEXT } from "../metadata"
 import { launchStateAbi } from "./abi"
 
 export type LaunchKey = { hook: Address; launchId: Hash }
@@ -112,6 +113,8 @@ export async function readErc20Names(
     ]),
   })
   const text = (r: { status: string; result?: unknown } | undefined) =>
-    r?.status === "success" && typeof r.result === "string" && r.result !== "" ? r.result : null
+    r?.status === "success" && typeof r.result === "string"
+      ? cleanText(cleanText(r.result).slice(0, MAX_TOKEN_TEXT)) || null
+      : null
   return tokens.map((_, i) => ({ symbol: text(results[2 * i]), name: text(results[2 * i + 1]) }))
 }

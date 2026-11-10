@@ -4,9 +4,8 @@
  * input that is not usable at all gives null. None of them throws.
  */
 
-import { cleanText, MAX_LINK, textField } from "../metadata"
+import { cleanText, MAX_LINK, MAX_TOKEN_TEXT, textField } from "../metadata"
 
-const MAX_NAME = 200
 const MAX_HANDLE = 100
 
 export type OsContract = { slug: string | null; standard: string }
@@ -136,12 +135,12 @@ export function parseContract(j: unknown): OsContract | null {
 /** `GET /collections/{slug}`, or one entry of a page of collections. Null without a slug. */
 export function parseCollection(j: unknown): OsCollection | null {
   const o = obj(j)
-  const slug = o ? textField(o.collection, MAX_NAME, false) : null
+  const slug = o ? textField(o.collection, MAX_TOKEN_TEXT, false) : null
   if (!o || !slug) return null
   const rarity = obj(o.rarity)
   return {
     slug,
-    name: textField(o.name, MAX_NAME, true),
+    name: textField(o.name, MAX_TOKEN_TEXT, true),
     imageUrl: textField(o.image_url, MAX_LINK, false),
     twitter: textField(o.twitter_username, MAX_HANDLE, false),
     website: textField(o.project_url, MAX_LINK, false),

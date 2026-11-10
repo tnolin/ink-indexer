@@ -154,7 +154,9 @@ describe("hostile collection pages", () => {
     await addCollection(HORNET)
     const boom = {
       ...s.snapshots,
-      emitSnapshotIfChanged: async () => void (await Promise.reject(new Error("write failed"))),
+      emitSnapshotIfChanged: async (): Promise<boolean> => {
+        throw new Error("write failed")
+      },
     }
     const jobs = [createDiscoveryJob({ ...s.deps, snapshots: boom })]
     await createScheduler(jobs, { sql, log, report, now }).tick()
@@ -170,7 +172,9 @@ describe("hostile collection pages", () => {
     await sql`update indexer.nft_collections set next_metadata_at = ${new Date(clock)} where contract = ${HORNET}`
     const boom = {
       ...s.snapshots,
-      emitSnapshotIfChanged: async () => void (await Promise.reject(new Error("write failed"))),
+      emitSnapshotIfChanged: async (): Promise<boolean> => {
+        throw new Error("write failed")
+      },
     }
     const jobs = [createMetadataJob({ ...s.deps, snapshots: boom })]
     await createScheduler(jobs, { sql, log, report, now }).tick()

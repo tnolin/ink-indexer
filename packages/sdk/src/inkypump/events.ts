@@ -7,6 +7,7 @@ import {
   type TradeEvent,
 } from "@ink-indexer/events"
 import type { Address, Hash } from "viem"
+import { cleanText, MAX_DESCRIPTION, MAX_LINK, MAX_TOKEN_TEXT } from "../metadata"
 import { UNISWAP_V4_POOL_MANAGER } from "../v4/constants"
 import type { V4Swap } from "../v4/decode"
 import { poolMarketCap, poolPrice, quoteReserve, reservesInRange, swapLegs } from "../v4/math"
@@ -32,7 +33,9 @@ const base = (launchpad: LaunchpadKey, token: Address, launchId: Hash, m: LogMet
   blockTimestamp: m.blockTimestamp,
 })
 
-const orNull = (s: string | undefined) => (s ? s : null)
+/** Launch text from the hook is creator-controlled: strip what Postgres refuses and bound the length. */
+const orNull = (s: string | undefined, max: number) =>
+  s ? cleanText(cleanText(s).slice(0, max)) || null : null
 
 export function launchEvent(
   created: LaunchCreated,
@@ -45,14 +48,14 @@ export function launchEvent(
     ...base("inkypump", created.token, created.launchId, m),
     hook: ctx.hook,
     creator: created.creator,
-    name: orNull(metadata?.name),
-    ticker: orNull(metadata?.ticker),
-    description: orNull(metadata?.description),
-    imageUrl: orNull(metadata?.imageUrl),
+    name: orNull(metadata?.name, MAX_TOKEN_TEXT),
+    ticker: orNull(metadata?.ticker, MAX_TOKEN_TEXT),
+    description: orNull(metadata?.description, MAX_DESCRIPTION),
+    imageUrl: orNull(metadata?.imageUrl, MAX_LINK),
     links: {
-      telegram: orNull(metadata?.telegram),
-      twitter: orNull(metadata?.twitter),
-      website: orNull(metadata?.website),
+      telegram: orNull(metadata?.telegram, MAX_LINK),
+      twitter: orNull(metadata?.twitter, MAX_LINK),
+      website: orNull(metadata?.website, MAX_LINK),
     },
     quoteAsset: ctx.quoteAsset,
     targetRaise: created.targetRaise.toString(),

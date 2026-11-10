@@ -21,6 +21,8 @@ export function ipfsCid(uri: string): string | null {
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g
 export const MAX_DESCRIPTION = 4_000
 export const MAX_LINK = 2_048
+/** The longest token name, ticker or collection name kept. */
+export const MAX_TOKEN_TEXT = 200
 
 /** Text from a creator or an IPFS document made safe to store: Postgres refuses NUL in text and jsonb, and lone surrogates in jsonb. */
 export function cleanText(s: string): string {

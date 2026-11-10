@@ -89,4 +89,17 @@ describe("readErc20Names", () => {
     } as unknown as StateReader
     expect(await readErc20Names(none, [], 1n)).toEqual([])
   })
+
+  it("returns names without NUL or lone surrogates, cut to a bounded length", async () => {
+    const client = {
+      multicall: async () => [
+        { status: "success", result: "A\u0000B\ud800" },
+        { status: "success", result: `n\u0000${"x".repeat(5_000)}` },
+      ],
+    } as unknown as StateReader
+    const [r] = await readErc20Names(client, [A], 1n)
+    expect(r!.symbol).toBe("AB\ufffd")
+    expect(r!.name).toHaveLength(200)
+    expect(r!.name).not.toContain("\u0000")
+  })
 })
