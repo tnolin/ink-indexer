@@ -4,6 +4,7 @@ import { INK_CHAIN_ID } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Chain } from "../../chain"
 import type { Logger } from "../../log"
+import { isTransportError } from "../../rpc"
 import type { EventRow } from "../source"
 import type { CollectionTouch, SeaDropMintRow, TransferRow } from "./index"
 import { MINT_MARKS_BPS } from "./policy"
@@ -348,11 +349,30 @@ export async function milestoneEvents(
   const out: Milestones = { events: [], stages: [], updates: [] }
   for (const ctx of contexts) {
     const last = ctx.rows.at(-1)!
-    const stats = await deps.chain.readMintStats(ctx.contract, last.minter, at.toBlock)
-    if (!stats || stats.maxSupply === 0n) {
-      deps.logger("debug", "no mint stats for a SeaDrop contract; skipping its milestones", {
-        contract: ctx.contract,
-      })
+    const batchFirstMint = at.collections.find((c) => c.contract === ctx.contract)?.firstMint
+    let stats: Awaited<ReturnType<typeof deps.chain.readMintStats>>
+    let prior: boolean
+    try {
+      stats = await deps.chain.readMintStats(ctx.contract, last.minter, at.toBlock)
+      if (!stats || stats.maxSupply === 0n) {
+        deps.logger("debug", "no mint stats for a SeaDrop contract; skipping its milestones", {
+          contract: ctx.contract,
+        })
+        continue
+      }
+      prior = await hadPriorMints(ctx, batchFirstMint?.block, deps.chain)
+    } catch (err) {
+      // The contract is untrusted: one that fails its reads must not stop the batch. Outages are
+      // retried inside the chain reads before they get here, so what is left is a data error.
+      if (isTransportError(err)) throw err
+      deps.logger(
+        "warn",
+        "milestone reads failed for a SeaDrop contract; skipping its milestones",
+        {
+          contract: ctx.contract,
+          error: String(err),
+        },
+      )
       continue
     }
     const time = (block: bigint) => at.times.get(block)!
@@ -369,9 +389,7 @@ export async function milestoneEvents(
       ...ctx.knownStages,
       ...newStages.map((s) => [s.index, s.ts] as const),
     ])
-    const batchFirstMint = at.collections.find((c) => c.contract === ctx.contract)?.firstMint
     const batchFirst = batchFirstMint?.ts
-    const prior = await hadPriorMints(ctx, batchFirstMint?.block, deps.chain)
     const keep = (d: MilestoneDraft) => !prior || d.kind === "sold_out"
     const mintStartTs = Math.min(
       ...[ctx.firstMintTs, batchFirst, ...stageStartTs.values()].filter((t) => t != null),

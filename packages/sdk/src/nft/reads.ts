@@ -21,7 +21,27 @@ function isRevert(err: unknown): boolean {
   return false
 }
 
-/** The return data of an eth_call at a block, or null when it reverted or returned nothing. */
+/** JSON-RPC codes that mean "slow down" rather than "this call failed": -32005 (limit exceeded), 429 and -32007. */
+const RATE_LIMIT_CODES = new Set([-32005, 429, -32007])
+const TRANSPORT_ERRORS = new Set(["HttpRequestError", "TimeoutError", "WebSocketRequestError"])
+
+/**
+ * True when the node answered the call with a JSON-RPC error object that is not a rate limit, as it
+ * does for a contract that hits an invalid opcode or runs out of gas when called from the zero
+ * address. Retrying gives the same answer; connection failures and rate limits are not included.
+ */
+function isRpcErrorResponse(err: unknown): boolean {
+  let answered = false
+  for (let e = err as { cause?: unknown } | undefined, depth = 0; e && depth < 8; depth++) {
+    const { name, code } = e as { name?: string; code?: number }
+    if ((name && TRANSPORT_ERRORS.has(name)) || RATE_LIMIT_CODES.has(code as number)) return false
+    if (typeof code === "number" && name?.endsWith("RpcError")) answered = true
+    e = e.cause as typeof e
+  }
+  return answered
+}
+
+/** The return data of an eth_call at a block, or null when it reverted, the node answered with an RPC error, or it returned nothing. */
 async function callAt(
   client: NftReader,
   to: Address,
@@ -32,7 +52,7 @@ async function callAt(
     const { data: out } = await client.call({ to, data, blockNumber })
     return out && out !== "0x" ? out : null
   } catch (err) {
-    if (isRevert(err)) return null
+    if (isRevert(err) || isRpcErrorResponse(err)) return null
     throw err
   }
 }

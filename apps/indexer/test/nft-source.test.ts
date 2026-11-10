@@ -13,7 +13,15 @@ import {
   SEAPORT_1_6,
   ZERO_TOPIC,
 } from "@ink-indexer/sdk"
-import { type Address, encodeAbiParameters, encodeEventTopics, type Hex, pad, parseAbi } from "viem"
+import {
+  type Address,
+  encodeAbiParameters,
+  encodeEventTopics,
+  type Hex,
+  InvalidInputRpcError,
+  pad,
+  parseAbi,
+} from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import {
   loadChimeraCampaigns,
@@ -786,6 +794,32 @@ describe("collections from sales", () => {
       { contract: SWEEP_COLLECTION, slug: null, due: true },
     ])
     expect(await createCollectionsFromSales(sql)).toBe(0)
+  })
+
+  it("a contract whose getMintStats call fails with an RPC error is skipped and the batch commits", async () => {
+    const logs = loadNftFixture("hornet-mints")
+    const warnings: string[] = []
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    chain.mintStats.set(HORNET, () => {
+      throw new InvalidInputRpcError(new Error("invalid opcode: INVALID") as never)
+    })
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: () => {},
+      sources: [
+        nftSource({
+          sql,
+          chain,
+          logger: (level, msg) => void (level === "warn" && warnings.push(msg)),
+        }),
+      ],
+    })
+    await idx.init()
+    await idx.backfill(firstBlock(logs), chain.head)
+    expect(await count("nft_mints")).toBeGreaterThan(0)
+    expect(warnings.join()).toContain("milestone")
   })
 
   describe("hostile quantities", () => {
