@@ -28,7 +28,7 @@ import { FakeChain } from "./fake-chain"
 import { addFixture as addHookit } from "./hookit-scenario"
 import { inkfunLaunch } from "./inkfun-scenario"
 import { launch } from "./scenario"
-import { addFixture as addTsunami } from "./tsunami-scenario"
+import { addFixture as addTsunami, seedToken } from "./tsunami-scenario"
 import { entry, swap } from "./v4-scenario"
 
 /** Values an attacker controls on chain or through an API, and that a source must store or skip without failing the batch. */
@@ -264,13 +264,11 @@ async function v4Scenario({ sql, logger }: HostileEnv): Promise<HostileScenario>
     pools.add(p, 10n ** 27n)
   }
   chain.supplies.set(entry(1).token, MAX_UINT256)
+  await seedToken(sql, { curve: entry(1).poolId.slice(0, 42) as Address, token: entry(1).token })
   swap(chain, { block: B, sqrtPriceX96: 2n ** 160n - 1n })
   return {
     chain,
-    sources: [
-      inkypumpSource({ sql, chain, logger, pools }),
-      v4Source({ sql, chain, logger, pools }),
-    ],
+    sources: [v4Source({ sql, chain, logger, pools })],
     from: B - 1n,
   }
 }

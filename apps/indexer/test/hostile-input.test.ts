@@ -58,6 +58,7 @@ describe.each(Object.entries(HOSTILE_SOURCES))("hostile input: %s", (_name, scen
     })
     await idx.trigger()
 
+    if (process.env.DBG) console.log(_name, chain.getLogsCalls.length)
     expect((await store.getCursor())?.block).toBe(chain.head)
     expect(errors).toEqual([])
   })
