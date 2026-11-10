@@ -681,7 +681,7 @@ describe("LogRouter with long topic lists", () => {
       if (t.calls.length === 1)
         throw new RpcRequestError({
           body: {},
-          error: { code: -32005, message: "limit exceeded" },
+          error: { code: -32005, message: "filter limit exceeded" },
           url: "http://x",
         })
       return []
@@ -718,5 +718,15 @@ describe("LogRouter with long topic lists", () => {
     const router = new LogRouter([t], fakeClock(), quiet)
     const { logs } = await router.getLogs(5n, 8n, { topics: [SWAP, ids(100)] })
     expect(logs).toHaveLength(100)
+  })
+
+  it("a limit found by guessing at the smallest range stays down", async () => {
+    const { t, sizes } = limited(10, "Temporary internal error. Please retry", 4)
+    const router = new LogRouter([t], fakeClock(), quiet)
+    await router.getLogs(5n, 5n, { topics: [SWAP, ids(100)] })
+    const settled = sizes.at(-1)!
+    sizes.length = 0
+    for (let i = 0; i < 60; i++) await router.getLogs(5n, 5n, { topics: [SWAP, ids(100)] })
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(settled)
   })
 })
