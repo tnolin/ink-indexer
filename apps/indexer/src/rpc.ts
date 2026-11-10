@@ -93,6 +93,11 @@ const realClock: Clock = {
   now: () => Date.now(),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
 }
+/** Most topics (or addresses) one position of an eth_getLogs filter carries before the router splits it. */
+export const LIST_SEED = 50
+/** Messages a provider gives for a filter list it refuses on size. Not relied on: see `LogRouter`. */
+const SIZE_REFUSAL =
+  /too many|exceed|too large|too long|max(imum)? (topics|addresses|number|size)|payload|request entity/i
 const GROW_AFTER = 20
 const BENCH_AFTER = 5
 const BENCH_MS = 60_000
@@ -118,6 +123,39 @@ type TransportState = {
   headAt: number
 }
 
+/** Raised inside the router when the list limit has shrunk, so the caller splits the filter again. */
+class ListTooLong extends Error {}
+
+const listOf = (v: unknown): unknown[] | null => (Array.isArray(v) ? v : null)
+
+/** The length of the longest address or topic list of the filter. */
+function longestList(f: LogFilter): number {
+  return Math.max(0, listOf(f.address)?.length ?? 0, ...f.topics.map((t) => listOf(t)?.length ?? 0))
+}
+
+/** The filter as requests whose lists hold at most `max` entries each; the filter itself when none is longer. */
+export function splitFilter(f: LogFilter, max: number): LogFilter[] {
+  const address = listOf(f.address)
+  if (address && address.length > max) {
+    return chunks(address as Address[], max).flatMap((a) => splitFilter({ ...f, address: a }, max))
+  }
+  for (let i = 0; i < f.topics.length; i++) {
+    const t = listOf(f.topics[i])
+    if (t && t.length > max) {
+      return chunks(t as Hex[], max).flatMap((c) =>
+        splitFilter({ ...f, topics: f.topics.map((x, j) => (j === i ? c : x)) }, max),
+      )
+    }
+  }
+  return [f]
+}
+
+function chunks<T>(list: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size))
+  return out
+}
+
 /**
  * Sends each eth_getLogs to the healthy transport with the largest range.
  * Any error halves that transport's range; the message is never parsed (dRPC's are unreliable).
@@ -131,6 +169,9 @@ type TransportState = {
  */
 export class LogRouter {
   private readonly states: TransportState[]
+  /** The longest topic or address list sent in one request. Shrinks when a provider refuses a size. */
+  private listLimit = LIST_SEED
+  private listSuccesses = 0
 
   constructor(
     transports: LogTransport[],
@@ -158,8 +199,53 @@ export class LogRouter {
     }))
   }
 
-  /** Fetches logs from `from` up to at most `to`. Returns the logs and the last block covered, which is clamped to the chosen transport's head. */
+  /**
+   * Fetches logs from `from` up to at most `to`. Returns the logs and the last block covered, which is
+   * clamped to the chosen transport's head. A topic or address list longer than the router's limit is
+   * sent as several requests over the same blocks and the logs are merged in chain order. A provider
+   * that refuses a list's size makes the limit smaller; it grows back after a run of successes.
+   */
   async getLogs(
+    from: bigint,
+    to: bigint,
+    filter: LogFilter,
+  ): Promise<{ logs: ChainLog[]; toBlock: bigint }> {
+    for (;;) {
+      const parts = splitFilter(filter, this.listLimit)
+      try {
+        let end = to
+        let logs: ChainLog[] = []
+        for (const part of parts) {
+          const r = await this.getLogsOnce(from, end, part)
+          // A later part may be served less far than the earlier ones; the span is what all covered.
+          if (r.toBlock < end) {
+            end = r.toBlock
+            logs = logs.filter((l) => l.blockNumber <= end)
+          }
+          logs.push(...r.logs)
+        }
+        if (parts.length > 1) {
+          logs.sort((a, b) =>
+            a.blockNumber === b.blockNumber
+              ? a.logIndex - b.logIndex
+              : a.blockNumber < b.blockNumber
+                ? -1
+                : 1,
+          )
+        }
+        if (this.listLimit < LIST_SEED && ++this.listSuccesses >= GROW_AFTER) {
+          this.listSuccesses = 0
+          this.listLimit = Math.min(LIST_SEED, this.listLimit * 2)
+        }
+        return { logs, toBlock: end }
+      } catch (err) {
+        if (err instanceof ListTooLong) continue
+        throw err
+      }
+    }
+  }
+
+  private async getLogsOnce(
     from: bigint,
     to: bigint,
     filter: LogFilter,
@@ -204,6 +290,19 @@ export class LogRouter {
               error: String(err),
             })
           } else {
+            // A list the provider will not take fails at every range, so halving the range cannot help:
+            // that is either a message that says so, or a failure at the smallest range.
+            const listLength = longestList(filter)
+            if (listLength > 1 && (SIZE_REFUSAL.test(String(err)) || s.range === 1)) {
+              this.listLimit = Math.max(1, Math.floor(listLength / 2))
+              this.listSuccesses = 0
+              this.logger("warn", "getLogs refused a long filter list; sending shorter ones", {
+                transport: s.t.name,
+                listLimit: this.listLimit,
+                error: String(err),
+              })
+              throw new ListTooLong()
+            }
             const wasMin = s.range === 1
             s.successes = 0
             s.range = Math.max(1, Math.floor(s.range / 2))

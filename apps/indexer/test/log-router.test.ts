@@ -584,3 +584,67 @@ describe("LogRouter.heads", () => {
     expect(await router.heads(50n)).toEqual([{ name: "a", head: 60n }])
   })
 })
+
+describe("LogRouter with long topic lists", () => {
+  const SWAP = `0x${"5a".repeat(32)}` as const
+  const ids = (n: number) =>
+    Array.from({ length: n }, (_, i) => `0x${i.toString(16).padStart(64, "0")}` as const)
+
+  /** A transport that refuses a request with more than `max` topics at one position, and answers one log per topic. */
+  function limited(max: number, message: string, seed = 1_000) {
+    const sizes: number[] = []
+    const t = transport("t", seed)
+    t.getLogs = async ({ fromBlock, topics }) => {
+      const list = (topics[1] ?? []) as string[]
+      sizes.push(list.length)
+      if (list.length > max) throw new Error(message)
+      return list.map((id, i) => ({
+        address: "0x0000000000000000000000000000000000000001",
+        topics: [SWAP, id],
+        data: "0x",
+        blockNumber: fromBlock,
+        blockHash: `0x${"11".repeat(32)}`,
+        transactionHash: `0x${"22".repeat(32)}`,
+        logIndex: i,
+      })) as never
+    }
+    return { t, sizes }
+  }
+
+  it("splits a list of 1,000 topics so no request carries more than 100, and returns every log", async () => {
+    const { t, sizes } = limited(100, "exceed max topics")
+    const router = new LogRouter([t], fakeClock(), quiet)
+    const { logs } = await router.getLogs(5n, 5n, { topics: [SWAP, ids(1_000)] })
+    expect(logs).toHaveLength(1_000)
+    expect(new Set(logs.map((l) => l.topics[1])).size).toBe(1_000)
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(100)
+  })
+
+  it("falls back to smaller chunks when the provider refuses a size, recognised by its message", async () => {
+    const { t, sizes } = limited(10, "query exceeds max topics")
+    const router = new LogRouter([t], fakeClock(), quiet)
+    const { logs } = await router.getLogs(5n, 5n, { topics: [SWAP, ids(300)] })
+    expect(logs).toHaveLength(300)
+    expect(sizes.at(-1)).toBeLessThanOrEqual(10)
+  })
+
+  it("falls back when the refusal says nothing about size, once the range cannot shrink further", async () => {
+    const { t } = limited(10, "Temporary internal error. Please retry", 4)
+    const router = new LogRouter([t], fakeClock(), quiet)
+    const { logs } = await router.getLogs(5n, 5n, { topics: [SWAP, ids(300)] })
+    expect(logs).toHaveLength(300)
+  })
+
+  it("splits an address list the same way", async () => {
+    const seen: number[] = []
+    const t = transport("t", 1_000)
+    t.getLogs = async ({ address }) => {
+      seen.push(Array.isArray(address) ? address.length : 1)
+      return []
+    }
+    const addresses = ids(250).map((i) => `0x${i.slice(26)}` as `0x${string}`)
+    await new LogRouter([t], fakeClock(), quiet).getLogs(1n, 2n, { address: addresses, topics: [] })
+    expect(Math.max(...seen)).toBeLessThanOrEqual(100)
+    expect(seen.reduce((a, b) => a + b, 0)).toBe(250)
+  })
+})
