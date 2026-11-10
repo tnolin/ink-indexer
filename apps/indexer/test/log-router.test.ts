@@ -626,6 +626,32 @@ describe("LogRouter with long topic lists", () => {
     const { logs } = await router.getLogs(5n, 5n, { topics: [SWAP, ids(300)] })
     expect(logs).toHaveLength(300)
     expect(sizes.at(-1)).toBeLessThanOrEqual(10)
+    // A size refusal says nothing about the block range, so the range is left alone.
+    expect(router.ranges()[0]!.range).toBe(1_000)
+  })
+
+  it("when a later chunk is served less far, earlier chunks are cut to the same last block", async () => {
+    const t = transport("t", 100)
+    t.getLogs = async ({ fromBlock, toBlock, topics }) => {
+      const list = topics[1] as string[]
+      const second = list.includes(ids(60)[55]!)
+      if (second && toBlock - fromBlock + 1n > 50n)
+        throw new Error("Temporary internal error. Please retry")
+      const blocks = second ? [1n] : [1n, 80n]
+      return blocks.map((b, i) => ({
+        address: "0x0000000000000000000000000000000000000001",
+        topics: [SWAP, list[0]],
+        data: "0x",
+        blockNumber: b,
+        blockHash: `0x${"11".repeat(32)}`,
+        transactionHash: `0x${"22".repeat(32)}`,
+        logIndex: i,
+      })) as never
+    }
+    const router = new LogRouter([t], fakeClock(), quiet)
+    const r = await router.getLogs(1n, 100n, { topics: [SWAP, ids(60)] })
+    expect(r.toBlock).toBe(50n)
+    expect(r.logs.map((l) => l.blockNumber)).toEqual([1n, 1n])
   })
 
   it("falls back when the refusal says nothing about size, once the range cannot shrink further", async () => {

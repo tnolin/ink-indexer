@@ -18,6 +18,7 @@ import {
   encodeAbiParameters,
   encodeEventTopics,
   type Hex,
+  HttpRequestError,
   InvalidInputRpcError,
   pad,
   parseAbi,
@@ -820,6 +821,23 @@ describe("collections from sales", () => {
     await idx.backfill(firstBlock(logs), chain.head)
     expect(await count("nft_mints")).toBeGreaterThan(0)
     expect(warnings.join()).toContain("milestone")
+  })
+
+  it("a transport failure in a milestone read still fails the batch so it is retried", async () => {
+    const logs = loadNftFixture("hornet-mints")
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    chain.mintStats.set(HORNET, () => {
+      throw new HttpRequestError({ url: "http://rpc.test", status: 503 })
+    })
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: () => {},
+      sources: [nftSource({ sql, chain, logger: () => {} })],
+    })
+    await idx.init()
+    await expect(idx.backfill(firstBlock(logs), chain.head)).rejects.toThrow()
   })
 
   describe("hostile quantities", () => {
