@@ -322,9 +322,9 @@ describe("reference collections", () => {
     ).toBe("real")
   })
 
-  // Two SeaDrop clones of the Thinkers collection, replayed from their creation block to the
-  // recording head with their OpenSea responses. In production both were filtered on the page gate
-  // (no X or website) and the structure gate.
+  // Two SeaDrop clones, replayed from their creation block to the recording head with their
+  // OpenSea responses. In production both were filtered on the page gate (no X or website) and the
+  // structure gate.
   it.each([
     {
       contract: "0xea8fa1eb53e0465d67c9cd4e77a3f4f6f39220ea" as const,
@@ -336,7 +336,7 @@ describe("reference collections", () => {
       slug: "thinkers-ink",
       mints: 336,
     },
-  ])("the Thinkers copycat $slug replayed stays filtered", ({ contract, slug, mints }) => {
+  ])("the SeaDrop clone $slug replayed stays filtered", ({ contract, slug, mints }) => {
     const meta = loadNftReplayMeta()
     // Ink makes a block a second; the head's time anchors the earlier ones.
     const c = chainFactsOf(loadNftReplay(contract), contract, (b) => meta.headTs - (meta.head - b))
