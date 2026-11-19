@@ -209,6 +209,73 @@ describe("listing fills", () => {
     expect((await sales())[0]?.price_wei).toBe(((SPOT_IN_NO_ZAP * 3n) / 2n).toString())
   })
 
+  it("a listing created earlier in the same block, in another transaction, is the listing that is filled (synthetic)", async () => {
+    const NEWLISTER = "0x2222222222222222222222222222222222222222" as Address
+    const t = await run(["eth-fill-no-zap"], (x) => {
+      const f = x.loaded[0]!
+      const coll = f.listings.before[0]!.collection
+      const read = f.listings.before[0]!.read!
+      const fill = f.logs.find((l) => l.logIndex === 466)!
+      // Nothing is listed at the block before; the listing is created in this block, ahead of the fill.
+      x.chain.nftxListings.set(`${coll}:1687`, (block) =>
+        block < f.blockNumber ? { ...read, owner: ZERO, priceTokens: null } : read,
+      )
+      x.chain.add({
+        ...synthLog(
+          fill,
+          "ListingsCreated",
+          {
+            _collection: coll,
+            _tokenIds: [1687n],
+            _listing: { owner: NEWLISTER, created: 1, duration: 3600, floorMultiple: 150 },
+            _listingType: 1,
+            _tokensRequired: 0n,
+            _taxRequired: 0n,
+            _sender: NEWLISTER,
+          },
+          { address: NFTX_LISTINGS, logIndex: 400 },
+        ),
+        transactionHash: `0x${"ab".repeat(32)}`,
+      })
+    })
+    expect(t.warnings).toEqual([])
+    expect(await sales()).toHaveLength(1)
+    expect((await sales())[0]).toMatchObject({
+      log_index: 466,
+      seller: NEWLISTER,
+      price_wei: ((SPOT_IN_NO_ZAP * 3n) / 2n).toString(),
+    })
+    expect((await saleEvents())[0]?.payload).toMatchObject({ via: "listing", seller: NEWLISTER })
+  })
+
+  it("a relist earlier in the same block, in another transaction, names the seller of a later Zap buy (synthetic)", async () => {
+    const NEWOWNER = "0x3333333333333333333333333333333333333333" as Address
+    const t = await run(["eth-zap-buy"], (x) => {
+      const filled = x.loaded[0]!.logs.find((l) => l.logIndex === 1455)!
+      x.chain.add({
+        ...synthLog(
+          filled,
+          "ListingRelisted",
+          {
+            _collection: POOL,
+            _tokenId: 29317n,
+            _listing: { owner: NEWOWNER, created: 1, duration: 3600, floorMultiple: 120 },
+          },
+          { address: NFTX_LISTINGS, logIndex: 1400 },
+        ),
+        transactionHash: `0x${"cd".repeat(32)}`,
+      })
+    })
+    const rows = (await sales()).filter((r) => r.log_index === 1455)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      seller: NEWOWNER,
+      buyer: BUYER,
+      price_wei: "12587756629698255",
+    })
+    expect(t.warnings.filter((w) => w.msg.includes("fill"))).toEqual([])
+  })
+
   it("a fill with no TokenWithdrawal for its id is skipped with one warning (synthetic)", async () => {
     const t = await run(["eth-zap-buy"], (x) => dropLogs(x, (l) => l.logIndex === 1446))
     expect(await sales()).toEqual([])

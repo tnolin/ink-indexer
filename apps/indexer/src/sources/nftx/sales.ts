@@ -264,6 +264,57 @@ function pricedFills(
   return out
 }
 
+/**
+ * A listing record as the earlier logs of the same block left it. The record read at the block
+ * before is where the block began; a listing created, relisted or repriced ahead of the item's
+ * first fill or relist in the same block, in this transaction or another, replaces or adjusts it.
+ * A relist does not log its listing's type, so a relisted record has no price until it is read.
+ */
+function recordBefore(
+  known: LogItem[],
+  collection: Address,
+  tokenId: bigint,
+  block: bigint,
+  logIndex: number,
+  base: NftxListingRead | null,
+): NftxListingRead | null {
+  const prior = known
+    .filter(
+      (i) =>
+        i.log.blockNumber === block && i.log.logIndex < logIndex && i.d.collection === collection,
+    )
+    .sort((a, b) => a.log.logIndex - b.log.logIndex)
+  let record = base
+  for (const { d } of prior) {
+    if (d.kind === "listingsCreated" && d.tokenIds.includes(tokenId))
+      record = {
+        owner: d.listing.owner,
+        created: d.listing.created,
+        duration: d.listing.duration,
+        floorMultiple: d.listing.floorMultiple,
+        priceTokens:
+          d.listingType === "liquid" ? BigInt(d.listing.floorMultiple) * 10n ** 16n : null,
+        type: d.listingType,
+      }
+    else if (d.kind === "relisted" && d.tokenId === tokenId)
+      record = {
+        owner: d.listing.owner,
+        created: d.listing.created,
+        duration: d.listing.duration,
+        floorMultiple: d.listing.floorMultiple,
+        priceTokens: null,
+        type: null,
+      }
+    else if (d.kind === "multipleUpdated" && d.tokenId === tokenId && record)
+      record = {
+        ...record,
+        floorMultiple: d.newMultiple,
+        priceTokens: record.type === "liquid" ? BigInt(d.newMultiple) * 10n ** 16n : null,
+      }
+  }
+  return record
+}
+
 /** One `nft_sales` row of an NFTX sale. */
 export type SaleRow = {
   txHash: Hash
@@ -343,6 +394,34 @@ export async function planSales(
     )
   }
 
+  // The first fill or relist of each item in a transaction is read as the block's earlier logs left it.
+  const listingsBefore = (
+    logs: LogItem[],
+    block: bigint,
+    base: Map<string, NftxListingRead | null> | undefined,
+  ) => {
+    const out = new Map(base)
+    const seen = new Set<string>()
+    for (const { log, d } of logs) {
+      const ids = d.kind === "filled" ? d.tokenIds : d.kind === "relisted" ? [d.tokenId] : []
+      for (const tokenId of ids) {
+        const k = key(d.collection, tokenId)
+        if (seen.has(k)) continue
+        seen.add(k)
+        const record = recordBefore(
+          known,
+          d.collection,
+          tokenId,
+          block,
+          log.logIndex,
+          base?.get(k) ?? null,
+        )
+        if (record !== (base?.get(k) ?? null)) out.set(k, record)
+      }
+    }
+    return out
+  }
+
   const spots = await spotPrices(sql, known, input.prices)
   const drafts: { txHash: Hash; blockHash: Hash; block: bigint; draft: SaleDraft }[] = []
   for (const [txHash, logs] of sellers) {
@@ -351,7 +430,7 @@ export async function planSales(
     for (const draft of classifySales(
       logs.map(({ log, d }) => ({ block: log.blockNumber, logIndex: log.logIndex, d })),
       {
-        listingsBefore: before.get(block) ?? new Map(),
+        listingsBefore: listingsBefore(logs, block, before.get(block)),
         spotAt: (b, logIndex, collection) => spotAt(spots.get(collection), b, logIndex),
         warn: (msg, fields) => logger("warn", msg, { ...fields, tx: txHash }),
       },
