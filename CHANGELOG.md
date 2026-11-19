@@ -21,7 +21,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 - Indexer: `nft.stats` fields only OpenSea knows, `owners`, `volume24hWei` and `sales24h`, can now be `null`: a pool move of a collection OpenSea has no stats for emits them as `null`. Consumers must handle `null` in these fields. See ADR 0042.
 - Indexer: mint progress and sold-out events now cover every collection judged or marked real, counted from the indexer's own stored mints, not only SeaDrop drops. A collection marked real by hand gets a stage start after 10 mints. See ADR 0043.
-- Indexer: OpenSea and NFTX listings are now announced whatever their expiry. Listings that live under an hour were dropped before. Every other listing filter is unchanged. See ADR 0045.
+- Indexer: OpenSea listings are now announced whatever their expiry. Listings that live under an hour were dropped before. Every other listing filter is unchanged. See ADR 0045.
 
 ### Fixed
 

@@ -5,17 +5,15 @@ Status: Accepted. Supersedes item 3 of the listing filter in [ADR 0017](0017-ope
 
 ## Context
 
-ADR 0017 dropped an OpenSea listing that lived under an hour (expiry minus listing time), and the NFTX source applied the same rule to the time left on a listing. A short listing priced under the floor is still buyable for as long as it is open, so an alert for it is useful. The other listing filters already keep the stream small. On OpenSea, a maker who relists one item again and again is limited by the rule that a listing must be lower than the last price written for that item.
+ADR 0017 dropped an OpenSea listing that lived under an hour (expiry minus listing time). A short listing priced under the floor is still buyable for as long as it is open, so an alert for it is useful. The other listing filters already keep the stream small. On OpenSea, a maker who relists one item again and again is limited by the rule that a listing must be lower than the last price written for that item.
 
 ## Decision
 
-An OpenSea or NFTX listing is announced whatever its expiry. Every other filter stays. For OpenSea:
+An OpenSea listing is announced whatever its expiry. Every other filter stays:
 - the listing is not private;
 - it is priced in ETH or WETH;
 - for ERC-1155, the price is per unit;
 - it is lower than the last price written for that item.
-
-An NFTX listing is announced when its pool has a price.
 
 `LISTING_MIN_LIFE_S` is removed.
 

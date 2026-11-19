@@ -310,7 +310,7 @@ For a collection with an NFTX market, `floorWei` and `floor24hAgoWei` are the co
 
 Pool moves of 1% or more from the last emitted pool price also emit `nft.stats` (`source: "chain"`). The fields only OpenSea knows are copied from the newest OpenSea stats at that time, or `null` when OpenSea has none: `owners`, `volume24hWei` and `sales24h` are nullable.
 
-NFTX prices come from the pool's slot0 price, `10^18 · 2^192 / sqrtPriceX96²` wei per NFT when the pool pairs the floor token with flETH as currency0, and its inverse otherwise. It is rounded down.
+NFTX prices come from the pool's price in its `PoolStateUpdated` events, `10^18 · 2^192 / sqrtPriceX96²` wei per NFT when the pool pairs the floor token with flETH as currency0, and its inverse otherwise. It is rounded down.
 
 ### `nft.launch`
 
