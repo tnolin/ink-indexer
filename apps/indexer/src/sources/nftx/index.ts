@@ -24,8 +24,10 @@ import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
 import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
+import type { Ranks } from "../opensea/ranks"
 import { blockSendersFor } from "../senders"
 import { pick, type Source, type SourceBatch } from "../source"
+import { planListings } from "./listings"
 import { planSales, type SalesPlan } from "./sales"
 import { fetchNftxSlug } from "./slug"
 import { type PricePoint, planStats, type StatsBasis, type StatsPlan } from "./stats"
@@ -51,6 +53,11 @@ export type NftxDeps = {
   blockReads?: number
   /** Where a trusted contract's undecodable log is reported; none by default. */
   report?: Pick<Reporter, "warn">
+  /**
+   * OpenSea's rank lookup, set while the OpenSea services run. A live listing priced within a tenth
+   * of the floor asks it for the item's rank; with none set, listings carry cached ranks only.
+   */
+  ranks?: { current: Pick<Ranks, "getRank"> | null }
 }
 
 export type CreatedRow = {
@@ -436,6 +443,19 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
     batch.sales = salesPlan.rows
     batch.closed = salesPlan.closed
     batch.events.push(...salesPlan.events)
+
+    batch.events.push(
+      ...(await planListings(
+        { sql, chain, logger, ranks: deps.ranks ?? { current: null } },
+        {
+          items,
+          slugOf: (a) => state.get(a)?.slug,
+          prices: batch.prices,
+          timestamp: (n) => blocks.get(n)!.timestamp,
+          live: ctx.live,
+        },
+      )),
+    )
 
     for (const { log, d } of opens) {
       const c = state.get(d.collection)!

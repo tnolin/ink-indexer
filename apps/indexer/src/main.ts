@@ -13,6 +13,7 @@ import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { createCollectionsFromSales } from "./sources/nft/write"
 import { nftxSource } from "./sources/nftx/index"
+import type { Ranks } from "./sources/opensea/ranks"
 import { PoolRegistry } from "./sources/pools"
 import { tsunamiSource } from "./sources/tsunami/index"
 import { v4Source } from "./sources/v4/index"
@@ -58,6 +59,8 @@ const sql = connect(databaseUrl)
 const store = createStore(sql)
 let current: Promise<void> | undefined
 let stopNft = () => {}
+// The rank lookup the OpenSea services share with the NFTX source once they run.
+const ranks: { current: Pick<Ranks, "getRank"> | null } = { current: null }
 const shutdown = createShutdown({
   stop: () => {
     // The NFT and OpenSea parts first, then the chain loop.
@@ -142,13 +145,21 @@ try {
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools, blockReads }),
       nftSource({ sql, chain, logger: log }),
-      nftxSource({ sql, chain, logger: log, report: reporter, blockReads }),
+      nftxSource({ sql, chain, logger: log, report: reporter, blockReads, ranks }),
     ],
   })
   await indexer.init()
   if (cli.command === "start")
     stopNft = (
-      await startSourceServices(sources, { env: process.env, sql, store, chain, log, report })
+      await startSourceServices(sources, {
+        env: process.env,
+        sql,
+        store,
+        chain,
+        log,
+        report,
+        ranks,
+      })
     ).stop
 } catch (err) {
   log("error", cli.command === "start" ? "startup failed" : `${cli.command} failed`, {

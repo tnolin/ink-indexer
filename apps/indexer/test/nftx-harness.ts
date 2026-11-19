@@ -23,6 +23,7 @@ import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
 import { nftSource } from "../src/sources/nft/index"
 import { nftxSource } from "../src/sources/nftx/index"
+import type { Ranks } from "../src/sources/opensea/ranks"
 import type { Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 
@@ -37,7 +38,7 @@ export function nftxHarness(
     both?: boolean
     now?: () => number
     /** OpenSea's rank lookups, as `startNftServices` shares them; none by default. */
-    ranks?: { current: { getRank: (...args: never[]) => Promise<unknown> } | null }
+    ranks?: { current: Pick<Ranks, "getRank"> | null }
   } = {},
 ) {
   const warnings: { msg: string; fields?: Record<string, unknown> }[] = []
@@ -56,7 +57,7 @@ export function nftxHarness(
     fetch: (async () => new Response("{}", { status: 404 })) as unknown as typeof fetch,
     now: opts.now,
     launchpad: null,
-    ...(opts.ranks ? { ranks: opts.ranks } : {}),
+    ranks: opts.ranks,
   })
   const sources = opts.both ? [nftSource({ sql, chain, logger }), nftx] : [nftx]
   const idx = new Indexer({ chain, store, logger, sources })
@@ -71,7 +72,12 @@ export function nftxHarness(
     })
     await idx.trigger()
   }
-  return { chain, idx, warnings, live, loaded }
+  /** Reads the chain from the first fixture's block up to the head as backfill spans. */
+  const backfill = async () => {
+    await idx.init()
+    await idx.backfill(firstBlock(), chain.head)
+  }
+  return { chain, idx, warnings, live, backfill, loaded }
 }
 
 /** Adds a fixture's logs and its block's senders, targets and time. */

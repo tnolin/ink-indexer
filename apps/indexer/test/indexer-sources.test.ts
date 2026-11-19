@@ -21,6 +21,7 @@ import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
 import { nftxSource } from "../src/sources/nftx/index"
+import type { Ranks } from "../src/sources/opensea/ranks"
 import { PoolRegistry } from "../src/sources/pools"
 import { tsunamiSource } from "../src/sources/tsunami/index"
 import { v4Source } from "../src/sources/v4/index"
@@ -299,6 +300,23 @@ describe("startSourceServices", () => {
     })
     keyless.stop()
     expect(warnings).toEqual([])
+  })
+
+  it("gives the NFTX source the rank lookup while the OpenSea services run", async () => {
+    const ranks: { current: Pick<Ranks, "getRank"> | null } = { current: null }
+    const d = {
+      ...deps({ OPENSEA_API_KEY: "wiring-test-key-0123456789" }, [], new FakeStream()),
+      ranks,
+    }
+    const services = await startSourceServices(sources({ INDEXER_SOURCES: "opensea,nftx" }), d)
+    expect(ranks.current).toHaveProperty("getRank")
+    services.stop()
+    expect(ranks.current).toBeNull()
+
+    // Without a key the services are off and there is no lookup.
+    const keyless = await startSourceServices(sources({}), { ...d, env: {} })
+    keyless.stop()
+    expect(ranks.current).toBeNull()
   })
 
   it("starts them when opensea is on", async () => {

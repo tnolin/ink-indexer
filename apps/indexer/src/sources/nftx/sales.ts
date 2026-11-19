@@ -1,7 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { type NftSaleEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import {
-  type ChainLog,
   INK_CHAIN_ID,
   NFTX_LOCKER,
   type NftxListingRead,
@@ -16,6 +15,7 @@ import { seenItems } from "../opensea/listings"
 import { cachedRanks, itemKey } from "../opensea/ranks"
 import type { EventRow } from "../source"
 import { combineFloor, floorParts } from "./floor"
+import { type LogItem, spotAt, spotPrices } from "./spot"
 import type { PricePoint } from "./stats"
 
 const E18 = 10n ** 18n
@@ -264,8 +264,6 @@ export type SalesPlan = {
   closed: { collection: Address; tokenId: bigint }[]
 }
 
-type LogItem = { log: ChainLog; d: NftxLog }
-
 /**
  * Sales of a span. Only collections the source knows are read. Listings are read one block before
  * each transaction with fills or relists, and the pool's spot at a log is the newest price at or
@@ -403,48 +401,4 @@ export async function planSales(
     plan.events.push({ event, block, blockHash, sub: `sale:${s.tokenId}` })
   }
   return plan
-}
-
-type SpotList = { block: bigint; logIndex: number; priceWei: bigint }[]
-type Spots = Map<Address, SpotList>
-
-/** The newest price at or before a log. */
-function spotAt(list: SpotList | undefined, block: bigint, logIndex: number) {
-  let best: bigint | null = null
-  for (const p of list ?? []) {
-    if (p.block > block || (p.block === block && p.logIndex > logIndex)) break
-    best = p.priceWei
-  }
-  return best
-}
-
-/** Each collection's prices around the span, in log order: the span's own and the stored ones. */
-async function spotPrices(sql: Sql, items: LogItem[], prices: PricePoint[]): Promise<Spots> {
-  const collections = [...new Set(items.map((i) => i.d.collection))]
-  const blocks = items.map((i) => i.log.blockNumber)
-  const low = blocks.reduce((a, b) => (b < a ? b : a))
-  const high = blocks.reduce((a, b) => (b > a ? b : a))
-  type Stored = { collection: Address; block: string; log_index: number; price: string }[]
-  const inSpan = await sql<Stored>`
-    select collection, block::text, log_index, price_wei::text as price from indexer.nftx_prices
-    where collection = any(${sql.array(collections)}::text[]) and price_wei is not null
-      and block >= ${low.toString()} and block <= ${high.toString()}`
-  const lastBefore = await sql<Stored>`
-    select distinct on (collection) collection, block::text, log_index, price_wei::text as price
-    from indexer.nftx_prices
-    where collection = any(${sql.array(collections)}::text[]) and price_wei is not null
-      and block < ${low.toString()}
-    order by collection, block desc, log_index desc`
-  const stored = [...inSpan, ...lastBefore]
-  const out: Spots = new Map()
-  const push = (collection: Address, block: bigint, logIndex: number, priceWei: bigint) =>
-    out.set(collection, [...(out.get(collection) ?? []), { block, logIndex, priceWei }])
-  for (const r of stored) push(r.collection, BigInt(r.block), r.log_index, BigInt(r.price))
-  for (const p of prices)
-    if (p.priceWei !== null) push(p.collection, p.block, p.logIndex, p.priceWei)
-  for (const list of out.values())
-    list.sort((a, b) =>
-      a.block === b.block ? a.logIndex - b.logIndex : a.block < b.block ? -1 : 1,
-    )
-  return out
 }

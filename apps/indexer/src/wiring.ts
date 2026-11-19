@@ -22,7 +22,7 @@ import { createBudget } from "./sources/opensea/budget"
 import { createDiscoveryJob, createMetadataJob } from "./sources/opensea/discovery"
 import { createDropsJob } from "./sources/opensea/drops"
 import { createListings } from "./sources/opensea/listings"
-import { createRanks } from "./sources/opensea/ranks"
+import { createRanks, type Ranks } from "./sources/opensea/ranks"
 import { createOpenSeaRest } from "./sources/opensea/rest"
 import { type Job, startScheduler } from "./sources/opensea/scheduler"
 import { createSnapshots } from "./sources/opensea/snapshot"
@@ -347,6 +347,8 @@ export async function startNftServices(
     tickMs?: number
     /** Whether the NFTX source runs in this process (see `SourceSelection.nftx`). */
     nftx?: boolean
+    /** Set to the rank lookup while the services run, for the NFTX source's listings. */
+    ranks?: { current: Pick<Ranks, "getRank"> | null }
   },
 ): Promise<{ stop(): void }> {
   const { sql, store, log, report, now } = deps
@@ -376,6 +378,13 @@ export async function startNftServices(
     const jobDeps = { sql, store, rest, snapshots, accounts, log, now }
     const stats = createStats({ sql, store, rest, log, now, nftx: deps.nftx })
     const ranks = createRanks({ sql, rest, log, now })
+    if (deps.ranks) {
+      const shared = deps.ranks
+      shared.current = ranks
+      stops.push(() => {
+        shared.current = null
+      })
+    }
     const listings = createListings({ sql, store, stats, ranks, log, report, now })
 
     const jobs: Job[] = [
