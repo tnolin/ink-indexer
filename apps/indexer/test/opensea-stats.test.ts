@@ -782,7 +782,7 @@ describe("latestFloor", () => {
         total_supply: null,
       },
     ])}`
-    const floors = await latestFloors(sql, [A, B, addr(0xee)])
+    const floors = await latestFloors(sql, [A, B, addr(0xee)], false)
     expect(floors.get(A)).toBe(6n)
     expect(floors.get(B)).toBeNull()
     expect(floors.has(addr(0xee))).toBe(false)

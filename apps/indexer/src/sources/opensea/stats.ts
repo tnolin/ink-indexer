@@ -119,13 +119,15 @@ export async function assignTiers(sql: Sql, now: Date): Promise<void> {
 
 /**
  * The floor of each contract that has a stats row or an NFTX price: the lower of the newest OpenSea
- * floor and the NFTX pool's spot price (null when neither exists).
+ * floor and the NFTX pool's spot price (null when neither exists). With `nftx` false the pool's
+ * price is left out.
  */
 export async function latestFloors(
   sql: Sql,
   contracts: string[],
+  nftx: boolean,
 ): Promise<Map<string, bigint | null>> {
-  const parts = await floorParts(sql, contracts)
+  const parts = await floorParts(sql, contracts, nftx)
   return new Map([...parts].map(([contract, p]) => [contract, combineFloor(p).floorWei]))
 }
 
@@ -309,7 +311,7 @@ export function createStats(deps: StatsDeps) {
     // A collection trading on NFTX is floored by the cheaper of the two markets.
     const onPool = deps.nftx === true && (await onNftx(sql, [contract])).has(contract)
     const spot = onPool
-      ? ((await floorParts(sql, [contract])).get(contract)?.nftxFloorWei ?? null)
+      ? ((await floorParts(sql, [contract], true)).get(contract)?.nftxFloorWei ?? null)
       : null
     const combined = combineFloor({ osFloorWei: stats.floorWei, osAt: at, nftxFloorWei: spot })
     const [pool] = onPool
@@ -505,7 +507,7 @@ export function createStats(deps: StatsDeps) {
     market: "opensea" | "nftx" | null
     osAt: Date | null
   } | null> {
-    const parts = (await floorParts(sql, [contract])).get(contract)
+    const parts = (await floorParts(sql, [contract], deps.nftx === true)).get(contract)
     if (!parts) return null
     const { floorWei, market } = combineFloor(parts)
     const at = market === "nftx" ? eventAt : parts.osAt

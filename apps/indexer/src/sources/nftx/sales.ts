@@ -361,7 +361,7 @@ export async function planSales(
     ).values(),
   ]
   const [parts, ranks, seen] = await Promise.all([
-    floorParts(sql, collections),
+    floorParts(sql, collections, true),
     cachedRanks(sql, items, new Date()),
     seenItems(sql, items),
   ])

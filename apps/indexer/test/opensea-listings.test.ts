@@ -106,10 +106,11 @@ const RANKED = "489"
 function setup(
   routes: Parameters<typeof fakeFetch>[0] = {},
   withStore: Pick<Store, "writeOffchain"> = store,
+  nftx = false,
 ) {
   const fetch = fakeFetch({ [statsPath]: osStats(0.1), ...routes })
   const rest = createOpenSeaRest({ key: KEY, budget, fetch, log, report, now })
-  const stats = createStats({ sql, store, rest, log, now })
+  const stats = createStats({ sql, store, rest, log, now, nftx })
   const ranks = createRanks({ sql, rest, log, now })
   const listings = createListings({ sql, store: withStore, stats, ranks, log, report, now })
   return { fetch, rest, stats, ranks, listings, handle: listings.handleStreamEvent }
@@ -518,13 +519,20 @@ describe("the floor", () => {
 
   it("an NFTX-floored listing carries floorAt equal to the listing time, so it is never stale", async () => {
     await addPool(FLOOR / 2n)
-    const s = setup()
+    const s = setup({}, store, true)
     await s.handle(listed({ price: FAR }))
     expect(callsTo(s.fetch, statsPath)).toBe(0)
     expect((await listingEvents())[0]).toMatchObject({
       floorWei: (FLOOR / 2n).toString(),
       floorAt: Math.floor(T0 / SEC),
     })
+  })
+
+  it("a listing ignores the pool's price while the NFTX source is off", async () => {
+    await addPool(FLOOR / 2n)
+    const s = setup()
+    await s.handle(listed({ price: FAR }))
+    expect((await listingEvents())[0]).toMatchObject({ floorWei: FLOOR.toString() })
   })
 
   it("listings still refresh the OpenSea floor when only nftx rows are new", async () => {

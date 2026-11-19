@@ -134,6 +134,8 @@ export type NftDeps = {
   sql: Sql
   chain: Pick<Chain, "getBlock" | "readMintStats" | "readTotalSupplyAt" | "readErc20Names">
   logger: Logger
+  /** Whether this process runs the NFTX source: only then does a sale's floor take the pool's price into account. */
+  nftx?: boolean
 }
 
 const TRANSFER = NFT_TOPICS.transfer
@@ -412,9 +414,11 @@ export async function processLogs(
   // A sale carries the collection's latest known floor (a read of our own stats, no network).
   // shortcut: this is the floor when the sale is processed, not when it happened, so a replay of old
   // sales stamps today's floor on them. Read the newest row at or before the sale's time to fix it.
-  const floors = await latestFloors(deps.sql, [
-    ...new Set(saleLogs.flatMap((x) => x.sales.map((r) => r.contract))),
-  ])
+  const floors = await latestFloors(
+    deps.sql,
+    [...new Set(saleLogs.flatMap((x) => x.sales.map((r) => r.contract)))],
+    deps.nftx === true,
+  )
   // And the item's name, image and rank, from what the listings cached (no network; a sale never
   // fetches a rank). The same shortcut applies: the cache as it stands when the sale is processed.
   const soldItems = [

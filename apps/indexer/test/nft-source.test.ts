@@ -67,7 +67,11 @@ const firstBlock = (logs: ChainLog[]) =>
   logs.reduce((m, l) => (l.blockNumber < m ? l.blockNumber : m), logs[0]!.blockNumber)
 
 /** A chain holding `logs`, an indexer with only the NFT source, and a backfill over the logs' range. */
-async function ingest(logs: ChainLog[], prepare: (chain: FakeChain) => void = () => {}) {
+async function ingest(
+  logs: ChainLog[],
+  prepare: (chain: FakeChain) => void = () => {},
+  nftx = false,
+) {
   const chain = new FakeChain(lastBlock(logs) + 5n)
   for (const l of logs) chain.add(l)
   prepare(chain)
@@ -75,7 +79,7 @@ async function ingest(logs: ChainLog[], prepare: (chain: FakeChain) => void = ()
     chain,
     store,
     logger: () => {},
-    sources: [nftSource({ sql, chain, logger: () => {} })],
+    sources: [nftSource({ sql, chain, logger: () => {}, nftx })],
   })
   await idx.init()
   await idx.backfill(firstBlock(logs), chain.head)
@@ -359,9 +363,13 @@ describe("NFT source", () => {
       sales_24h: 0,
       total_supply: null,
     })
-    const saleFloors = async () => {
+    const saleFloors = async (nftx = false) => {
       const roles = loadSeaportRoles()
-      await ingest(loadNftFixture("seaport-fills").filter((l) => l.transactionHash === roles.sweep))
+      await ingest(
+        loadNftFixture("seaport-fills").filter((l) => l.transactionHash === roles.sweep),
+        () => {},
+        nftx,
+      )
       const rows = await sql<{ payload: { floorWei: string | null } }[]>`
         select payload from indexer.events where type = 'nft.sale'`
       expect(rows).toHaveLength(50)
@@ -376,6 +384,38 @@ describe("NFT source", () => {
         stat("2026-10-19T01:00:00Z", "999", NFT_A),
       ])}`
       expect(await saleFloors()).toEqual(new Set(["222"]))
+    })
+
+    describe("of a collection with an NFTX pool", () => {
+      const poolPrice = async () => {
+        await sql`insert into indexer.nft_stats ${sql([stat("2026-10-19T00:00:00Z", "222")])}`
+        await sql`insert into indexer.nftx_collections ${sql({
+          collection: SWEEP_COLLECTION,
+          floor_token: NFT_A,
+          creator: NFT_A,
+          created_block: "1",
+          initialized_block: "2",
+          fleth_is_currency0: true,
+        })}`
+        await sql`insert into indexer.nftx_prices ${sql({
+          collection: SWEEP_COLLECTION,
+          block: "3",
+          log_index: 0,
+          sqrt_price_x96: "1",
+          price_wei: "50",
+          at: new Date("2026-10-19T02:00:00Z"),
+        })}`
+      }
+
+      it("ignores the pool's price while the NFTX source is off", async () => {
+        await poolPrice()
+        expect(await saleFloors(false)).toEqual(new Set(["222"]))
+      })
+
+      it("takes the pool's price when it is lower and the NFTX source is on", async () => {
+        await poolPrice()
+        expect(await saleFloors(true)).toEqual(new Set(["50"]))
+      })
     })
 
     it("is null when the newest stats row has no floor, whatever older rows had", async () => {

@@ -103,54 +103,62 @@ describe("floors on a collection with an NFTX market", () => {
   it("latestFloors returns the NFTX price when it is lower than the newest OpenSea floor", async () => {
     await addOs(A, 500n, T0 - 5 * MIN)
     await addNftx(A, [900n, 300n])
-    expect((await latestFloors(sql, [A])).get(A)).toBe(300n)
+    expect((await latestFloors(sql, [A], true)).get(A)).toBe(300n)
   })
 
   it("latestFloors keeps the OpenSea floor when it is the lower one", async () => {
     await addOs(A, 200n, T0 - 5 * MIN)
     await addNftx(A, [300n])
-    expect((await latestFloors(sql, [A])).get(A)).toBe(200n)
+    expect((await latestFloors(sql, [A], true)).get(A)).toBe(200n)
   })
 
   it("a sunset collection's NFTX price is not used", async () => {
     await addOs(A, 500n, T0)
     await addNftx(A, [300n], { sunset: true })
-    expect((await latestFloors(sql, [A])).get(A)).toBe(500n)
+    expect((await latestFloors(sql, [A], true)).get(A)).toBe(500n)
     expect([...(await onNftx(sql, [A]))]).toEqual([])
   })
 
   it("a collection whose pool has not opened has no NFTX price", async () => {
     await addOs(A, 500n, T0)
     await addNftx(A, [300n], { initialized: false })
-    expect((await latestFloors(sql, [A])).get(A)).toBe(500n)
+    expect((await latestFloors(sql, [A], true)).get(A)).toBe(500n)
   })
 
-  it("a pool price that is not defined gives no NFTX floor", async () => {
+  it("a pool price that is not defined is skipped: the last defined price stands", async () => {
     await addOs(A, 500n, T0)
     await addNftx(A, [300n, null])
-    expect((await latestFloors(sql, [A])).get(A)).toBe(500n)
+    expect((await latestFloors(sql, [A], true)).get(A)).toBe(300n)
+  })
+
+  it("a pool with no defined price gives no NFTX floor", async () => {
+    await addOs(A, 500n, T0)
+    await addNftx(A, [null, null])
+    expect((await latestFloors(sql, [A], true)).get(A)).toBe(500n)
+    await addNftx(B, [null])
+    expect((await latestFloors(sql, [B], true)).has(B)).toBe(false)
   })
 
   it("a collection with only an NFTX price and no OpenSea row has that price", async () => {
     await addNftx(A, [300n])
-    expect((await latestFloors(sql, [A])).get(A)).toBe(300n)
-    expect((await latestFloors(sql, [B])).has(B)).toBe(false)
+    expect((await latestFloors(sql, [A], true)).get(A)).toBe(300n)
+    expect((await latestFloors(sql, [B], true)).has(B)).toBe(false)
   })
 
   it("the OpenSea floor of a row is its os_floor_wei, or floor_wei on a row from before NFTX", async () => {
     await addNftx(A, [900n])
     await addOs(A, 100n, T0 - 2 * MIN)
-    expect((await floorParts(sql, [A])).get(A)).toMatchObject({ osFloorWei: 100n })
+    expect((await floorParts(sql, [A], true)).get(A)).toMatchObject({ osFloorWei: 100n })
     // A newer combined row: floor_wei holds the lower of the two, os_floor_wei the OpenSea floor.
     await addOs(A, 50n, T0 - MIN, { os: 400n, market: "nftx" })
-    expect((await floorParts(sql, [A])).get(A)).toMatchObject({
+    expect((await floorParts(sql, [A], true)).get(A)).toMatchObject({
       osFloorWei: 400n,
       osAt: new Date(T0 - MIN),
       nftxFloorWei: 900n,
     })
     // OpenSea had no floor at that poll.
     await addOs(A, null, T0, { os: null, market: "opensea" })
-    expect((await floorParts(sql, [A])).get(A)).toMatchObject({ osFloorWei: null })
+    expect((await floorParts(sql, [A], true)).get(A)).toMatchObject({ osFloorWei: null })
   })
 
   it("rows written from pool moves do not stand for the OpenSea row", async () => {
@@ -164,10 +172,50 @@ describe("floors on a collection with an NFTX market", () => {
       os_floor_wei: "400",
       block: "300",
     })}`
-    expect((await floorParts(sql, [A])).get(A)).toMatchObject({
+    expect((await floorParts(sql, [A], true)).get(A)).toMatchObject({
       osFloorWei: 400n,
       osAt: new Date(T0 - 10 * MIN),
     })
+  })
+})
+
+describe("with the NFTX source off", () => {
+  const stats = () =>
+    createStats({
+      sql,
+      store: createStore(sql),
+      rest: undefined as never,
+      log: () => {},
+      now: () => T0,
+    })
+
+  it("floors ignore the pool's price, as they did before NFTX", async () => {
+    await addOs(A, 500n, T0 - 5 * MIN)
+    await addNftx(A, [300n])
+    expect((await latestFloors(sql, [A], false)).get(A)).toBe(500n)
+    expect((await floorParts(sql, [A], false)).get(A)).toMatchObject({
+      osFloorWei: 500n,
+      nftxFloorWei: null,
+    })
+  })
+
+  it("a collection with only a pool price has no floor", async () => {
+    await addNftx(B, [300n])
+    expect((await latestFloors(sql, [B], false)).has(B)).toBe(false)
+    expect((await floorParts(sql, [B], false)).has(B)).toBe(false)
+  })
+
+  it("the floor a listing reads is the OpenSea row's alone", async () => {
+    await addOs(A, 500n, T0 - 30 * MIN)
+    await addNftx(A, [300n])
+    expect(await stats().latestFloor(A, new Date(T0))).toEqual({
+      floorWei: 500n,
+      at: new Date(T0 - 30 * MIN),
+      market: "opensea",
+      osAt: new Date(T0 - 30 * MIN),
+    })
+    await addNftx(B, [300n])
+    expect(await stats().latestFloor(B, new Date(T0))).toBeNull()
   })
 })
 
@@ -179,6 +227,7 @@ describe("the floor the listings read", () => {
       rest: undefined as never,
       log: () => {},
       now: () => T0,
+      nftx: true,
     })
 
   it("an NFTX floor takes the time of the event, an OpenSea floor its own row's time", async () => {

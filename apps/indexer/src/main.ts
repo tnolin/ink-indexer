@@ -151,7 +151,7 @@ try {
       }),
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools, blockReads }),
-      nftSource({ sql, chain, logger: log }),
+      nftSource({ sql, chain, logger: log, nftx: sources.nftx }),
       nftxSource({ sql, chain, logger: log, report: reporter, blockReads, ranks }),
     ],
   })

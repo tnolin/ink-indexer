@@ -36,8 +36,15 @@ export async function onNftx(sql: Sql, contracts: string[]): Promise<Set<string>
  * absent. Rows written from pool moves have a block and are not OpenSea rows: their OpenSea floor
  * is a copy, so the newest OpenSea row speaks for it. Rows written before NFTX carry the raw
  * OpenSea floor in `floor_wei`; later ones in `os_floor_wei`.
+ *
+ * The pool's spot price is the newest one that is defined. With `nftx` false it is not read, so a
+ * process that does not run the NFTX source floors a collection as it did before NFTX.
  */
-export async function floorParts(sql: Sql, contracts: string[]): Promise<Map<string, FloorParts>> {
+export async function floorParts(
+  sql: Sql,
+  contracts: string[],
+  nftx: boolean,
+): Promise<Map<string, FloorParts>> {
   if (contracts.length === 0) return new Map()
   const rows = await sql<
     { contract: string; at: Date | null; os: string | null; nx: string | null }[]
@@ -51,12 +58,10 @@ export async function floorParts(sql: Sql, contracts: string[]): Promise<Map<str
     left join lateral (
       select p.price_wei from indexer.nftx_prices p
       join indexer.nftx_collections n on n.collection = p.collection
-      where p.collection = q.contract and n.initialized_block is not null and n.sunset_block is null
+      where ${nftx} and p.collection = q.contract and p.price_wei is not null
+        and n.initialized_block is not null and n.sunset_block is null
       order by p.block desc, p.log_index desc limit 1) nx on true
-    where os.at is not null or exists (
-      select 1 from indexer.nftx_prices p
-      join indexer.nftx_collections n on n.collection = p.collection
-      where p.collection = q.contract and n.initialized_block is not null and n.sunset_block is null)`
+    where os.at is not null or nx.price_wei is not null`
   return new Map(
     rows.map((r) => [
       r.contract,

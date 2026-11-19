@@ -203,7 +203,7 @@ export async function planListings(
     ).values(),
   ]
   const [parts, cached, seen] = await Promise.all([
-    floorParts(sql, [...new Set(drafts.map((x) => x.draft.collection))]),
+    floorParts(sql, [...new Set(drafts.map((x) => x.draft.collection))], true),
     cachedRanks(sql, items, new Date()),
     seenItems(sql, items),
   ])
