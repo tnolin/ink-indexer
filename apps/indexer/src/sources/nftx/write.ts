@@ -132,6 +132,33 @@ export async function writeRows(tx: Tx, batch: NftxBatch) {
       update indexer.nftx_collections set combined_since = ${new Date(c.at * 1000)}
       where collection = ${c.collection} and combined_since is null`
 
+  for (const part of chunks(batch.sales))
+    await tx`
+      insert into indexer.nft_sales ${tx(
+        part.map((r) => ({
+          tx_hash: r.txHash,
+          log_index: r.logIndex,
+          contract: r.collection,
+          token_id: s(r.tokenId),
+          qty: 1,
+          price_wei: s(r.priceWei),
+          currency: "ETH",
+          buyer: r.buyer,
+          seller: r.seller,
+          order_hash: r.orderHash,
+          block: s(r.block),
+          market: "nftx",
+        })),
+      )}
+      on conflict do nothing`
+
+  // A filled, relisted, cancelled or stale listing is not listed any more.
+  for (const part of chunks(batch.closed))
+    await tx`
+      delete from indexer.nft_listing_state l
+      using unnest(${tx.array(part.map((r) => r.collection))}::text[], ${tx.array(part.map((r) => s(r.tokenId)))}::numeric[]) as ended(contract, token_id)
+      where l.contract = ended.contract and l.token_id = ended.token_id`
+
   for (const x of batch.slugs)
     await tx`
       update indexer.nft_collections set nftx_slug = ${x.slug}
@@ -146,6 +173,7 @@ export async function writeRows(tx: Tx, batch: NftxBatch) {
 export async function rollbackRows(tx: Tx, fork: bigint, prepared: NftxRollback) {
   const f = s(fork)
   await tx`delete from indexer.nft_stats where block > ${f}`
+  await tx`delete from indexer.nft_sales where market = 'nftx' and block > ${f}`
   await tx`delete from indexer.nftx_prices where block > ${f}`
   await tx`delete from indexer.nft_launches where launchpad = 'nftx' and block > ${f}`
   await tx`

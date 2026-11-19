@@ -26,6 +26,7 @@ import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import { blockSendersFor } from "../senders"
 import { pick, type Source, type SourceBatch } from "../source"
+import { planSales, type SalesPlan } from "./sales"
 import { fetchNftxSlug } from "./slug"
 import { type PricePoint, planStats, type StatsBasis, type StatsPlan } from "./stats"
 import { rollbackRows, writeRows } from "./write"
@@ -38,7 +39,7 @@ const SYMBOL_MAX = 32
 
 export type NftxDeps = {
   sql: Sql
-  chain: Pick<Chain, "getBlockSenders" | "readNftxPoolCounts">
+  chain: Pick<Chain, "getBlockSenders" | "readNftxListings" | "readNftxPoolCounts">
   logger: Logger
   /** NFTX's API for the slug; tests pass a stub. */
   fetch?: typeof fetch
@@ -90,6 +91,10 @@ export type NftxBatch = SourceBatch & {
   stats: StatsPlan["rows"]
   statsLast: StatsPlan["last"]
   combinedSince: StatsPlan["combinedSince"]
+  /** Sales of listing fills, relists and instant trades (see `planSales`). */
+  sales: SalesPlan["rows"]
+  /** Items whose listing ended in the span. */
+  closed: SalesPlan["closed"]
 }
 
 /** The pool sizes at a fork, read before the rollback transaction opens. */
@@ -238,6 +243,8 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       stats: [],
       statsLast: [],
       combinedSince: [],
+      sales: [],
+      closed: [],
       events: [],
       blocks: [],
     }
@@ -416,6 +423,19 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
     batch.statsLast = plan.last
     batch.combinedSince = plan.combinedSince
     batch.events.push(...plan.events)
+
+    const salesPlan = await planSales(
+      { sql, chain, logger },
+      {
+        items,
+        slugOf: (a) => state.get(a)?.slug,
+        prices: batch.prices,
+        timestamp: (n) => blocks.get(n)!.timestamp,
+      },
+    )
+    batch.sales = salesPlan.rows
+    batch.closed = salesPlan.closed
+    batch.events.push(...salesPlan.events)
 
     for (const { log, d } of opens) {
       const c = state.get(d.collection)!
