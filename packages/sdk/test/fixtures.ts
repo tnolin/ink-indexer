@@ -1,7 +1,14 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Address, Hash } from "viem"
-import type { ChainLog, ClassicLaunch, LaunchState, TsunamiCurveState } from "../src/index"
+import type {
+  AuctionCheckpoint,
+  ChainLog,
+  ClassicLaunch,
+  LaunchState,
+  NftxListingRead,
+  TsunamiCurveState,
+} from "../src/index"
 
 export const FIXTURES = [
   "legacy-launch",
@@ -331,4 +338,81 @@ export type HookitPoolKey = {
 
 export function loadHookitPoolKey(): HookitPoolKey {
   return readFixtureJson("hookit-pool-key")
+}
+
+/** Transactions recorded with `capture-fixture.ts --topics nftx`. */
+export const NFTX_FIXTURES = [
+  "lildudes-created",
+  "lildudes-init",
+  "arbitrage-lildudes",
+  "arbitrage-bubblecats-1",
+  "arbitrage-bubblecats-2",
+  "arbitrage-bubblecats-3",
+  "arbitrage-bubblecats-4",
+  "arbitrage-bubblecats-5",
+  "arbitrage-bubblecats-6",
+  "arbitrage-bubblecats-7",
+  "arbitrage-bubblecats-8",
+  "arbitrage-bubblecats-9",
+  "eth-zap-buy",
+  "eth-zap-buy-2",
+  "eth-fill-no-zap",
+  "eth-relist",
+  "eth-listing-created",
+  "eth-floor-redeemed",
+  "eth-sold-for-eth",
+] as const
+export type NftxFixtureName = (typeof NFTX_FIXTURES)[number]
+
+export type NftxFixtureListing = {
+  collection: Address
+  tokenId: bigint
+  read: NftxListingRead | null
+}
+
+export type NftxFixture = {
+  name: NftxFixtureName
+  chainId: number
+  txHash: Hash
+  blockNumber: bigint
+  blockHash: Hash
+  timestamp: number
+  from: Address
+  to: Address | null
+  /** The transaction's NFTX, Seaport and ERC-721 Transfer logs. */
+  logs: ChainLog[]
+  /** Each collection's newest CollectionInitialized and PoolStateUpdated before the transaction, Ethereum fixtures only. */
+  pools: ChainLog[]
+  /** Listings reads of the items the listing logs name, at the block before and at the block. */
+  listings: { before: NftxFixtureListing[]; at: NftxFixtureListing[] }
+}
+
+export function loadNftxFixture(name: NftxFixtureName): NftxFixture {
+  return readFixtureJson(`nftx/${name}`)
+}
+
+/** The auction recorded with `capture-fixture.ts --topics nftx-auction`. */
+export type NftxAuctionFixture = {
+  name: string
+  chainId: number
+  auction: Address
+  created: ChainLog
+  from: Address
+  to: Address | null
+  tokenSupplyAtCreation: bigint
+  logs: ChainLog[]
+  checkpoints: { block: bigint; read: AuctionCheckpoint | null }[]
+  plainAtEnd: {
+    block: bigint
+    currencyRaised: bigint
+    totalCleared: bigint
+    isGraduated: boolean
+    clearingPrice: bigint
+    lastCheckpointedBlock: bigint
+  }
+  blockTimes: Record<string, number>
+}
+
+export function loadNftxAuctionFixture(): NftxAuctionFixture {
+  return readFixtureJson("nftx/inktrons-auction")
 }
