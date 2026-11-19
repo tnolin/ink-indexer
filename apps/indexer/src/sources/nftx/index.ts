@@ -1,6 +1,9 @@
 import type { Sql } from "@ink-indexer/db"
 import { type NftLaunchEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import {
+  CCA_AUCTION_TOPICS,
+  CCA_FACTORY,
+  CCA_TOPICS,
   type ChainLog,
   cleanText,
   decodeNftxLog,
@@ -27,6 +30,7 @@ import { droppedLogs } from "../dropped"
 import type { Ranks } from "../opensea/ranks"
 import { blockSendersFor } from "../senders"
 import { pick, type Source, type SourceBatch } from "../source"
+import { type AuctionPlan, planAuctions } from "./auctions"
 import { planListings } from "./listings"
 import { planSales, type SalesPlan } from "./sales"
 import { fetchNftxSlug } from "./slug"
@@ -41,7 +45,16 @@ const SYMBOL_MAX = 32
 
 export type NftxDeps = {
   sql: Sql
-  chain: Pick<Chain, "getBlockSenders" | "readNftxListings" | "readNftxPoolCounts">
+  chain: Pick<
+    Chain,
+    | "getBlock"
+    | "getBlockSenders"
+    | "readNftxListings"
+    | "readNftxPoolCounts"
+    | "readOwners"
+    | "readTotalSupplies"
+    | "readAuctionCheckpoint"
+  >
   logger: Logger
   /** NFTX's API for the slug; tests pass a stub. */
   fetch?: typeof fetch
@@ -102,6 +115,9 @@ export type NftxBatch = SourceBatch & {
   sales: SalesPlan["rows"]
   /** Items whose listing ended in the span. */
   closed: SalesPlan["closed"]
+  /** Auctions the factory created or that changed in the span, and their bids (see `planAuctions`). */
+  auctions: AuctionPlan["rows"]
+  auctionBids: AuctionPlan["bids"]
 }
 
 /** The pool sizes at a fork, read before the rollback transaction opens. */
@@ -160,6 +176,15 @@ function emitterOk(d: NftxLog, emitter: Address): boolean {
       return emitter === NFTX_HOOK
   }
 }
+
+/** The factory's `AuctionCreated`, read from the factory alone. */
+const FACTORY: LogFilter = { address: CCA_FACTORY, topics: [[CCA_TOPICS.AuctionCreated]] }
+
+/**
+ * Every auction's own events, from any address: the auctions are created at run time, so their
+ * addresses are not known to the filter. Only those of auctions the factory created are kept.
+ */
+const AUCTIONS: LogFilter = { topics: [[...CCA_AUCTION_TOPICS]] }
 
 const TRUSTED = new Set<Address>([ADDRESSES.address].flat() as Address[])
 
@@ -252,8 +277,35 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       combinedSince: [],
       sales: [],
       closed: [],
+      auctions: [],
+      auctionBids: [],
       events: [],
       blocks: [],
+    }
+    // The auction part runs whether or not the span has NFTX logs: a phase can fall due in a span
+    // with none.
+    const withAuctions = async (): Promise<NftxBatch> => {
+      const plan = await planAuctions(
+        { sql, chain, logger, launchpad },
+        {
+          factoryLogs: logs[1] ?? [],
+          auctionLogs: logs[2] ?? [],
+          created: batch.created.map((c) => ({
+            collection: c.collection,
+            floorToken: c.floorToken,
+            creator: c.creator,
+            block: c.block,
+          })),
+          slugs: new Map(batch.slugs.map((x) => [x.collection, x.slug])),
+          toBlock: ctx.toBlock,
+        },
+      )
+      batch.auctions = plan.rows
+      batch.auctionBids = plan.bids
+      batch.events.push(...plan.events)
+      const known = new Set(batch.blocks.map((b) => b.number))
+      batch.blocks.push(...plan.blocks.filter((b) => !known.has(b.number)))
+      return batch
     }
     const items: { log: ChainLog; d: NftxLog }[] = []
     for (const log of [...(logs[0] ?? [])].sort(byPosition)) {
@@ -264,7 +316,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       }
       if (emitterOk(d, log.address)) items.push({ log, d })
     }
-    if (items.length === 0) return batch
+    if (items.length === 0) return withAuctions()
 
     const known = await loadKnown([...new Set(items.map((i) => i.d.collection))])
     const blockNumbers = [...new Set(items.map((i) => i.log.blockNumber))]
@@ -468,12 +520,16 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
         sub: "",
       })
     }
-    return batch
+    return withAuctions()
   }
 
   return {
     name: "nftx",
-    filters: (only) => [pick(only, "nftx", ADDRESSES)],
+    filters: (only) => [
+      pick(only, "nftx", ADDRESSES),
+      pick(only, "nftx", FACTORY),
+      pick(only, "nftx", AUCTIONS),
+    ],
     process: (logs, ctx) => process(logs, ctx),
     write: (tx, batch) => writeRows(tx, batch),
     prepareRollback: async (fork) => {

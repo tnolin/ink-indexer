@@ -1,4 +1,5 @@
 import { connect, migrate } from "@ink-indexer/db"
+import { applyAuctionLink } from "./auction-cli"
 import { viemChain } from "./chain"
 import { parseCli } from "./cli"
 import { log } from "./log"
@@ -87,6 +88,12 @@ try {
   if (cli.command === "collections-from-sales") {
     const created = await createCollectionsFromSales(sql)
     log("info", "collections from sales created", { created })
+    await sql.end()
+    process.exit(0)
+  }
+  if (cli.command === "auction") {
+    await applyAuctionLink(sql, { auction: cli.auction, contract: cli.contract })
+    log("info", "auction linked", { auction: cli.auction, contract: cli.contract })
     await sql.end()
     process.exit(0)
   }

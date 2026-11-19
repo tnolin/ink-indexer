@@ -159,6 +159,53 @@ export async function writeRows(tx: Tx, batch: NftxBatch) {
       using unnest(${tx.array(part.map((r) => r.collection))}::text[], ${tx.array(part.map((r) => s(r.tokenId)))}::numeric[]) as ended(contract, token_id)
       where l.contract = ended.contract and l.token_id = ended.token_id`
 
+  // An auction row only moves forward: a phase, once written, stays, and a row another process
+  // linked or kept in the meantime stays kept.
+  for (const a of batch.auctions) {
+    if (a.isNew)
+      await tx`
+        insert into indexer.nftx_auctions ${tx({
+          auction: a.auction,
+          token: a.token,
+          currency: a.currency,
+          start_block: s(a.startBlock),
+          end_block: s(a.endBlock),
+          claim_block: s(a.claimBlock),
+          floor_price_q96: s(a.floorPriceQ96),
+          required_raise: s(a.requiredRaise),
+          amount: s(a.amount),
+          sender: a.sender,
+          tx_to: a.txTo,
+          created_block: s(a.createdBlock),
+          created_log_index: a.createdLogIndex,
+        })}
+        on conflict (auction) do nothing`
+    await tx`
+      update indexer.nftx_auctions set
+        total_supply = coalesce(total_supply, ${a.totalSupply === null ? null : s(a.totalSupply)}),
+        tokens_received_block = coalesce(tokens_received_block, ${a.tokensReceivedBlock === null ? null : s(a.tokensReceivedBlock)}),
+        collection = coalesce(collection, ${a.collection}),
+        kept = kept or ${a.kept},
+        kept_block = coalesce(kept_block, ${a.keptBlock === null ? null : s(a.keptBlock)}),
+        created_emitted_block = coalesce(created_emitted_block, ${a.createdEmittedBlock === null ? null : s(a.createdEmittedBlock)}),
+        live_block = coalesce(live_block, ${a.liveBlock === null ? null : s(a.liveBlock)}),
+        ended_block = coalesce(ended_block, ${a.endedBlock === null ? null : s(a.endedBlock)})
+      where auction = ${a.auction}`
+  }
+  for (const part of chunks(batch.auctionBids))
+    await tx`
+      insert into indexer.nftx_auction_bids ${tx(
+        part.map((b) => ({
+          auction: b.auction,
+          block: s(b.block),
+          log_index: b.logIndex,
+          kind: b.kind,
+          bid_id: s(b.bidId),
+          owner: b.owner,
+        })),
+      )}
+      on conflict do nothing`
+
   for (const x of batch.slugs)
     await tx`
       update indexer.nft_collections set nftx_slug = ${x.slug}
@@ -185,6 +232,22 @@ export async function rollbackRows(tx: Tx, fork: bigint, prepared: NftxRollback)
     where note = 'nftx-launchpad'
       and contract in (select collection from indexer.nftx_collections where created_block > ${f})`
   await tx`delete from indexer.nftx_collections where created_block > ${f}`
+  // Auctions: those created above the fork go, with their bids; a phase written above it is
+  // forgotten, so the replay announces it again. An auction kept by a collection created above the
+  // fork is unkept, unless it was linked by hand.
+  await tx`delete from indexer.nftx_auction_bids where block > ${f}`
+  await tx`delete from indexer.nftx_auctions where created_block > ${f}`
+  await tx`
+    update indexer.nftx_auctions set
+      collection = null, kept = false, kept_block = null,
+      created_emitted_block = null, live_block = null, ended_block = null
+    where kept and not manual and kept_block > ${f}`
+  await tx`
+    update indexer.nftx_auctions set total_supply = null, tokens_received_block = null
+    where tokens_received_block > ${f}`
+  await tx`update indexer.nftx_auctions set created_emitted_block = null where created_emitted_block > ${f}`
+  await tx`update indexer.nftx_auctions set live_block = null where live_block > ${f}`
+  await tx`update indexer.nftx_auctions set ended_block = null where ended_block > ${f}`
   await tx`
     update indexer.nftx_collections set initialized_block = null, pool_id = null,
       fleth_is_currency0 = null, seeded = null

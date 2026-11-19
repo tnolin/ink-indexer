@@ -1,6 +1,9 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
+  CCA_AUCTION_TOPICS,
+  CCA_FACTORY,
+  CCA_TOPICS,
   CHIMERA_FACTORY,
   HOOKIT_TOPICS,
   INKFUN_TOPICS,
@@ -254,11 +257,16 @@ describe("the live tick with INDEXER_SOURCES", () => {
     expect(asked.some((f) => f.address === SEADROP_V1)).toBe(false)
   })
 
-  it("nftx alone reads the NFTX contracts in one address-bound request", async () => {
+  it("nftx alone reads the NFTX contracts and the auction factory in one address-bound request, and the auctions' events by topic in another", async () => {
     const asked = await liveFilters({ INDEXER_SOURCES: "nftx" })
-    expect(asked).toHaveLength(1)
-    expect(JSON.stringify(asked[0]?.address)).toContain(NFTX_LOCKER)
-    expect(JSON.stringify(asked[0]?.topics)).toContain(NFTX_TOPICS.CollectionCreated)
+    expect(asked).toHaveLength(2)
+    const bound = asked.find((f) => f.address !== undefined)!
+    const open = asked.find((f) => f.address === undefined)!
+    expect(JSON.stringify(bound.address)).toContain(NFTX_LOCKER)
+    expect(JSON.stringify(bound.address)).toContain(CCA_FACTORY)
+    expect(JSON.stringify(bound.topics)).toContain(NFTX_TOPICS.CollectionCreated)
+    expect(JSON.stringify(bound.topics)).toContain(CCA_TOPICS.AuctionCreated)
+    expect(open.topics).toEqual([[...CCA_AUCTION_TOPICS]])
   })
 
   it("opensea alone reads the mint and sale filters in 4 requests", async () => {

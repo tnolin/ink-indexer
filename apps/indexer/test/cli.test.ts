@@ -54,7 +54,7 @@ describe("parseCli", () => {
   it("carries the usage line with every rejection", () => {
     const r = parseCli(["backfill"])
     expect(r.ok === false && r.usage).toBe(
-      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> [--max-supply <n>] | collections-from-sales",
+      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> [--max-supply <n>] | auction <auction> <contract> | collections-from-sales",
     )
   })
 
@@ -192,5 +192,29 @@ describe("parseCli mark", () => {
   it("the usage line names --block-reads", () => {
     const r = parseCli(["backfill"])
     expect(r.ok === false && r.usage).toContain("[--block-reads <1-16>]")
+  })
+})
+
+describe("parseCli auction", () => {
+  const A = "0xf74d83a782aa45ec00d4f425714c028749a03563"
+  const C = "0x0000000000000000000000000000000000000c0c"
+
+  it("nft:auction takes an auction and a contract", () => {
+    expect(parseCli(["auction", A, C])).toEqual({
+      ok: true,
+      command: "auction",
+      auction: A,
+      contract: C,
+    })
+    for (const argv of [
+      ["auction"],
+      ["auction", A],
+      ["auction", A, C, C],
+      ["auction", A, "0x12"],
+    ]) {
+      const r = parseCli(argv)
+      expect(r.ok, argv.join(" ")).toBe(false)
+      expect(r.ok === false && r.usage).toContain("auction <auction> <contract>")
+    }
   })
 })

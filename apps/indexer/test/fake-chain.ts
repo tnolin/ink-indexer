@@ -124,6 +124,8 @@ export class FakeChain implements Chain {
   supplyReads: { tokens: Address[]; block: bigint }[] = []
   /** Every getBlock call. */
   getBlockCalls: bigint[] = []
+  /** What getBlock answers as a block's time; a block with no entry reads as its own number. */
+  blockTimes = new Map<bigint, bigint>()
   getLogsCalls: [bigint, bigint][] = []
   getBlockNumberCalls = 0
   /** When set, getBlockNumber answers this instead of `head`: a provider stuck on an old block. */
@@ -177,7 +179,7 @@ export class FakeChain implements Chain {
   async getBlock(n: bigint) {
     this.getBlockCalls.push(n)
     if (this.nullOnce.delete(n)) return null
-    return n > this.head ? null : { hash: this.hashOf(n), timestamp: n }
+    return n > this.head ? null : { hash: this.hashOf(n), timestamp: this.blockTimes.get(n) ?? n }
   }
 
   async getBlockSenders(n: bigint) {
