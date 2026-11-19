@@ -643,6 +643,18 @@ describe("MINT LIVE", () => {
     expect(mintLiveDue(live({ safelist: "verified", minted: 10 }))).toBe(true)
   })
 
+  it("a manual real collection gets MINT LIVE after 10 mints, not after 30 minutes", () => {
+    const real = { override: "real" as const }
+    expect(mintLiveDue(live({ ...real, minted: 10 }))).toBe(true)
+    expect(mintLiveDue(live({ ...real, minted: 9 }))).toBe(false)
+    // A manual filtered mark does not take the fast path.
+    expect(mintLiveDue(live({ override: "filtered", minted: 12 }))).toBe(false)
+  })
+
+  it("a pending one still waits for the duration gate", () => {
+    expect(mintLiveDue(live({ override: null, minted: 50 }))).toBe(false)
+  })
+
   it("an unverified mint is announced once gate 2 passes by duration", () => {
     const first = 1_000_000 - 30 * MIN
     expect(

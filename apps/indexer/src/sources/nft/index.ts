@@ -32,9 +32,12 @@ import { latestFloors } from "../opensea/stats"
 import { type BackfillSource, type EventRow, pick, type Source, type SourceBatch } from "../source"
 import {
   loadMilestoneContexts,
+  loadRealMintContexts,
   type MilestoneUpdate,
   milestoneBlocks,
   milestoneEvents,
+  realMintBlocks,
+  realMintMilestones,
   type StageRow,
 } from "./milestones"
 import { TIMESTAMP_READ_CONCURRENCY } from "./policy"
@@ -366,11 +369,13 @@ export async function processLogs(
     if (b === undefined || m.block < b) firstMintBlock.set(m.contract, m.block)
   }
   const milestoneContexts = await loadMilestoneContexts(deps.sql, seadropMints)
+  const realContexts = await loadRealMintContexts(deps.sql, mints)
   const wanted = new Set<bigint>([
     ...firstMintBlock.values(),
     ...launches.map((l) => l.block),
     ...saleLogs.map((x) => x.log.blockNumber),
     ...milestoneBlocks(milestoneContexts),
+    ...realMintBlocks(realContexts, mints),
   ])
   const times = await blockTimestamps(deps.chain, [...wanted])
 
@@ -463,6 +468,11 @@ export async function processLogs(
     collections: [...collections.values()],
   })
   events.push(...milestones.events)
+  const realMilestones = await realMintMilestones(realContexts, mints, deps, {
+    times,
+    blockHash: (block) => hashes.get(block)!,
+  })
+  events.push(...realMilestones.events)
 
   return {
     events,
@@ -475,7 +485,7 @@ export async function processLogs(
     launches,
     collections: [...collections.values()],
     stages: milestones.stages,
-    milestones: milestones.updates,
+    milestones: [...milestones.updates, ...realMilestones.updates],
     touched: [...collections.keys()],
   }
 }

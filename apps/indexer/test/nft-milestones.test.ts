@@ -1,8 +1,14 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import type { NftMintEvent } from "@ink-indexer/events"
-import { type ChainLog, decodeNftTransfers } from "@ink-indexer/sdk"
-import type { Address } from "viem"
+import {
+  type ChainLog,
+  decodeNftTransfers,
+  NFT_TOPICS,
+  NFTX_LOCKER,
+  ZERO_TOPIC,
+} from "@ink-indexer/sdk"
+import { type Address, type Hex, pad, toHex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import { loadNftFixture } from "../../../packages/sdk/test/fixtures"
 import { Indexer } from "../src/loop"
@@ -641,5 +647,187 @@ describe("a contract that minted before its first stored mint", () => {
     const k = await kinds()
     expect(k).toContain("stage_start")
     expect(await kinds()).toContain("sold_out")
+  })
+})
+
+describe("mint milestones of a real collection that is not SeaDrop", () => {
+  const REAL = "0x00000000000000000000000000000000000000d1" as Address
+  const FIRST = 1_000n
+  const wallet = (i: number) => `0x${(0xe00 + i).toString(16).padStart(40, "0")}` as Address
+  const mint = (to: Address, id: number, block: bigint, contract = REAL): ChainLog => ({
+    address: contract,
+    topics: [NFT_TOPICS.transfer, ZERO_TOPIC, pad(to), pad(toHex(id))] as Hex[],
+    data: "0x",
+    blockNumber: block,
+    blockHash: `0x${"11".repeat(32)}`,
+    transactionHash: pad(toHex(id + 0x10_000)),
+    logIndex: 0,
+  })
+  /** Mints of consecutive token ids to fresh wallets, one per block from `block`. */
+  const mints = (from: number, n: number, block: bigint, to = wallet) =>
+    Array.from({ length: n }, (_, i) => mint(to(from + i), from + i, block + BigInt(i)))
+
+  /** A collection as the verdict job leaves a real one: a drop with a stored first mint. */
+  async function seed(over: Record<string, unknown> = {}) {
+    await sql`insert into indexer.nft_collections ${sql({
+      contract: REAL,
+      standard: "erc721",
+      kind: "drop",
+      verdict: "real",
+      prior_minted: false,
+      first_mint_block: FIRST.toString(),
+      first_mint_ts: new Date(Number(FIRST) * 1000),
+      max_supply: "10",
+      next_discovery_at: null,
+      ...over,
+    })}`
+  }
+
+  /** Runs one batch over every log on the chain up to `head`. */
+  async function run(chain: FakeChain, logs: ChainLog[], head: bigint, first = FIRST) {
+    for (const l of logs) chain.add(l)
+    chain.head = head
+    const idx = await start(chain, [{ ...logs[0]!, blockNumber: first }])
+    await idx.trigger()
+    return idx
+  }
+  const kinds = async () =>
+    (await mintEvents()).map((e) => [e.payload.kind, e.payload.markBps, e.sub, e.block])
+
+  it("a real non-SeaDrop collection reaches 50% and then sold out across two batches", async () => {
+    await seed()
+    const chain = new FakeChain(1_004n)
+    const idx = await run(chain, mints(1, 5, FIRST), 1_004n)
+    expect(await kinds()).toEqual([
+      ["progress", 2500, "mint:progress:2500", 1_004n],
+      ["progress", 5000, "mint:progress:5000", 1_004n],
+    ])
+
+    for (const l of mints(6, 5, 1_010n)) chain.add(l)
+    chain.head = 1_014n
+    await idx.trigger()
+    expect(await kinds()).toEqual([
+      ["progress", 2500, "mint:progress:2500", 1_004n],
+      ["progress", 5000, "mint:progress:5000", 1_004n],
+      ["progress", 7500, "mint:progress:7500", 1_014n],
+      ["sold_out", null, "mint:sold_out:0", 1_014n],
+    ])
+    const [c] =
+      await sql`select last_mark_bps, sold_out_block, max_supply from indexer.nft_collections`
+    expect(c).toMatchObject({ last_mark_bps: 7500, sold_out_block: 1_014n, max_supply: "10" })
+    expect(await sql`select 1 from indexer.nft_stages`).toHaveLength(0)
+  })
+
+  it("a real non-SeaDrop progress event reads stageLabel Mint, and its sold_out has no stageCounts field", async () => {
+    await seed({ max_supply: "4" })
+    const chain = new FakeChain(1_003n)
+    await run(chain, mints(1, 4, FIRST), 1_003n)
+    const [progress, , , soldOut] = (await mintEvents()).map((e) => e.payload)
+    expect(progress).toMatchObject({
+      type: "nft.mint",
+      source: "chain",
+      contract: REAL,
+      kind: "progress",
+      stageIndex: 0,
+      stageLabel: "Mint",
+      stagePriceWei: "0",
+      markBps: 2500,
+      minted: "4",
+      maxSupply: "4",
+      mintStartTs: 1_000,
+      stageStartTs: 1_000,
+      minters: 4,
+      blockNumber: "1003",
+      blockTimestamp: 1_003,
+    })
+    expect(soldOut).toMatchObject({ kind: "sold_out", stageLabel: "Mint", markBps: null })
+    expect("stageCounts" in soldOut!).toBe(false)
+    expect("stageCounts" in progress!).toBe(false)
+  })
+
+  it("one without a max supply gets no milestones", async () => {
+    await seed({ max_supply: null })
+    await run(new FakeChain(1_009n), mints(1, 10, FIRST), 1_009n)
+    expect(await mintEvents()).toEqual([])
+  })
+
+  it("a pending one gets none", async () => {
+    await seed({ verdict: "pending" })
+    await run(new FakeChain(1_009n), mints(1, 10, FIRST), 1_009n)
+    expect(await mintEvents()).toEqual([])
+  })
+
+  it("a filtered one, a continuous one and a SeaDrop one get none", async () => {
+    for (const over of [{ verdict: "filtered" }, { kind: "continuous" }, { seadrop: true }]) {
+      await sql`delete from indexer.nft_collections`
+      await sql`delete from indexer.events`
+      await seed(over)
+      await run(new FakeChain(1_009n), mints(1, 10, FIRST), 1_009n)
+      expect(await mintEvents(), JSON.stringify(over)).toEqual([])
+    }
+  })
+
+  it("one with prior supply gets none, and neither does one whose prior supply is undecided", async () => {
+    for (const prior of [true, null]) {
+      await sql`delete from indexer.nft_collections`
+      await sql`delete from indexer.events`
+      await seed({ prior_minted: prior })
+      await run(new FakeChain(1_009n), mints(1, 10, FIRST), 1_009n)
+      expect(await mintEvents(), String(prior)).toEqual([])
+    }
+  })
+
+  it("a --max-supply override wins over the stored max supply", async () => {
+    await seed({ max_supply: "1000" })
+    await sql`insert into indexer.nft_overrides (contract, max_supply) values (${REAL}, 10)`
+    await run(new FakeChain(1_009n), mints(1, 10, FIRST), 1_009n)
+    const events = (await mintEvents()).map((e) => e.payload)
+    expect(events.at(-1)).toMatchObject({ kind: "sold_out", maxSupply: "10", minted: "10" })
+    expect(events.map((e) => e.maxSupply)).toEqual(Array(events.length).fill("10"))
+  })
+
+  it("Locker mints do not count toward 50%", async () => {
+    await seed()
+    const chain = new FakeChain(1_008n)
+    const locker = Array.from({ length: 5 }, (_, i) =>
+      mint(NFTX_LOCKER, 100 + i, FIRST + BigInt(i)),
+    )
+    const idx = await run(chain, [...locker, ...mints(1, 4, FIRST + 5n)], 1_008n)
+    // Four mints of ten are 40%; counting the Locker's five would read 90% and announce 75%.
+    expect((await mintEvents()).map((e) => e.payload.markBps)).toEqual([2500])
+    expect(await sql`select count(*)::int as n from indexer.nft_mints`).toEqual([{ n: 4 }])
+
+    for (const l of mints(5, 1, 1_010n)) chain.add(l)
+    chain.head = 1_010n
+    await idx.trigger()
+    expect((await mintEvents()).map((e) => e.payload.markBps)).toEqual([2500, 5000])
+  })
+
+  it("scanning the same blocks again counts their mints once", async () => {
+    await seed({ max_supply: "10" })
+    const chain = new FakeChain(1_004n)
+    const idx = await run(chain, mints(1, 5, FIRST), 1_004n)
+    const before = await kinds()
+    expect(before).toHaveLength(2)
+    // Replayed with the five mints stored: counting them twice would read 10 of 10.
+    await idx.backfill(FIRST, 1_004n)
+    expect(await kinds()).toEqual(before)
+    expect((await sql`select sold_out_block from indexer.nft_collections`)[0]).toEqual({
+      sold_out_block: null,
+    })
+  })
+
+  it("a SeaDrop collection's milestones use a --max-supply override over getMintStats", async () => {
+    const logs = loadNftFixture("inkverse-mints")
+    const chain = new FakeChain(lastBlock(logs) + 5n)
+    for (const l of logs) chain.add(l)
+    supplyFrom(chain, INKVERSE, 1_000n)
+    await sql`insert into indexer.nft_overrides (contract, max_supply) values (${INKVERSE}, 400)`
+    const idx = await start(chain, logs)
+    await idx.trigger()
+    const events = (await mintEvents()).map((e) => e.payload)
+    expect(events.filter((e) => e.kind === "progress" || e.kind === "sold_out")).not.toHaveLength(0)
+    for (const e of events) expect(e.maxSupply).toBe("400")
+    expect(events.find((e) => e.kind === "sold_out")).toMatchObject({ maxSupply: "400" })
   })
 })

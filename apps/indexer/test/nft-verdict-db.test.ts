@@ -783,6 +783,55 @@ describe("manual marks", () => {
     expect(reports).toEqual([])
   })
 
+  it("a --max-supply override wins over the stored and the on-chain max supply and patches the column", async () => {
+    const s = setup()
+    const deps = { sql, verdict: s.verdict }
+    await addCollection(PRTSCN, { max_supply: "1000", max_supply_checked: true })
+    await addMints(PRTSCN, [`0x${"a".repeat(40)}`], [blockAt(T0)])
+    chain.maxSupplies.set(PRTSCN, 2000n)
+    clock = T0 + MIN
+
+    await applyMark(deps, { contract: PRTSCN, value: "real", maxSupply: 3333n })
+    expect(
+      (await sql`select max_supply::text from indexer.nft_overrides where contract = ${PRTSCN}`)[0],
+    ).toEqual({ max_supply: "3333" })
+    expect(await rowOf(PRTSCN)).toMatchObject({ max_supply: "3333", verdict: "real" })
+    expect(chain.maxSupplyReads).toEqual([])
+
+    // Marking again without the flag keeps the stored override.
+    await applyMark(deps, { contract: PRTSCN, value: "real" })
+    expect(
+      (await sql`select max_supply::text from indexer.nft_overrides where contract = ${PRTSCN}`)[0],
+    ).toEqual({ max_supply: "3333" })
+    expect(await rowOf(PRTSCN)).toMatchObject({ max_supply: "3333" })
+  })
+
+  it("an override on a collection whose max supply was never read skips the on-chain read", async () => {
+    const s = setup()
+    await addCollection(PRTSCN)
+    await addMints(PRTSCN, [`0x${"a".repeat(40)}`], [blockAt(T0)])
+    chain.maxSupplies.set(PRTSCN, 2000n)
+    await applyMark(
+      { sql, verdict: s.verdict },
+      { contract: PRTSCN, value: "real", maxSupply: 50n },
+    )
+    expect(chain.maxSupplyReads).toEqual([])
+    expect(await rowOf(PRTSCN)).toMatchObject({ max_supply: "50", max_supply_checked: true })
+  })
+
+  it("clearing the mark forgets the override and has the next run read the max supply again", async () => {
+    const s = setup()
+    const deps = { sql, verdict: s.verdict }
+    await addCollection(PRTSCN)
+    await addMints(PRTSCN, [`0x${"a".repeat(40)}`], [blockAt(T0)])
+    chain.maxSupplies.set(PRTSCN, 2000n)
+    await applyMark(deps, { contract: PRTSCN, value: "real", maxSupply: 50n })
+    await applyMark(deps, { contract: PRTSCN, value: "clear" })
+    expect(await sql`select 1 from indexer.nft_overrides`).toHaveLength(0)
+    expect(await rowOf(PRTSCN)).toMatchObject({ max_supply: "2000" })
+    expect(chain.maxSupplyReads).toHaveLength(1)
+  })
+
   it("nft:mark validates the address and value", () => {
     expect(parseMark([HORNET.toUpperCase().replace("0X", "0x"), "real"])).toEqual({
       ok: true,

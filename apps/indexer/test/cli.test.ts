@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { parseCli } from "../src/cli"
+import { MARK_USAGE, parseMark } from "../src/mark-cli"
 
 describe("parseCli", () => {
   it("accepts start and backfill with valid arguments", () => {
@@ -53,7 +54,7 @@ describe("parseCli", () => {
   it("carries the usage line with every rejection", () => {
     const r = parseCli(["backfill"])
     expect(r.ok === false && r.usage).toBe(
-      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> | collections-from-sales",
+      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> [--max-supply <n>] | collections-from-sales",
     )
   })
 
@@ -118,8 +119,54 @@ describe("parseCli mark", () => {
       expect(parseCli(argv).ok, argv.join(" ")).toBe(false)
     const r = parseCli(["mark", HORNET, "spam"])
     expect(r.ok === false && r.usage).toBe(
-      "usage: nft:mark <contract> <real|filtered|continuous|drop|clear>",
+      "usage: nft:mark <contract> <real|filtered|continuous|drop|clear> [--max-supply <n>]",
     )
+  })
+
+  it("parseCli mark 0x… real --max-supply 3333 returns maxSupply 3333n", () => {
+    expect(parseCli(["mark", HORNET, "real", "--max-supply", "3333"])).toEqual({
+      ok: true,
+      command: "mark",
+      contract: HORNET,
+      value: "real",
+      maxSupply: 3333n,
+    })
+    // Without the flag the result has no maxSupply field at all.
+    expect("maxSupply" in (parseCli(["mark", HORNET, "real"]) as object)).toBe(false)
+  })
+
+  it("parseMark accepts --max-supply 3333 after the value", () => {
+    expect(parseMark([HORNET, "drop", "--max-supply", "3333"])).toEqual({
+      ok: true,
+      contract: HORNET,
+      value: "drop",
+      maxSupply: 3333n,
+    })
+    const widest = "9".repeat(78)
+    expect(parseMark([HORNET, "real", "--max-supply", widest])).toMatchObject({
+      ok: true,
+      maxSupply: BigInt(widest),
+    })
+    expect(MARK_USAGE).toContain("[--max-supply <n>]")
+  })
+
+  it("refuses --max-supply 0, -1, 1e3, a 79-digit number, a repeated flag and clear with --max-supply", () => {
+    for (const argv of [
+      [HORNET, "real", "--max-supply", "0"],
+      [HORNET, "real", "--max-supply", "000"],
+      [HORNET, "real", "--max-supply", "-1"],
+      [HORNET, "real", "--max-supply", "1e3"],
+      [HORNET, "real", "--max-supply", "1.5"],
+      [HORNET, "real", "--max-supply", "0x10"],
+      [HORNET, "real", "--max-supply", "9".repeat(79)],
+      [HORNET, "real", "--max-supply", ""],
+      [HORNET, "real", "--max-supply"],
+      [HORNET, "real", "--max-supply", "5", "--max-supply", "6"],
+      [HORNET, "clear", "--max-supply", "5"],
+      [HORNET, "--max-supply", "5", "real"],
+      [HORNET, "real", "--max-supply", "5", "extra"],
+    ])
+      expect(parseMark(argv).ok, argv.join(" ")).toBe(false)
   })
 
   it("--block-reads takes 1 to 16 on a backfill, and is left out by default", () => {

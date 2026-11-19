@@ -91,8 +91,15 @@ try {
   if (cli.command === "mark") {
     const { historyStartBlock } = readNftSettings(process.env, log)
     const verdict = await createNftVerdictJob({ historyStartBlock, sql, store, chain, log })
-    await applyMark({ sql, verdict }, { contract: cli.contract, value: cli.value })
-    log("info", "mark applied", { contract: cli.contract, mark: cli.value })
+    await applyMark(
+      { sql, verdict },
+      { contract: cli.contract, value: cli.value, maxSupply: cli.maxSupply },
+    )
+    log("info", "mark applied", {
+      contract: cli.contract,
+      mark: cli.value,
+      maxSupply: cli.maxSupply?.toString(),
+    })
     await sql.end()
     process.exit(0)
   }
