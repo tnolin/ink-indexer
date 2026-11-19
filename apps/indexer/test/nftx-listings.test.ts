@@ -4,6 +4,7 @@ import { NFTX_LISTINGS, type NftxLog, nftxOrderHash } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { NftxFixtureName } from "../../../packages/sdk/test/fixtures"
+import { nftxSource } from "../src/sources/nftx/index"
 import { listingDrafts } from "../src/sources/nftx/listings"
 import { createStore, type Store } from "../src/store"
 import { nftxHarness, seedPools, stubListings, synthLog } from "./nftx-harness"
@@ -206,6 +207,53 @@ describe("floor", () => {
       floorWei: (SPOT_CREATED / 2n).toString(),
       floorAt: CREATED_TIME - 600,
     })
+  })
+})
+
+describe("listing logs that are not read", () => {
+  const EXTENDED = "0x978b110b1e258411462d703b173c821999f16cfdb075a8053cd8abaa567b8954"
+  const TRANSFERRED = "0x82b30eba1c9622f3eaae428f942ee1ebcbb088e48b8abfae893854138dcd327c"
+  const word = (n: bigint | string) => n.toString(16).padStart(64, "0")
+  const collectionTopic = `0x${word(COLLECTION.slice(2))}` as const
+
+  it("no filter asks for ListingExtended or ListingTransferred", () => {
+    const t = nftxHarness(sql, store, ["eth-listing-created"], {})
+    const source = nftxSource({ sql, chain: t.chain, logger: () => {}, launchpad: null })
+    const topics = JSON.stringify(source.filters(undefined))
+    expect(topics).not.toContain(EXTENDED)
+    expect(topics).not.toContain(TRANSFERRED)
+  })
+
+  it("ListingExtended and ListingTransferred logs from the Listings contract change nothing", async () => {
+    const snapshot = async () => ({
+      events: await sql`select id, type, sub, log_index, payload from indexer.events order by id`,
+      state: await sql`select * from indexer.nft_listing_state order by 1, 2`,
+    })
+    await run(["eth-listing-created"])
+    const baseline = await snapshot()
+    expect(baseline.events).toHaveLength(1)
+
+    await sql.end()
+    sql = await resetDb(inject("databaseUrl"))
+    store = createStore(sql)
+    await run(["eth-listing-created"], (t) => {
+      const like = t.loaded[0]!.logs.find((l) => l.logIndex === 1163)!
+      t.chain.add({
+        ...like,
+        address: NFTX_LISTINGS,
+        topics: [EXTENDED, collectionTopic],
+        data: `0x${word(24375n)}${word(604800n)}${word(1209600n)}`,
+        logIndex: 1164,
+      })
+      t.chain.add({
+        ...like,
+        address: NFTX_LISTINGS,
+        topics: [TRANSFERRED, collectionTopic],
+        data: `0x${word(24375n)}${word(LISTER.slice(2))}${word(LISTER.slice(2))}`,
+        logIndex: 1165,
+      })
+    })
+    expect(await snapshot()).toEqual(baseline)
   })
 })
 
