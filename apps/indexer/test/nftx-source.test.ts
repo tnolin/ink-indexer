@@ -841,6 +841,40 @@ describe("stats from pool moves", () => {
     expect(moved(10_000n, 10_000n)).toBe(false)
   })
 
+  describe("a rollback of the stats row that began the combined history", () => {
+    it("clears combined_since, so the replay begins the history again", async () => {
+      const t = setup(["lildudes-created", "lildudes-init"])
+      t.chain.nftxPoolCounts.set(LD, 61)
+      await t.live()
+      expect((await collectionRow()).combined_since).not.toBeNull()
+      t.chain.reorg(INIT_BLOCK)
+      await t.idx.trigger()
+      expect(await statRows()).toEqual([])
+      expect((await collectionRow()).combined_since).toBeNull()
+    })
+
+    it("keeps combined_since while an older combined row survives", async () => {
+      const t = setup(["lildudes-created", "lildudes-init"])
+      t.chain.nftxPoolCounts.set(LD, 61)
+      const since = new Date("2026-01-01T00:00:00Z")
+      await t.live()
+      await sql`insert into indexer.nft_stats ${sql({
+        contract: LD,
+        at: since,
+        floor_wei: "1",
+        floor_market: "opensea",
+        os_floor_wei: "1",
+      })}`
+      await sql`update indexer.nftx_collections set combined_since = ${since} where collection = ${LD}`
+      addFixture(t.chain, loadNftxFixture("arbitrage-lildudes"))
+      t.chain.head = ARB_BLOCK + 100n
+      await t.idx.trigger()
+      t.chain.reorg(ARB_BLOCK)
+      await t.idx.trigger()
+      expect((await collectionRow()).combined_since).toEqual(since)
+    })
+  })
+
   // The only older row is the opening's, 14.6 days before the move. A history that begins after
   // it has no 24h-ago floor.
   it.each([

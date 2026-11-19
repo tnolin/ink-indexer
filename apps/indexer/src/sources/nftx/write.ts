@@ -258,6 +258,13 @@ export async function rollbackRows(tx: Tx, fork: bigint, prepared: NftxRollback)
     await tx`
       update indexer.nftx_collections set pool_count = ${p.count}, pool_count_block = ${f}
       where collection = ${p.collection} and pool_count_block > ${f}`
+  // The combined history begins at its first row; when the rollback took that row, it begins again
+  // with the next one.
+  await tx`
+    update indexer.nftx_collections set combined_since = null
+    where combined_since is not null and not exists (
+      select 1 from indexer.nft_stats
+      where contract = collection and floor_market is not null and at <= combined_since)`
   await tx`
     update indexer.nftx_collections set stats_price_wei = null, stats_block = null
     where stats_block > ${f}`
