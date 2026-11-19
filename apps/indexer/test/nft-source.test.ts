@@ -1,6 +1,6 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
-import { type NftLaunchEvent, SCHEMA_VERSION } from "@ink-indexer/events"
+import { type NftLaunchEvent, type NftSaleEvent, SCHEMA_VERSION } from "@ink-indexer/events"
 import {
   CHIMERA_FACTORY,
   type ChainLog,
@@ -8,6 +8,9 @@ import {
   decodeNftTransfers,
   decodeOrderFulfilled,
   NFT_TOPICS,
+  NFTX_LOCKER,
+  NFTX_TOPICS,
+  nftxEventsAbi,
   SEADROP_V1,
   SEAPORT_1_5,
   SEAPORT_1_6,
@@ -22,19 +25,23 @@ import {
   InvalidInputRpcError,
   pad,
   parseAbi,
+  toHex,
 } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import {
   loadChimeraCampaigns,
   loadNftFixture,
+  loadNftxFixture,
   loadSeaportRoles,
 } from "../../../packages/sdk/test/fixtures"
 import { Indexer } from "../src/loop"
 import type { LogFilter } from "../src/rpc"
 import { inkypumpSource } from "../src/sources/inkypump/index"
-import { nftSource } from "../src/sources/nft/index"
+import { lockerDeposits, nftSource } from "../src/sources/nft/index"
+import { farmShareBps } from "../src/sources/nft/verdict"
 import { createCollectionsFromSales } from "../src/sources/nft/write"
 import { PoolRegistry } from "../src/sources/pools"
+import { pick } from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 
@@ -743,20 +750,22 @@ describe("NFT source", () => {
 
     asked.length = 0
     await idx.backfill(from, chain.head, ["nft-sales"])
-    expect(asked.map((f) => f.address)).toEqual([[SEAPORT_1_6, SEAPORT_1_5]])
+    // Seaport, plus the Locker whose deposits mark the sales that go to the pool.
+    expect(asked.map((f) => f.address)).toEqual([[SEAPORT_1_6, SEAPORT_1_5, NFTX_LOCKER]])
     expect(await count("nft_sales")).toBe(1)
 
     asked.length = 0
     await idx.backfill(from, chain.head, ["nft-mints"])
-    // Mints, burns and ERC-1155 mints and burns are 3 requests, SeaDrop the 4th.
+    // Mints, burns and ERC-1155 mints and burns are 3 requests, SeaDrop and the Locker's
+    // deposits (which decide the mints to leave out) the 4th.
     expect(asked).toHaveLength(4)
-    expect(asked.at(-1)?.address).toBe(SEADROP_V1)
+    expect(asked.at(-1)?.address).toEqual([SEADROP_V1, NFTX_LOCKER])
 
     // A source with none of its filters picked is left out entirely.
     asked.length = 0
     await idx.backfill(from, chain.head, ["inkypump"])
     expect(asked).toHaveLength(1)
-    expect(sources[1]!.filters(["inkypump"])).toEqual(Array(7).fill(null))
+    expect(sources[1]!.filters(["inkypump"])).toEqual(Array(8).fill(null))
     expect(sources[0]!.filters(["nft-sales"])).toEqual([null])
 
     // No list: every filter of every source, as the live loop reads them.
@@ -891,5 +900,173 @@ describe("collections from sales", () => {
       expect(await live([log])).toBeGreaterThan(log.blockNumber)
       expect(await count("nft_sales")).toBe(0)
     })
+  })
+})
+
+describe("Locker deposits", () => {
+  const LIL_DUDES = "0x2538d3202844e6b3852570d9ef63a916f900c373"
+  const BUBBLE_CATS = "0xd5e11440ca64a53dc7efb369a1dcceff0c95dfcd"
+  const LIL_DUDES_ARBITRAGE = "0x761219aa4139836e0296f1215c2a4897c38c9296"
+  const BUBBLE_CATS_ARBITRAGE = "0x312f2f0eb07465f79e14c6eb931c1aadd380ae13"
+
+  const salePayloads = async () =>
+    (
+      await sql<{ payload: NftSaleEvent }[]>`
+        select payload from indexer.events where type = 'nft.sale' order by id`
+    ).map((r) => r.payload)
+
+  it("the 2026-11-12 arbitrage gives one Seaport sale of Lil Dudes #195 at 256810000000000 wei bought by 0x7612…9296 with toPool true", async () => {
+    await ingest(loadNftxFixture("arbitrage-lildudes").logs)
+    const sales = await salePayloads()
+    expect(sales).toHaveLength(1)
+    expect(sales[0]).toMatchObject({
+      contract: LIL_DUDES,
+      tokenId: "195",
+      priceWei: "256810000000000",
+      buyer: LIL_DUDES_ARBITRAGE,
+      toPool: true,
+    })
+  })
+
+  it("the nine Bubble Cats arbitrage transactions of block 60018368 to 60018858 give nine Seaport sales bought by 0x312f…ae13, each with toPool true", async () => {
+    const logs = ([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).flatMap(
+      (i) => loadNftxFixture(`arbitrage-bubblecats-${i}`).logs,
+    )
+    await ingest(logs)
+    const sales = await salePayloads()
+    expect(sales).toHaveLength(9)
+    for (const sale of sales)
+      expect(sale).toMatchObject({
+        contract: BUBBLE_CATS,
+        priceWei: "100000000000000",
+        buyer: BUBBLE_CATS_ARBITRAGE,
+        toPool: true,
+      })
+    expect(new Set(sales.map((x) => x.tokenId)).size).toBe(9)
+  })
+
+  it("an OpenSea sale without a Locker deposit has no toPool field", async () => {
+    await ingest([
+      orderLog([{ itemType: 2, token: NFT_A, identifier: 5n, amount: 1n }], 10n ** 15n),
+    ])
+    const sales = await salePayloads()
+    expect(sales).toHaveLength(1)
+    expect("toPool" in sales[0]!).toBe(false)
+  })
+
+  it("a deposit of another token in the same transaction does not mark the sale", async () => {
+    const sale = orderLog([{ itemType: 2, token: NFT_A, identifier: 5n, amount: 1n }], 10n ** 15n)
+    await ingest([sale, depositLog(NFT_A, [6n], sale.transactionHash, sale.blockNumber, 1)])
+    expect("toPool" in (await salePayloads())[0]!).toBe(false)
+  })
+
+  const MINT_BLOCK = 58_000_000n
+  const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hex
+  const mintLog = (contract: Address, to: Address, id: bigint, t: Hex, block = MINT_BLOCK, i = 0) =>
+    ({
+      address: contract,
+      topics: [NFT_TOPICS.transfer, ZERO_TOPIC, pad(to), pad(toHex(id))],
+      data: "0x",
+      blockNumber: block,
+      blockHash: `0x${"11".repeat(32)}`,
+      transactionHash: t,
+      logIndex: i,
+    }) as ChainLog
+  function depositLog(collection: Address, ids: bigint[], t: Hex, block: bigint, i: number) {
+    return {
+      address: NFTX_LOCKER,
+      topics: encodeEventTopics({
+        abi: nftxEventsAbi,
+        eventName: "TokenDeposit",
+        args: { _collection: collection },
+      }) as Hex[],
+      data: encodeAbiParameters(
+        [{ type: "uint256[]" }, { type: "address" }, { type: "address" }],
+        [ids, BOB, BOB],
+      ),
+      blockNumber: block,
+      blockHash: `0x${"11".repeat(32)}`,
+      transactionHash: t,
+      logIndex: i,
+    } as ChainLog
+  }
+
+  it("a mint to the Locker is not stored and the contract still gets its standard (synthetic)", async () => {
+    await ingest([mintLog(NFT_A, NFTX_LOCKER, 1n, tx(1)), mintLog(NFT_A, ALICE, 2n, tx(2))])
+    expect(await sql`select token_id from indexer.nft_mints`).toEqual([{ token_id: "2" }])
+    const [c] = await sql`select standard, first_mint_block from indexer.nft_collections`
+    expect(c).toMatchObject({ standard: "erc721", first_mint_block: MINT_BLOCK })
+  })
+
+  it("a contract whose only mint went to the Locker still gets its standard (synthetic)", async () => {
+    await ingest([mintLog(NFT_A, NFTX_LOCKER, 1n, tx(1))])
+    expect(await count("nft_mints")).toBe(0)
+    const [c] = await sql`select standard, first_mint_block from indexer.nft_collections`
+    expect(c).toMatchObject({ standard: "erc721", first_mint_block: null })
+  })
+
+  it("a mint to a wallet deposited into the Locker in the same transaction is not stored (synthetic)", async () => {
+    await ingest([
+      mintLog(NFT_A, ALICE, 1n, tx(1), MINT_BLOCK, 0),
+      mintLog(NFT_A, ALICE, 2n, tx(1), MINT_BLOCK, 1),
+      depositLog(NFT_A, [1n], tx(1), MINT_BLOCK, 2),
+    ])
+    expect(await sql`select token_id from indexer.nft_mints`).toEqual([{ token_id: "2" }])
+  })
+
+  it("a mint to a wallet deposited in a later transaction is stored (synthetic)", async () => {
+    await ingest([
+      mintLog(NFT_A, ALICE, 1n, tx(1)),
+      depositLog(NFT_A, [1n], tx(2), MINT_BLOCK + 1n, 0),
+    ])
+    expect(await count("nft_mints")).toBe(1)
+  })
+
+  it("farmShareBps does not count the Locker as a minter", async () => {
+    const contracts = Array.from(
+      { length: 6 },
+      (_, i) => `0x00000000000000000000000000000000000000c${i}` as Address,
+    )
+    await ingest(
+      contracts.flatMap((c, i) => [
+        mintLog(c, NFTX_LOCKER, 1n, tx(10 + i), MINT_BLOCK, 0),
+        mintLog(c, `0x00000000000000000000000000000000000000d${i}`, 2n, tx(10 + i), MINT_BLOCK, 1),
+      ]),
+    )
+    await sql`update indexer.nft_collections set kind = 'drop'`
+    expect(await farmShareBps(sql, contracts[0]!, Number(MINT_BLOCK) + 100)).toEqual({
+      share: 0,
+      minters: 1,
+    })
+  })
+
+  it("lockerDeposits keys each deposited token by transaction, collection and id", () => {
+    const set = lockerDeposits([depositLog(NFT_A, [1n, 7n], tx(3), MINT_BLOCK, 0)])
+    expect([...set].sort()).toEqual([`${tx(3)}:${NFT_A}:1`, `${tx(3)}:${NFT_A}:7`])
+  })
+
+  it("the Locker's TokenDeposit topic is the one the filter reads", async () => {
+    const chain = new FakeChain(MINT_BLOCK)
+    const filters = nftSource({ sql, chain, logger: () => {} }).filters()
+    expect(
+      filters.some((f) => f?.address === NFTX_LOCKER && f.topics[0] === NFTX_TOPICS.TokenDeposit),
+    ).toBe(true)
+  })
+})
+
+describe("pick", () => {
+  const filter: LogFilter = { topics: [] }
+  it("with two groups returns the filter for either group and null for neither", () => {
+    const groups = ["nft-mints", "nft-sales"] as const
+    expect(pick(undefined, groups, filter)).toBe(filter)
+    expect(pick(["nft-mints"], groups, filter)).toBe(filter)
+    expect(pick(["nft-sales", "hookit"], groups, filter)).toBe(filter)
+    expect(pick(["nft-launches"], groups, filter)).toBeNull()
+    expect(pick([], groups, filter)).toBeNull()
+  })
+
+  it("with one group behaves as before", () => {
+    expect(pick(["nft-launches"], "nft-launches", filter)).toBe(filter)
+    expect(pick(["nft-sales"], "nft-launches", filter)).toBeNull()
   })
 })

@@ -5,12 +5,16 @@ import {
   type ChainLog,
   decodeChimeraCampaign,
   decodeNftTransfers,
+  decodeNftxLog,
   decodeOrderFulfilled,
   decodeSeaDropLog,
   INK_CHAIN_ID,
   MAX_STORED_QTY,
   mergeMatchedSales,
   NFT_TOPICS,
+  NFTX_LAUNCHPAD,
+  NFTX_LOCKER,
+  NFTX_TOPICS,
   SEADROP_V1,
   SEAPORT_1_5,
   SEAPORT_1_6,
@@ -25,7 +29,7 @@ import type { LogFilter } from "../../rpc"
 import { seenItems } from "../opensea/listings"
 import { cachedRanks, itemKey } from "../opensea/ranks"
 import { latestFloors } from "../opensea/stats"
-import { type EventRow, pick, type Source, type SourceBatch } from "../source"
+import { type BackfillSource, type EventRow, pick, type Source, type SourceBatch } from "../source"
 import {
   loadMilestoneContexts,
   type MilestoneUpdate,
@@ -150,6 +154,9 @@ const BATCHES = [NFT_TOPICS.transferSingle, NFT_TOPICS.transferBatch]
  *   is restricted to OrderFulfilled and CampaignCreated and the extras shrink to the cross product
  *   of the addresses and those two topics, which is empty in practice.
  *
+ * The Locker's TokenDeposit filter names an address, so it joins the address request above; its
+ * extra logs are the other events of the Locker, which the loop drops when the response is split.
+ *
  * Mints and burns cannot share a request: they constrain different topic positions (from in topic1
  * against to in topic2), and ORing positions would fetch every transfer.
  */
@@ -161,9 +168,13 @@ const FILTERS: LogFilter[] = [
   { address: SEADROP_V1, topics: [] },
   { address: [SEAPORT_1_6, SEAPORT_1_5], topics: [NFT_TOPICS.orderFulfilled] },
   { address: CHIMERA_FACTORY, topics: [NFT_TOPICS.campaignCreated] },
+  { address: NFTX_LOCKER, topics: [NFTX_TOPICS.TokenDeposit] },
 ]
-/** The backfill name of each filter: `nft-mints` is the first five, then Seaport, then Chimera. */
-const FILTER_GROUPS = [
+/**
+ * The backfill name of each filter: `nft-mints` is the first five, then Seaport, Chimera, and the
+ * Locker's deposits, which both mints and sales read.
+ */
+const FILTER_GROUPS: (BackfillSource | readonly BackfillSource[])[] = [
   "nft-mints",
   "nft-mints",
   "nft-mints",
@@ -171,14 +182,16 @@ const FILTER_GROUPS = [
   "nft-mints",
   "nft-sales",
   "nft-launches",
-] as const
-const [MINTS_721, BURNS_721, MINTS_1155, BURNS_1155, SEADROP, SEAPORT, CHIMERA] = [
-  0, 1, 2, 3, 4, 5, 6,
+  ["nft-mints", "nft-sales"],
+]
+const [MINTS_721, BURNS_721, MINTS_1155, BURNS_1155, SEADROP, SEAPORT, CHIMERA, LOCKER] = [
+  0, 1, 2, 3, 4, 5, 6, 7,
 ] as const
 
 /**
- * NFTs as a loop source: mints and burns (ERC-721 and ERC-1155), SeaDrop logs, Seaport sales and
- * Chimera campaigns. Rows go to the `nft_*` tables; each Seaport sale also becomes an `nft.sale` event.
+ * NFTs as a loop source: mints and burns (ERC-721 and ERC-1155), SeaDrop logs, Seaport sales,
+ * Chimera campaigns and the NFTX Locker's deposits. Rows go to the `nft_*` tables; each Seaport sale
+ * also becomes an `nft.sale` event.
  */
 export function nftSource(deps: NftDeps): Source<NftBatch, null> {
   return {
@@ -194,6 +207,20 @@ export function nftSource(deps: NftDeps): Source<NftBatch, null> {
 }
 
 const s = (x: bigint) => x.toString()
+
+/**
+ * `${tx}:${collection}:${tokenId}` of every token the Locker took in the given logs. An NFT that
+ * reaches the Locker in the transaction that minted or sold it was routed through, not held.
+ */
+export function lockerDeposits(logs: ChainLog[]): Set<string> {
+  const keys = new Set<string>()
+  for (const l of logs) {
+    const d = decodeNftxLog(l)
+    if (d?.kind !== "deposit") continue
+    for (const id of d.tokenIds) keys.add(`${l.transactionHash}:${d.collection}:${id}`)
+  }
+  return keys
+}
 
 export async function processLogs(
   logs: ChainLog[][],
@@ -226,6 +253,18 @@ export async function processLogs(
       ;(t.kind === "mint" ? mints : burns).push(row)
     })
   }
+  // A mint into the Locker (or NFTX's launchpad) is a collection being deposited, not a person
+  // minting; so is a mint to a wallet that deposits the token in the same transaction. These rows
+  // are never stored, so they feed neither milestones, MINT LIVE nor the farm-wallet share. The
+  // contract keeps its standard and its row.
+  const deposits = lockerDeposits(at(LOCKER))
+  const routed = (m: TransferRow) =>
+    m.account === NFTX_LOCKER ||
+    m.account === NFTX_LAUNCHPAD ||
+    deposits.has(`${m.txHash}:${m.contract}:${m.tokenId}`)
+  const stored = mints.filter((m) => !routed(m))
+  mints.length = 0
+  mints.push(...stored)
 
   const seadropMints: SeaDropMintRow[] = []
   const seadropConfig: SeaDropConfigRow[] = []
@@ -399,10 +438,16 @@ export async function processLogs(
       const sub = first === r.contract ? `sale:${r.tokenId}` : `sale:${r.tokenId}:${r.contract}`
       sales.push(r)
       events.push({
-        event: saleEvent(r, ts, floors.get(r.contract) ?? null, {
-          ...listedItems.get(itemKey(r.contract, s(r.tokenId))),
-          rank: ranks.get(itemKey(r.contract, s(r.tokenId))),
-        }),
+        event: saleEvent(
+          r,
+          ts,
+          floors.get(r.contract) ?? null,
+          {
+            ...listedItems.get(itemKey(r.contract, s(r.tokenId))),
+            rank: ranks.get(itemKey(r.contract, s(r.tokenId))),
+          },
+          deposits.has(`${r.txHash}:${r.contract}:${r.tokenId}`),
+        ),
         block: r.block,
         blockHash: log.blockHash,
         sub,
@@ -529,6 +574,7 @@ function saleEvent(
   blockTimestamp: number,
   floorWei: bigint | null,
   item: SaleItem,
+  toPool: boolean,
 ): NftSaleEvent {
   return {
     v: SCHEMA_VERSION,
@@ -553,6 +599,8 @@ function saleEvent(
     maxRank: item.rank?.maxRank ?? null,
     // The collection's latest stats floor; null while it has none.
     floorWei: floorWei === null ? null : s(floorWei),
+    // Absent, not false, on an ordinary sale.
+    ...(toPool ? { toPool: true } : {}),
   }
 }
 

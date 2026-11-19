@@ -58,7 +58,8 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
  * `v4-swaps` the swaps and burns of tokens with a registered Uniswap v4 pool, whichever
  * PoolManager holds it. The NFT source's filters come in three
  * groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and `nft-launches`
- * (the Chimera factory).
+ * (the Chimera factory). The NFTX Locker's deposits belong to both `nft-mints` and `nft-sales`:
+ * they decide which mints and which sales are left out or marked.
  */
 export const BACKFILL_SOURCES = [
   "inkypump",
@@ -72,12 +73,15 @@ export const BACKFILL_SOURCES = [
 ] as const
 export type BackfillSource = (typeof BACKFILL_SOURCES)[number]
 
-/** `filter` when `only` is absent or names `group`, else null (see `Source.filters`). */
+/**
+ * `filter` when `only` is absent or names `group` (any of them, for a filter several groups
+ * need), else null (see `Source.filters`).
+ */
 export const pick = (
   only: readonly BackfillSource[] | undefined,
-  group: BackfillSource,
+  group: BackfillSource | readonly BackfillSource[],
   filter: LogFilter,
-) => (only === undefined || only.includes(group) ? filter : null)
+) => (only === undefined || [group].flat().some((g) => only.includes(g)) ? filter : null)
 
 /** The `entity` column: what readers look an event up by. Every event type has one case. */
 export function entityOf(e: IndexerEvent): string {
