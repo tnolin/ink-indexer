@@ -2,8 +2,12 @@
 // Usage: OPENSEA_API_KEY=<key> INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts [--only <step,step>]
 //        INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts --chimera
 //        INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts --matched <tx hash>
+//        OPENSEA_API_KEY=<key> INK_RPC=<http rpc url> pnpm tsx scripts/record-nft-fixtures.ts --collections <address@creation block>[,...]
 // --chimera records the Chimera factory's campaign logs from its deployment block to head. It needs only the RPC.
 // --matched records every log of one Seaport transaction in which two orders were matched, as seaport-matched.json. It needs only the RPC.
+// --collections records, per collection, its ERC-721 mints and SeaDrop logs from the creation block to head, and
+// OpenSea's contract, collection, stats and drop responses, under packages/sdk/test/fixtures/nft/replay and
+// apps/indexer/test/fixtures/opensea/replay. A response that is not a 200 is kept as data.
 // Steps: collections, seaport, erc1155, farm, rest, stream (all by default).
 // Chain logs go to packages/sdk/test/fixtures/nft, OpenSea responses to apps/indexer/test/fixtures/opensea.
 // Run it once while the key is valid, then commit the output. Every file is checked for the API key
@@ -16,6 +20,8 @@ import { ink } from "viem/chains"
 const CHIMERA_ONLY = process.argv.includes("--chimera")
 const matchedArg = process.argv.indexOf("--matched")
 const MATCHED_TX = matchedArg > 0 ? (process.argv[matchedArg + 1] ?? "") : ""
+const collectionsArg = process.argv.indexOf("--collections")
+const REPLAY_ARG = collectionsArg > 0 ? (process.argv[collectionsArg + 1] ?? "") : ""
 const KEY = process.env.OPENSEA_API_KEY ?? ""
 if (!KEY && !CHIMERA_ONLY && !MATCHED_TX) throw new Error("OPENSEA_API_KEY is not set")
 const RPC_URL = process.env.INK_RPC ?? "https://rpc-qnd.inkonchain.com"
@@ -687,6 +693,58 @@ async function recordMatched(txHash: string) {
   console.log(`matched: ${logs.length} logs of ${txHash} in block ${receipt.blockNumber}`)
 }
 
+/** `address@block` for each collection: the lowercase contract and the block it was created in. */
+function parseReplayTargets(arg: string): { address: string; created: number }[] {
+  const targets = arg.split(",").map((part) => {
+    const m = /^(0x[0-9a-fA-F]{40})@(\d+)$/.exec(part.trim())
+    if (!m) throw new Error(`--collections wants <address@creation block>[,...], got "${part}"`)
+    return { address: (m[1] as string).toLowerCase(), created: Number(m[2]) }
+  })
+  if (targets.length === 0) throw new Error("--collections needs at least one collection")
+  return targets
+}
+
+/** Mints, SeaDrop logs and OpenSea's answers for collections created recently, as a verdict replay needs them. */
+async function recordReplay(arg: string) {
+  const head = await headBlock()
+  const headTs = await timestampOf(head)
+  const replayChain = join(CHAIN_DIR, "replay")
+  const replayOpenSea = join(OPENSEA_DIR, "replay")
+  const meta: { head: number; headTs: number; collections: Record<string, unknown> } = {
+    head,
+    headTs,
+    collections: {},
+  }
+  for (const { address, created } of parseReplayTargets(arg)) {
+    console.log(`${address}: blocks ${created}-${head}`)
+    const mints = (await collect(created, head, mintFilter(address))).filter(is721)
+    const seadrop = await collect(created, head, { address: SEADROP, topics: [null, pad(address)] })
+    save(join(replayChain, `${address}.json`), logsJson([...mints, ...seadrop]))
+
+    const contract = await openSea(`/api/v2/chain/ink/contract/${address}`)
+    save(join(replayOpenSea, `contract-${address}.json`), `${JSON.stringify(contract, null, 2)}\n`)
+    const slug =
+      contract.status === 200 &&
+      typeof (contract.body as { collection?: unknown }).collection === "string"
+        ? (contract.body as { collection: string }).collection
+        : null
+    if (slug) {
+      for (const [name, path] of [
+        [`collection-${slug}`, `/api/v2/collections/${slug}`],
+        [`stats-${slug}`, `/api/v2/collections/${slug}/stats`],
+        [`drop-${slug}`, `/api/v2/drops/${slug}`],
+      ] as const)
+        save(
+          join(replayOpenSea, `${name}.json`),
+          `${JSON.stringify(await openSea(path), null, 2)}\n`,
+        )
+    }
+    meta.collections[address] = { created, slug, mints: mints.length, seadropLogs: seadrop.length }
+  }
+  save(join(replayChain, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`)
+  console.log("replay:", meta)
+}
+
 // ---- main ----
 
 function checkForKey(dir: string) {
@@ -702,6 +760,12 @@ function checkForKey(dir: string) {
 }
 
 try {
+  if (REPLAY_ARG) {
+    await recordReplay(REPLAY_ARG)
+    for (const dir of [CHAIN_DIR, OPENSEA_DIR]) checkForKey(dir)
+    console.log(`wrote ${writtenFiles.length} files; no file contains the API key`)
+    process.exit(0)
+  }
   if (MATCHED_TX) {
     await recordMatched(MATCHED_TX)
     console.log(`wrote ${writtenFiles.length} files`)
