@@ -229,6 +229,10 @@ describe("keepAuction", () => {
     expect(keepAuction(stored(), context({ floorSupply: null }))).toBe(false)
   })
 
+  it("an auction of a token with no supply is not kept", () => {
+    expect(keepAuction(stored(), context({ floorSupply: 0n }))).toBe(false)
+  })
+
   it("an auction is not kept when its token is not a floor token, its sender is not the creator, owner or launchpad, its currency is not ETH, or it is the second one", () => {
     expect(keepAuction(stored({ token: STRANGER }), context())).toBe(false)
     expect(keepAuction(stored(), context({ collection: null }))).toBe(false)
@@ -441,6 +445,13 @@ describe("keeping a stored auction later", () => {
       clearingPriceWei: FLOOR_WEI,
       bidders: bidsUpTo(60_337_821n),
     })
+  })
+
+  it("an auction whose floor token has no supply at its block is stored, not kept (synthetic)", async () => {
+    const t = await setup({ supply: 0n })
+    await t.backfill()
+    expect((await auctionRow()).kept).toBe(false)
+    expect(await auctionEvents()).toEqual([])
   })
 
   it("an auction created in the same span as its collection is kept at its AuctionCreated log (synthetic supply)", async () => {
@@ -789,6 +800,20 @@ describe("phases", () => {
     ])
     await t.idx.backfill(60_400_001n, t.chain.head)
     expect(await auctionEvents()).toHaveLength(4)
+  })
+
+  it("a price dated before the block its created was announced at is not announced (synthetic)", async () => {
+    const t = await setup({ supply: HALF })
+    await t.backfill(CREATED, 60_385_200n)
+    expect((await auctionEvents()).map((e) => e.payload.phase)).toEqual(["created", "live"])
+    // The price logged at 60385228 is older than the announced created.
+    await sql`update indexer.nftx_auctions set created_emitted_block = 60390000`
+    await t.idx.backfill(60_385_201n, t.chain.head)
+    expect((await auctionEvents()).map((e) => e.payload.phase)).toEqual([
+      "created",
+      "live",
+      "ended",
+    ])
   })
 
   it("the same span twice emits each phase once", async () => {

@@ -76,7 +76,10 @@ export function keepAuction(
 ): boolean {
   const col = c.collection
   if (!col || a.token !== col.floorToken) return false
-  if (a.currency !== ZERO || c.alreadyKept || c.floorSupply === null) return false
+  // A token with no supply at the auction's block does not exist there yet, and half of nothing is
+  // met by any amount.
+  if (a.currency !== ZERO || c.alreadyKept || c.floorSupply === null || c.floorSupply === 0n)
+    return false
   const sender =
     a.sender === col.creator ||
     (c.owner !== null && a.sender === c.owner) ||
@@ -521,8 +524,12 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
       a.liveBlock = due.live
       dirty.add(a.auction)
     }
+    // A price older than the block `created` was announced at would follow it out of order.
     for (const p of priceLogs)
-      if (p.a.auction === a.auction)
+      if (
+        p.a.auction === a.auction &&
+        (a.createdEmittedBlock === null || p.log.blockNumber >= a.createdEmittedBlock)
+      )
         emits.push({ kind: "price", a, log: p.log, priceQ96: p.priceQ96 })
     if (due.ended !== null) {
       emits.push({ kind: "ended", a, block: due.ended })
