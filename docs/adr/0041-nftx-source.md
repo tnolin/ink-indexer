@@ -11,7 +11,7 @@ NFTX turns an NFT collection into a fungible floor token and a Uniswap v4 pool. 
 
 **A `nftx` source reads the NFTX contracts.** One address-bound filter covers the Locker, both Zaps, the royalty gate, the Listings contract and the hook. A log is accepted only from the contract that emits its kind, so a look-alike log from any other address is dropped. The platform and backfill name is `nftx`, and it is part of the default `INDEXER_SOURCES`.
 
-**Collections and pools.** `CollectionCreated` stores the collection, its floor token and its name, and gives the collection a snapshot before any mint is indexed. `CollectionInitialized` stores the pool key, which side flETH is on and how many NFTs were seeded, writes an `nft_launches` row and emits `nft.launch` with `launchpad: "nftx"`. A pool whose hook is not the NFTX hook, or that has no flETH side, is stored without a side, writes no launch and logs one warning. Launches are keyed by collection and launchpad, so a collection can have a Chimera launch and an NFTX launch; rolling either back restores the other.
+**Collections and pools.** `CollectionCreated` stores the collection, its floor token and its name, and gives the collection a snapshot before any mint is indexed. `CollectionInitialized` stores the pool key, which side flETH is on and how many NFTs were seeded, writes an `nft_launches` row and emits `nft.launch` with `launchpad: "nftx"`. An opening whose pool has a hook other than the NFTX hook, or no flETH side, writes nothing and logs one warning, so a later opening of the real pool still stands. NFTX pools are not registered in the shared `PoolRegistry`: their prices come from the hook's `PoolStateUpdated` logs, and the `v4` source does not index their swaps. Launches are keyed by collection and launchpad, so a collection can have a Chimera launch and an NFTX launch; rolling either back restores the other.
 
 **Pool prices.** Each `PoolStateUpdated` writes one `nftx_prices` row. The price is wei per NFT, `10^18 · 2^192 / sqrtPriceX96²` when the pool pairs the floor token with flETH as currency0 and the inverse otherwise, rounded down; a price that is not defined is stored as null. Logs after `CollectionSunset` add nothing.
 
@@ -21,11 +21,11 @@ NFTX turns an NFT collection into a fungible floor token and a Uniswap v4 pool. 
 - `instant_sell`: the item was sold to the pool, so the Locker is the buyer.
 - `instant_buy`: a floor item was bought from the pool, so the Locker is the seller.
 
-A transaction's total is split evenly across its items, rounded down, with the remainder on the last. An item is sold once per transaction: the first log that classifies it wins. A listing's record is read from the Listings contract one block before the transaction, because the fill removes it.
+A transaction's total is split evenly across its items, rounded down, with the remainder on the last. An item is sold once per transaction: the first log that classifies it wins, except that a `GatedSale` is read before the other logs, because it names the seller and the ETH the seller received after the royalty. A listing's record is read from the Listings contract one block before the transaction, because the fill removes it.
 
 **Listings.** Each id of `ListingsCreated`, each relist and each floor-multiple update is announced as `nft.listing` with `market: "nftx"`. The price is the listing's floor multiple times the pool's spot price at the log. A listing is announced whatever its expiry; one whose pool has no price is not announced.
 
-**The Locker and OpenSea sales.** A mint into the Locker, or to a wallet that deposits the token into the Locker in the same transaction, is not stored, counted toward milestones or counted as a minting wallet. A Seaport sale whose item reaches the Locker in the same transaction is stored with `toPool: true`.
+**The Locker and OpenSea sales.** A mint into the Locker, or to a wallet that deposits the token into the Locker in the same transaction, is not stored, counted toward milestones or counted as a minting wallet. A Seaport sale whose item reaches the Locker in the same transaction is stored as usual, and its `nft.sale` event carries `toPool: true`.
 
 **Names.** A collection's name in NFTX's web addresses is read from NFTX's public API, at most three lookups per batch and once per five minutes per collection. The slug is accepted only as lowercase letters, digits and hyphens, because it ends up in a URL, and a failed lookup never stops ingestion.
 

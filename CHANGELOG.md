@@ -11,7 +11,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Indexer: a collection with an NFTX market has a combined floor, the lower of its OpenSea floor and its NFTX pool price, in `nft.stats` and `nft.listing`. A pool price that moves 1% or more emits `nft.stats`. See ADR 0042.
 - Indexer: `nft.launch` for a collection that opens trading on NFTX, and `nft.collection` snapshots with `launchpad: "nftx"` from the collection's creation.
 - Indexer: Uniswap continuous clearing auctions of NFTX floor tokens, followed through `created`, `live`, `price` and `ended` as `nft.auction` events, with the amount raised, the clearing price, the bidders and whether the auction graduated read from the contract as of each event's block. `pnpm nft:auction <auction> <contract>` links an auction the automatic check missed to a collection. See ADR 0044.
-- Indexer: mint progress and sold-out events for every collection that is judged or marked real, counted from the indexer's own stored mints, not only for SeaDrop drops. `pnpm nft:mark <contract> <mark> --max-supply <n>` sets a max supply by hand, and `clear` forgets it. See ADR 0043.
+- Indexer: `pnpm nft:mark <contract> <mark> --max-supply <n>` sets a collection's max supply by hand, and `clear` forgets it. See ADR 0043.
 - Indexer: a Seaport sale whose item goes into the NFTX Locker in the same transaction carries `toPool: true`, and mints into the Locker are no longer stored, counted toward milestones or counted as a minting wallet.
 - Events: optional NFTX fields on `nft.collection`, `nft.listing`, `nft.sale` and `nft.stats` (`market`, `via`, `toPool`, `floorMultiple`, `listingType`, `floorMarket`, `nftxFloorWei`, `poolCount`, `nftxSlug`) and the `nft.auction` event (`events-v5`). Schema version stays 2.
 - SDK: NFTX and auction log decoding, pool and auction price math, and readers for listings, pool sizes, owners and auction checkpoints at a block.
@@ -19,7 +19,13 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 
 ### Changed
 
+- Indexer: `nft.stats` fields only OpenSea knows, `owners`, `volume24hWei` and `sales24h`, can now be `null`: a pool move of a collection OpenSea has no stats for emits them as `null`. Consumers must handle `null` in these fields. See ADR 0042.
+- Indexer: mint progress and sold-out events now cover every collection judged or marked real, counted from the indexer's own stored mints, not only SeaDrop drops. A collection marked real by hand gets a stage start after 10 mints. See ADR 0043.
 - Indexer: OpenSea and NFTX listings are now announced whatever their expiry. Listings that live under an hour were dropped before. Every other listing filter is unchanged. See ADR 0045.
+
+### Fixed
+
+- Indexer: `.env.example` lists every platform name `INDEXER_SOURCES` accepts, and says that an empty value runs all of them.
 
 ## [indexer-v0.7.1] - 2026-11-10
 
