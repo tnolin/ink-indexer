@@ -82,7 +82,16 @@ export function classifySales(tx: TxLog[], reads: SaleReads): SaleDraft[] {
     sold.add(k)
     out.push(s)
   }
-  for (const { block, logIndex, d } of tx) {
+  // The RoyaltyGate sells through the Zap's `sellTokensForETH`, which logs `TokensSoldForETH`, not
+  // `NFTSoldForETH`, so by the verified source the two sale logs do not meet for one item; no
+  // recorded transaction shows both. Were both present, the gate's log is the one that names the
+  // seller (the Zap's would name the gate) and the ETH the seller received after the royalty, so
+  // it is read first and wins.
+  const ordered = [
+    ...tx.filter((l) => l.d.kind === "gatedSale"),
+    ...tx.filter((l) => l.d.kind !== "gatedSale"),
+  ]
+  for (const { block, logIndex, d } of ordered) {
     switch (d.kind) {
       case "filled":
         for (const id of unique(d.tokenIds)) {

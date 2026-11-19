@@ -440,6 +440,38 @@ describe("instant trades", () => {
     expect((await sales()).map((r) => r.price_wei)).toEqual(["33", "33", "34"])
   })
 
+  it.each([
+    ["after", 70],
+    ["before", 60],
+  ])(
+    "a GatedSale logged %s the Zap's NFTSoldForETH for the same ids books one sale, at the seller and net price the GatedSale names (synthetic)",
+    async (_where, logIndex) => {
+      const SELLER = "0x2222222222222222222222222222222222222222"
+      const net = 9_000_000_000_000_000n
+      await run(["eth-sold-for-eth"], (t) => {
+        const sold = t.loaded[0]!.logs.find((l) => l.logIndex === 67)!
+        t.chain.add(
+          synthLog(
+            sold,
+            "GatedSale",
+            {
+              _collection: "0x06f97e756f5c7ac0db75411101bd09e17f63aba7",
+              _tokenIds: [3430n],
+              _seller: SELLER,
+              _ethReceived: net,
+              _royalty: 1n,
+            },
+            { address: NFTX_ROYALTY_GATE, logIndex },
+          ),
+        )
+      })
+      const rows = await sales()
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatchObject({ token_id: "3430", seller: SELLER, price_wei: net.toString() })
+      expect(await saleEvents()).toHaveLength(1)
+    },
+  )
+
   it("GatedSale gives instant sells (synthetic)", async () => {
     await run(["eth-sold-for-eth"], (t) => {
       const sold = t.loaded[0]!.logs.find((l) => l.logIndex === 67)!
