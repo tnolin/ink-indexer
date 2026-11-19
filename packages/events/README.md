@@ -157,6 +157,8 @@ Two optional fields were added to version 2 without a new version: `launchpad.la
 - `source: "chain"` events have a real `txHash` and `logIndex`, and `blockTimestamp` is the block time.
 - `source: "opensea"` events have a synthetic `txHash` (`os:list:<order hash>`, `os:col:<contract>:<n>`, `os:drop:<contract>:<n>`, `os:stats:<contract>:<n>`), `logIndex` 0, and `blockTimestamp` is the receipt time. `blockNumber` is the chain's latest ingested block when the event was received. After a reorg the row, and `blockNumber` with it, moves to the fork block rather than being deleted.
 - Wei amounts are decimal strings. Fields that OpenSea or the chain may not give are `null`.
+- Collections on NFTX add optional fields (`market`, `via`, `toPool`, `floorMultiple`, `listingType`, `floorMarket`, `nftxFloorWei`, `poolCount`, `nftxSlug`) and one event type, `nft.auction`. Rows written before they existed lack the fields, so read a missing one as `null` (or as OpenSea for `market`).
+- `nft.stats` and `nft.auction` events built from NFTX chain data have a synthetic `txHash` (`nftx:stats:<contract>:<block>:<logIndex>` and `nftx:auction:<auction>:<phase>:<block>[:<logIndex>]`) and `source: "chain"`; they are rolled back with the block like any chain event.
 
 ### `nft.collection`
 
@@ -179,6 +181,8 @@ A snapshot, written at discovery and whenever a field changes.
   "creator": { "address": "0x00000000000000000000000000000000000000c1", "username": "maker", "verified": false }
 }
 ```
+
+- `launchpad` is `chimera` for a collection launched on Chimera, `nftx` for one that has an NFTX market and no Chimera launch, and `null` otherwise. `launchToken` is the Chimera token, or the NFTX floor token.
 
 - `kind` is `drop` (the collection has a mint phase), `continuous` (NFTs keep minting and burning with no stages, as in Chimera collections) or `legacy` (the mint finished before the indexer's NFT history, so there are no mint events).
 - `verdict` is `real` when the collection passes the quality checks, `pending` while they are undecided, and `filtered` when one has failed. `gates` shows each check: `page`, `structure`, `traits` and `farm` are `pass`, `fail` or `pending` (`structure` and `farm` are `n/a` where they do not apply), and `farmShareBps` is the share of minters that are farm wallets. `manual` is true when the verdict or kind was set by hand.
@@ -239,11 +243,13 @@ A listing that passed the indexer's filter: public, paid in ETH or WETH, open fo
 }
 ```
 
-`priceWei` is per unit. `floorWei` and `floorAt` are the collection's newest stored floor and the time it was read. A floor more than 10 minutes old is read again before the event is written, at most once per collection every 10 minutes; when that read fails, the event carries the older floor with its own `floorAt`. `rank` is OpenSea's rarity rank. It is fetched only for listings priced at or under the floor plus 10%, so it is `null` for the rest, and `null` where OpenSea has no rank.
+`priceWei` is per unit. `floorWei` and `floorAt` are the collection's newest stored floor and the time it was read. For a collection with an NFTX market that floor is the lower of the OpenSea floor and the NFTX pool's spot price; when it comes from the pool, `floorAt` is the event's own time, because the pool price holds until the next trade. A floor more than 10 minutes old is read again before the event is written, at most once per collection every 10 minutes; when that read fails, the event carries the older floor with its own `floorAt`. `rank` is OpenSea's rarity rank. It is fetched only for listings priced at or under the floor plus 10%, so it is `null` for the rest, and `null` where OpenSea has no rank.
+
+An NFTX listing has `market: "nftx"`, `currency: "ETH"`, `maker` (the listing owner), `orderHash` (the keccak of the transaction hash, log index and token id), `floorMultiple` (150 is 1.50x), `listingType` (`liquid` or `dutch`) and `nftxSlug`. Its `priceWei` is the multiple applied to the pool's spot price at the listing's block, and `expiresAt` is the listing's creation time plus its duration. Every NFTX listing is emitted, with no price filter.
 
 ### `nft.sale`
 
-One event per NFT item in a Seaport fill.
+One event per NFT item in a Seaport fill, and one per item sold through NFTX.
 
 ```json
 {
@@ -262,6 +268,23 @@ One event per NFT item in a Seaport fill.
 - The price is the ETH or WETH paid on the side opposite the NFTs, split evenly across the items, and per unit for ERC-1155.
 - When a buyer's offer is filled against the seller's order in one transaction, the NFT is one sale. The buyer is the offerer of the order that has the NFT in its consideration, the seller is the offerer of the order that has it in its offer, and the price is the buyer order's payment.
 - `floorWei` is the latest known floor and can be `null`.
+- `toPool: true` marks a Seaport sale whose item went into the NFTX Locker in the same transaction. The field is absent otherwise.
+
+An NFTX sale has `source: "chain"`, `market: "nftx"`, `currency: "ETH"` and `orderHash` set to the keccak of the transaction hash, log index and token id, and its `via` says how the item changed hands: `listing` (a filled or relisted NFTX listing), `instant_sell` (sold to the pool) or `instant_buy` (a floor item bought from the pool). The pool side of an instant trade is the Locker's address, lowercase, in `buyer` (instant sell) or `seller` (instant buy).
+
+```json
+{
+  "v": 2, "type": "nft.sale", "chainId": 57073,
+  "contract": "0x2538d3202844e6b3852570d9ef63a916f900c373", "source": "chain",
+  "txHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "logIndex": 31,
+  "blockNumber": "61700000", "blockTimestamp": 1790100000,
+  "tokenId": "195", "priceWei": "320000000000000", "currency": "ETH",
+  "buyer": "0x00000000000000000000000000000000000000b2", "seller": "0xb4c5b5235b98114e9dc227b54e088c11680b2385",
+  "orderHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+  "itemName": null, "imageUrl": null, "rank": null, "maxRank": null, "floorWei": "308559859825663",
+  "market": "nftx", "via": "instant_buy", "nftxSlug": "lil-dudes"
+}
+```
 
 ### `nft.stats`
 
@@ -279,9 +302,19 @@ One event per NFT item in a Seaport fill.
 
 `floor24hAgoWei` comes from the indexer's own stats history and is `null` under 24 hours of history. `listedCount` is `null` when not counted; it stops at 300 with `listedCapped` true.
 
+For a collection with an NFTX market, `floorWei` and `floor24hAgoWei` are the combined floor, the lower of the OpenSea floor and the NFTX pool's spot price (a tie goes to OpenSea). Three optional fields say where it comes from:
+
+- `floorMarket` is `opensea` or `nftx`, and absent or `null` on rows written before NFTX.
+- `nftxFloorWei` is the pool's spot price per NFT, and `poolCount` the NFTs in the pool.
+- `nftxSlug` is the collection's name in NFTX's URLs.
+
+Pool moves of 1% or more from the last emitted pool price also emit `nft.stats` (`source: "chain"`). The fields only OpenSea knows are copied from the newest OpenSea stats at that time, or `null` when OpenSea has none: `owners`, `volume24hWei` and `sales24h` are nullable.
+
+NFTX prices come from the pool's slot0 price, `10^18 · 2^192 / sqrtPriceX96²` wei per NFT when the pool pairs the floor token with flETH as currency0, and its inverse otherwise. It is rounded down.
+
 ### `nft.launch`
 
-A Chimera campaign was created. `contract` is the collection.
+A Chimera campaign was created, or a collection opened trading on NFTX. `contract` is the collection.
 
 ```json
 {
@@ -296,6 +329,41 @@ A Chimera campaign was created. `contract` is the collection.
 }
 ```
 
+For `launchpad: "nftx"` the launch is the collection's `CollectionInitialized`: `campaignId` and `token` are the floor token's address, `tokenName` and `tokenSymbol` come from `CollectionCreated`, `creator` is the address that created the NFTX collection, and `poolId` is the Uniswap v4 pool. The optional `nftxFloorWei` is the pool's spot price per NFT when trading opened, `poolCount` the NFTs seeded into the pool (each counted once) and `nftxSlug` the collection's name in NFTX's URLs.
+
+### `nft.auction`
+
+A Uniswap continuous clearing auction of an NFTX floor token, followed for its whole life. `contract` is the collection. An auction is followed only when it sells the floor token of an NFTX collection, was created by the collection's NFTX creator, its NFT contract's owner or NFTX's launchpad, is paid in ETH, sells at least half of the floor token's supply and is the collection's first such auction. One type covers its phases:
+
+- `created`: the indexer recognised the auction.
+- `live`: bidding opened, at `max(startBlock, the block the tokens arrived)`.
+- `price`: the clearing price updated between the start and the end block.
+- `ended`: the auction reached its end block.
+
+```json
+{
+  "v": 2, "type": "nft.auction", "chainId": 57073,
+  "contract": "0x00000000000000000000000000000000000000a1", "source": "chain",
+  "txHash": "nftx:auction:0xf74d83a782aa45ec00d4f425714c028749a03563:ended:60471589", "logIndex": 0,
+  "blockNumber": "60471589", "blockTimestamp": 1790000000,
+  "phase": "ended",
+  "auction": "0xf74d83a782aa45ec00d4f425714c028749a03563",
+  "token": "0xc166c1b94ae9e2a590346ca6d103a4a6636a9f63", "currency": "ETH",
+  "startBlock": "60385189", "endBlock": "60471589", "claimBlock": "60471889",
+  "startsAt": 1789913600, "endsAt": 1790000000, "claimsAt": 1790000300,
+  "supply": "1100", "minBidWei": "99999999999999", "clearingPriceWei": "99999999999999",
+  "raisedWei": "10171999999999999", "requiredRaiseWei": "0", "bidders": 11,
+  "graduated": true, "cleared": "101", "nftxSlug": null
+}
+```
+
+- Prices are per NFT, in the currency's smallest unit: the auction's Q96 price times 10^18 over 2^96, rounded down. `minBidWei` is the starting minimum bid and `clearingPriceWei` the minimum bid now, the price every filled bid pays.
+- `currency` is `"ETH"` only for the zero address. Any other currency is its lowercase address; the indexer never reads a token's `symbol()`.
+- `raisedWei`, and `graduated` and `cleared` on `ended`, are read from the auction at the block with its checkpoint advanced, because the auction only updates them lazily. `graduated` is whether the raise reached `requiredRaiseWei`; when it is false every bid is refunded.
+- `startsAt`, `endsAt` and `claimsAt` are the block times, estimated at one second per block while a block is still ahead.
+- `bidders` counts distinct bid owners up to the phase.
+- A kept auction found later, for instance when its collection is created after it, emits `created` at the block of the batch that kept it.
+
 ## Identity
 
 `(txHash, logIndex)` is the stable identity of a launchpad event. One log can yield several NFT events (a sweep sells many items in one log, and one SeaDrop log can cross two mint milestones), so an NFT event's identity is the row's `(tx_hash, log_index, sub)`, and deduping NFT events on `(txHash, logIndex)` would drop real events. A consumer that reads only payloads can use:
@@ -306,6 +374,8 @@ A Chimera campaign was created. `contract` is the collection.
 | `nft.sale` | `txHash`, `logIndex`, `contract`, `tokenId` |
 | `nft.mint` | `txHash`, `logIndex`, `kind`, and `markBps` (for `progress`) or `stageIndex` (for `stage_start`) |
 | `nft.launch` | `txHash`, `logIndex` |
+| `nft.auction` | `txHash`, which is `nftx:auction:<auction>:<phase>:<block>`, with `:<logIndex>` for a phase tied to a log |
+| `nft.stats` from an NFTX pool move | `txHash`, which is `nftx:stats:<contract>:<block>:<logIndex>` |
 | OpenSea-derived events (`nft.collection`, `nft.drop`, `nft.listing`, `nft.stats`, and stage starts from the schedule) | `txHash`, which is a unique synthetic id |
 
 The table's `id` can change after a reorg rollback, because rolled-back chain events are deleted and the new fork's events are inserted with new ids, so dedupe on these identities and not on `id`.
