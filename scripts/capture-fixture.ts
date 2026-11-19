@@ -14,11 +14,22 @@
 // --topics hookit-state <name> <block> <poolId>... [--rpc url] records StateView slot0 and liquidity at a block.
 // --topics hookit-config <name> <txHash>... records, for every Master launch in those transactions, what the
 // launching factory's views answer (token, bitmask, quote, tick spacing, fee) at the launch block.
-// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami|hookit]
+// --topics nftx <name> <txHash> <httpRpcUrl> [--ethereum] records the transaction's NFTX, Seaport and ERC-721 Transfer logs,
+// its sender and target, the Listings reads of every item its listing logs name at the block before and at the block,
+// and, for each collection it touches, the newest CollectionInitialized and PoolStateUpdated logs at or before it.
+// --topics nftx-auction <name> <auction> <fromBlock> <toBlock> [--rpc url] records the factory's AuctionCreated log, every
+// log the auction emitted (read in pages of 1,000 blocks), the creating transaction's sender and target, the floor token's
+// totalSupply at creation, the checkpoint multicall at each in-range price update and at the end block, the plain reads
+// at the end block, and the block times of the auction's phases.
+// Usage: pnpm tsx scripts/capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami|hookit|nftx|nftx-auction]
 import { mkdirSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import {
+  CCA_AUCTION_TOPICS,
+  CCA_FACTORY,
+  CCA_TOPICS,
   type ChainLog,
+  decodeCcaLog,
   decodeHookitLog,
   decodeInkfunLog,
   decodeLog,
@@ -30,7 +41,16 @@ import {
   type LaunchKey,
   type LaunchState,
   LOG_TOPICS,
+  NFTX_FLETH,
+  NFTX_HOOK,
+  NFTX_LISTINGS,
+  NFTX_LOCKER,
+  NFTX_LOG_TOPICS,
+  NFTX_ROYALTY_GATE,
+  NFTX_TOPICS,
+  NFTX_ZAPS,
   RIPTIDE_VAULT,
+  readAuctionCheckpoint,
   readBalances,
   readClassicLaunches,
   readCurveSold,
@@ -38,8 +58,11 @@ import {
   readLaunchStates,
   readMasterLaunchConfigs,
   readMetadataUris,
+  readNftxListings,
   readTotalSupplies,
   readTsunamiCurves,
+  SEAPORT_1_5,
+  SEAPORT_1_6,
   SWAP_TOPIC,
   TRANSFER_TOPIC,
   TSUNAMI_LOG_TOPICS,
@@ -49,6 +72,7 @@ import {
 import {
   type Address,
   createPublicClient,
+  decodeEventLog,
   type Hash,
   type Hex,
   http,
@@ -56,7 +80,7 @@ import {
   parseAbi,
   toHex,
 } from "viem"
-import { ink } from "viem/chains"
+import { ink, mainnet } from "viem/chains"
 
 // PoolManager `Initialize`.
 const INITIALIZE_TOPIC: Hex = TSUNAMI_TOPICS.initialize
@@ -71,24 +95,35 @@ if (
   mode !== "hookit" &&
   mode !== "hookit-history" &&
   mode !== "hookit-state" &&
-  mode !== "hookit-config"
+  mode !== "hookit-config" &&
+  mode !== "nftx" &&
+  mode !== "nftx-auction"
 )
   throw new Error(`unknown --topics ${mode}`)
+const ethereumAt = argv.indexOf("--ethereum")
+const onEthereum = ethereumAt !== -1
+if (onEthereum) argv.splice(ethereumAt, 1)
 const rpcAt = argv.indexOf("--rpc")
 const rpcFlag = rpcAt === -1 ? undefined : argv.splice(rpcAt, 2)[1]
 const [name, txHash] = argv
 const url =
-  rpcFlag ?? (mode.startsWith("hookit-") ? undefined : argv[2]) ?? "https://rpc-gel.inkonchain.com"
+  rpcFlag ??
+  (mode.startsWith("hookit-") || mode === "nftx-auction" ? undefined : argv[2]) ??
+  "https://rpc-gel.inkonchain.com"
 if (!name || !txHash)
   throw new Error(
     "usage: capture-fixture.ts <name> <txHash> [httpRpcUrl] [--topics v4|inkfun|tsunami|hookit]",
   )
-const client = createPublicClient({ chain: ink, transport: http(url, { retryCount: 5 }) })
+const client = createPublicClient({
+  chain: onEthereum ? mainnet : ink,
+  transport: http(url, { retryCount: 5 }),
+})
 
 const dir = join(import.meta.dirname, "../packages/sdk/test/fixtures")
 mkdirSync(dir, { recursive: true })
 const save = (fixture: object, summary: string) => {
   const json = JSON.stringify(fixture, (_k, v) => (typeof v === "bigint" ? `${v}n` : v), 2)
+  mkdirSync(dirname(join(dir, name)), { recursive: true })
   writeFileSync(join(dir, `${name}.json`), `${json}\n`)
   console.log(`wrote ${name}.json: ${summary}`)
 }
@@ -208,6 +243,276 @@ if (mode === "hookit-state") {
     pools.push({ poolId, sqrtPriceX96: slot0[0], tick: slot0[1], liquidity })
   }
   save({ name, blockNumber: at, pools }, `${pools.length} pools`)
+  process.exit(0)
+}
+
+/** eth_getLogs with raw topics, which viem's getLogs does not take. */
+async function rawLogs(params: {
+  address?: Address
+  topics: (Hex | Hex[] | null)[]
+  fromBlock: bigint
+  toBlock: bigint
+}): Promise<ChainLog[]> {
+  const found = await client.request({
+    method: "eth_getLogs",
+    params: [
+      {
+        ...(params.address ? { address: params.address } : {}),
+        topics: params.topics,
+        fromBlock: toHex(params.fromBlock),
+        toBlock: toHex(params.toBlock),
+      },
+    ],
+  })
+  return found.map((l) =>
+    toChainLog({
+      ...l,
+      blockNumber: BigInt(l.blockNumber as Hex),
+      logIndex: Number(l.logIndex),
+    } as Parameters<typeof toChainLog>[0]),
+  )
+}
+
+const byPosition = (a: ChainLog, b: ChainLog) =>
+  a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1
+
+/**
+ * The newest log at or before `toBlock`. A node that accepts a wide range answers in one request;
+ * otherwise the range is scanned back in pages of `page` blocks.
+ */
+async function newestLog(
+  params: { address?: Address; topics: (Hex | Hex[] | null)[] },
+  toBlock: bigint,
+  page: bigint,
+  maxPages: number,
+): Promise<ChainLog | null> {
+  const wide = toBlock > 3_000_000n ? toBlock - 3_000_000n : 0n
+  try {
+    const logs = await rawLogs({ ...params, fromBlock: wide, toBlock })
+    return logs.sort(byPosition).at(-1) ?? null
+  } catch {
+    // Fall through to paging.
+  }
+  for (let n = 0, hi = toBlock; n < maxPages && hi > 0n; n++, hi -= page) {
+    const lo = hi - page + 1n > 0n ? hi - page + 1n : 0n
+    const logs = await rawLogs({ ...params, fromBlock: lo, toBlock: hi })
+    const last = logs.sort(byPosition).at(-1)
+    if (last) return last
+  }
+  return null
+}
+
+if (mode === "nftx") {
+  // <name> <txHash> <httpRpcUrl> [--ethereum]
+  const hash = txHash as Hash
+  const receipt = await client.getTransactionReceipt({ hash })
+  const tx = await client.getTransaction({ hash })
+  const block = await client.getBlock({ blockNumber: receipt.blockNumber })
+  const nftxEmitters = new Set<Address>([
+    NFTX_LOCKER,
+    NFTX_HOOK,
+    NFTX_LISTINGS,
+    NFTX_ROYALTY_GATE,
+    NFTX_FLETH,
+    ...NFTX_ZAPS,
+  ])
+  const isNftx = (l: { address: Address; topics: readonly Hex[] }) =>
+    nftxEmitters.has(l.address.toLowerCase() as Address) ||
+    (l.topics[0] !== undefined && NFTX_LOG_TOPICS.includes(l.topics[0]))
+  const logs: ChainLog[] = receipt.logs
+    .filter(
+      (l) =>
+        isNftx(l) ||
+        l.address.toLowerCase() === SEAPORT_1_6 ||
+        l.address.toLowerCase() === SEAPORT_1_5 ||
+        (l.topics[0] === TRANSFER_TOPIC && l.topics.length === 4),
+    )
+    .map(toChainLog)
+
+  // The items the Listings logs name, read before and at the block.
+  const listingTopics: Hex[] = [
+    NFTX_TOPICS.ListingsCreated,
+    NFTX_TOPICS.ListingRelisted,
+    NFTX_TOPICS.ListingFloorMultipleUpdated,
+    NFTX_TOPICS.ListingsFilled,
+    NFTX_TOPICS.ListingsCancelled,
+    NFTX_TOPICS.ListingClosedAsStale,
+  ]
+  const abi = parseAbi([
+    "struct Listing { address owner; uint40 created; uint32 duration; uint16 floorMultiple; }",
+    "event ListingsCreated(address indexed _collection, uint256[] _tokenIds, Listing _listing, uint8 _listingType, uint256 _tokensRequired, uint256 _taxRequired, address _sender)",
+    "event ListingRelisted(address indexed _collection, uint256 _tokenId, Listing _listing)",
+    "event ListingFloorMultipleUpdated(address indexed _collection, uint256 _tokenId, uint32 _oldFloorMultiple, uint32 _newFloorMultiple)",
+    "event ListingsFilled(address indexed _collection, uint256[][] _tokenIds, address _recipient)",
+    "event ListingsCancelled(address indexed _collection, uint256[] _tokenIds)",
+    "event ListingClosedAsStale(address indexed _collection, uint256 _tokenId, address _owner, uint256 _feesCaptured, uint256 _refunded)",
+  ])
+  const items = new Map<string, { collection: Address; tokenId: bigint }>()
+  for (const l of logs) {
+    if (!listingTopics.includes(l.topics[0] as Hex)) continue
+    const ev = decodeEventLog({ abi, topics: l.topics as [Hex, ...Hex[]], data: l.data })
+    const a = ev.args as Record<string, unknown>
+    const collection = (a._collection as string).toLowerCase() as Address
+    const ids: bigint[] =
+      "_tokenIds" in a
+        ? (a._tokenIds as (bigint | readonly bigint[])[]).flatMap((x) =>
+            typeof x === "bigint" ? [x] : [...x],
+          )
+        : [a._tokenId as bigint]
+    for (const tokenId of ids) items.set(`${collection}:${tokenId}`, { collection, tokenId })
+  }
+  const list = [...items.values()]
+  const readAt = async (at: bigint) =>
+    (await readNftxListings(client, list, at)).map((read, i) => ({ ...list[i], read }))
+  const before = await readAt(receipt.blockNumber - 1n)
+  const atBlock = await readAt(receipt.blockNumber)
+
+  // Pool logs: the collection's opening and its newest price at or before the block.
+  const collections = [
+    ...new Set(
+      logs
+        .filter((l) => isNftx(l) && l.topics[1] !== undefined && l.topics.length > 1)
+        .map((l) => `0x${l.topics[1]?.slice(26)}` as Address),
+    ),
+  ].filter((c) => !nftxEmitters.has(c))
+  const page = onEthereum ? 10_000n : 999n
+  const pools: ChainLog[] = []
+  // Ink fixtures hold what they need in the transaction; only an Ethereum fixture looks back.
+  for (const c of onEthereum ? collections : []) {
+    const topic1 = pad(c, { size: 32 })
+    const opened = await newestLog(
+      { address: NFTX_LOCKER, topics: [NFTX_TOPICS.CollectionInitialized, topic1] },
+      receipt.blockNumber,
+      onEthereum ? 100_000n : page,
+      onEthereum ? 300 : 100,
+    )
+    const price = await newestLog(
+      { topics: [NFTX_TOPICS.PoolStateUpdated, topic1] },
+      receipt.blockNumber,
+      page,
+      onEthereum ? 300 : 100,
+    )
+    for (const l of [opened, price])
+      if (
+        l &&
+        !logs.some((k) => k.transactionHash === l.transactionHash && k.logIndex === l.logIndex)
+      )
+        pools.push(l)
+  }
+  save(
+    {
+      name,
+      chainId: client.chain.id,
+      txHash: hash,
+      blockNumber: receipt.blockNumber,
+      blockHash: receipt.blockHash,
+      timestamp: Number(block.timestamp),
+      from: tx.from.toLowerCase(),
+      to: tx.to?.toLowerCase() ?? null,
+      logs,
+      pools,
+      listings: { before, at: atBlock },
+    },
+    `${logs.length} logs, ${pools.length} pool logs, ${list.length} listing items`,
+  )
+  process.exit(0)
+}
+
+if (mode === "nftx-auction") {
+  // <name> <auction> <fromBlock> <toBlock>
+  const auction = (txHash as string).toLowerCase() as Address
+  const [, , from, to] = argv
+  if (!from || !to) throw new Error("usage: <name> <auction> <fromBlock> <toBlock> [--rpc url]")
+  const factoryLogs: ChainLog[] = []
+  const auctionLogs: ChainLog[] = []
+  for (let a = BigInt(from); a <= BigInt(to); a += 1_000n) {
+    const hi = a + 999n > BigInt(to) ? BigInt(to) : a + 999n
+    factoryLogs.push(
+      ...(await rawLogs({
+        address: CCA_FACTORY,
+        topics: [CCA_TOPICS.AuctionCreated, pad(auction, { size: 32 })],
+        fromBlock: a,
+        toBlock: hi,
+      })),
+    )
+    auctionLogs.push(
+      ...(await rawLogs({
+        address: auction,
+        topics: [[...CCA_AUCTION_TOPICS]],
+        fromBlock: a,
+        toBlock: hi,
+      })),
+    )
+  }
+  const created = factoryLogs[0]
+  if (!created) throw new Error("no AuctionCreated in range")
+  const decoded = decodeCcaLog(created)
+  if (decoded?.kind !== "auctionCreated") throw new Error("AuctionCreated does not decode")
+  const tx = await client.getTransaction({ hash: created.transactionHash })
+  const erc20 = parseAbi(["function totalSupply() view returns (uint256)"])
+  const tokenSupply = await client.readContract({
+    address: decoded.token,
+    abi: erc20,
+    functionName: "totalSupply",
+    blockNumber: created.blockNumber,
+  })
+  const { startBlock, endBlock, claimBlock } = decoded.config
+  const priceBlocks = [
+    ...new Set(
+      auctionLogs.flatMap((l) => {
+        const d = decodeCcaLog(l)
+        return d?.kind === "clearingPrice" &&
+          d.checkpointBlock >= startBlock &&
+          d.checkpointBlock <= endBlock
+          ? [l.blockNumber]
+          : []
+      }),
+    ),
+  ]
+  const checkpointBlocks = [...new Set([...priceBlocks, startBlock, endBlock, endBlock + 1n])]
+  const checkpoints = []
+  for (const b of checkpointBlocks)
+    checkpoints.push({ block: b, read: await readAuctionCheckpoint(client, auction, b) })
+  const plainAbi = parseAbi([
+    "function currencyRaised() view returns (uint256)",
+    "function totalCleared() view returns (uint256)",
+    "function isGraduated() view returns (bool)",
+    "function clearingPrice() view returns (uint256)",
+    "function lastCheckpointedBlock() view returns (uint64)",
+  ])
+  const plain: Record<string, unknown> = {}
+  for (const fn of [
+    "currencyRaised",
+    "totalCleared",
+    "isGraduated",
+    "clearingPrice",
+    "lastCheckpointedBlock",
+  ] as const)
+    plain[fn] = await client.readContract({
+      address: auction,
+      abi: plainAbi,
+      functionName: fn,
+      blockNumber: endBlock,
+    })
+  const times: Record<string, number> = {}
+  for (const b of new Set([created.blockNumber, startBlock, endBlock, claimBlock, ...priceBlocks]))
+    times[String(b)] = Number((await client.getBlock({ blockNumber: b })).timestamp)
+  save(
+    {
+      name,
+      chainId: client.chain.id,
+      auction,
+      created,
+      from: tx.from.toLowerCase(),
+      to: tx.to?.toLowerCase() ?? null,
+      tokenSupplyAtCreation: tokenSupply,
+      logs: auctionLogs,
+      checkpoints,
+      plainAtEnd: { block: endBlock, ...plain },
+      blockTimes: times,
+    },
+    `${auctionLogs.length} auction logs, ${checkpoints.length} checkpoint reads`,
+  )
   process.exit(0)
 }
 

@@ -130,7 +130,7 @@ export function composeCollection(
   // and farm n/a, so it is never judged on mint grounds.
   const kind = KINDS.find((k) => k === row.kind) ?? "drop"
   const verdict = VERDICTS.find((v) => v === row.verdict) ?? "pending"
-  const chimera = row.launchpad === "chimera"
+  const launchpad = row.launchpad === "chimera" || row.launchpad === "nftx" ? row.launchpad : null
   return {
     v: SCHEMA_VERSION,
     chainId: INK_CHAIN_ID,
@@ -158,8 +158,8 @@ export function composeCollection(
       ? Math.floor(row.rarity_calculated_at.getTime() / 1000)
       : null,
     maxRank: row.max_rank,
-    launchpad: chimera ? "chimera" : null,
-    launchToken: chimera ? ((row.launch_token as Address | null) ?? null) : null,
+    launchpad,
+    launchToken: launchpad ? ((row.launch_token as Address | null) ?? null) : null,
     creator: creatorOf(row),
   }
 }

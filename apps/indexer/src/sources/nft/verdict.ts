@@ -297,15 +297,15 @@ export function nextVerdictAt(f: GateFacts, opts: { kindFixed?: boolean } = {}):
 
 /**
  * Whether a mint with no SeaDrop stages gets its MINT LIVE now: a `drop` (never `pending_kind`)
- * still minting and not announced yet. A verified collection or creator is announced after 10
- * mints; any other once gate 2 passes by duration.
+ * still minting and not announced yet. A verified collection or creator, or a collection marked
+ * real by hand, is announced after 10 mints; any other once gate 2 passes by duration.
  */
 export function mintLiveDue(
   f: GateFacts & { seadrop: boolean; mintStartEmitted: boolean; minted: number },
 ): boolean {
   if (f.kind !== "drop" || f.seadrop || f.mintStartEmitted || f.firstMintTs === null) return false
   if (mintEndTs(f) !== null) return false
-  if (isVerified(f)) return f.minted >= MINT_LIVE_VERIFIED_MINTS
+  if (isVerified(f) || f.override === "real") return f.minted >= MINT_LIVE_VERIFIED_MINTS
   return structureByDuration(f) === "pass"
 }
 
@@ -373,6 +373,7 @@ type FactsRow = {
   creator_verified: boolean
   override_kind: string | null
   override_verdict: string | null
+  override_max_supply: string | null
   last_block: string | null
   minted: string
   minters: number
@@ -409,6 +410,7 @@ async function loadFacts(sql: Sql, contract: string): Promise<FactsRow | undefin
       ) as name_copy,
       coalesce(a.verified, false) as creator_verified,
       o.kind as override_kind, o.verdict as override_verdict,
+      o.max_supply::text as override_max_supply,
       m.last_block::text as last_block, coalesce(m.minted, 0)::text as minted,
       coalesce(m.minters, 0)::int as minters, coalesce(m.mints_7d, 0)::text as mints_7d,
       (select coalesce(sum(b.qty), 0) from indexer.nft_burns b
@@ -473,9 +475,15 @@ export function createVerdictJob(deps: VerdictDeps): Job {
         : firstTs + Number(BigInt(block) - firstBlock) * BLOCK_S
     const lastMintTs = tsOf(row.last_block)
 
-    // maxSupply() is read once, at the latest stored mint, unless the milestones already know it.
-    let maxSupply = row.max_supply === null ? null : BigInt(row.max_supply)
+    // A max supply marked by hand wins over the stored one and over the contract's answer; it is
+    // written to the column so snapshots show it. Otherwise maxSupply() is read once, at the latest
+    // stored mint, unless the milestones already know it.
+    const markedMaxSupply =
+      row.override_max_supply === null ? null : BigInt(row.override_max_supply)
+    let maxSupply = markedMaxSupply ?? (row.max_supply === null ? null : BigInt(row.max_supply))
     const patch: CollectionPatch = {}
+    if (markedMaxSupply !== null && row.max_supply !== markedMaxSupply.toString())
+      patch.max_supply = markedMaxSupply.toString()
     if (!row.max_supply_checked && row.last_block !== null) {
       if (maxSupply === null) {
         maxSupply = await chain.readMaxSupply(contract as Address, BigInt(row.last_block))

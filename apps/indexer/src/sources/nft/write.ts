@@ -117,7 +117,11 @@ export async function writeRows(tx: Tx, batch: NftBatch) {
         seadrop = indexer.nft_collections.seadrop or excluded.seadrop,
         kind = coalesce(excluded.kind, indexer.nft_collections.kind),
         launchpad = coalesce(excluded.launchpad, indexer.nft_collections.launchpad),
-        launch_token = coalesce(indexer.nft_collections.launch_token, excluded.launch_token),
+        -- A Chimera launch brings its own token, which replaces the floor token of a collection that
+        -- opened on NFTX first.
+        launch_token = case
+          when excluded.launchpad is not null then excluded.launch_token
+          else coalesce(indexer.nft_collections.launch_token, excluded.launch_token) end,
         creator_address = coalesce(indexer.nft_collections.creator_address, excluded.creator_address),
         verdict_dirty = indexer.nft_collections.verdict_dirty
           or excluded.launchpad is not null
@@ -259,7 +263,8 @@ export async function createCollectionsFromSales(sql: Sql): Promise<number> {
 
 /**
  * Deletes rows above `fork`. A collection whose first mint was above it loses its first-mint
- * fields; one whose launch was above it loses the launchpad, token, creator and kind that launch gave it.
+ * fields; one whose Chimera launch was above it loses the launchpad, token, creator and kind that
+ * launch gave it. NFTX launches are the NFTX source's to delete.
  *
  * shortcut: a collection whose only logs were above the fork keeps its row, `standard` and
  * `seadrop = true`. Deleting it would need a first-seen block column on nft_collections.
@@ -275,12 +280,22 @@ export async function rollbackRows(tx: Tx, fork: bigint) {
   await tx`delete from indexer.nft_seadrop_mints where block > ${f}`
   await tx`delete from indexer.nft_seadrop_config where block > ${f}`
   await tx`delete from indexer.nft_sales where block > ${f}`
+  // Only a Chimera launch set these columns. A collection that also has an NFTX market goes back to
+  // it: the floor token is its launch token again.
   await tx`
     update indexer.nft_collections
     set launchpad = null, launch_token = null, creator_address = null, kind = null,
       verdict_dirty = true
-    where contract in (select collection from indexer.nft_launches where block > ${f})`
-  await tx`delete from indexer.nft_launches where block > ${f}`
+    where contract in (
+      select collection from indexer.nft_launches where launchpad = 'chimera' and block > ${f})`
+  await tx`
+    update indexer.nft_collections c
+    set launchpad = 'nftx', launch_token = n.floor_token
+    from indexer.nftx_collections n
+    where n.collection = c.contract and n.created_block <= ${f} and c.launchpad is null
+      and c.contract in (
+        select collection from indexer.nft_launches where launchpad = 'chimera' and block > ${f})`
+  await tx`delete from indexer.nft_launches where launchpad = 'chimera' and block > ${f}`
   await tx`
     update indexer.nft_collections set first_mint_block = null, first_mint_ts = null,
       prior_supply = null, prior_minted = null, verdict_dirty = true

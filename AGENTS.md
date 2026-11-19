@@ -18,8 +18,9 @@
 - `pnpm test`: all tests. A throwaway Postgres starts automatically unless `TEST_DATABASE_URL` is set (the tests drop its `indexer` schema; `DATABASE_URL` is never used for tests).
 - `pnpm lint`, `pnpm typecheck`, `pnpm format`.
 - `pnpm db:dev`: persistent local Postgres in `.data/postgres`.
-- `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>] [--sources inkypump,inkfun,tsunami,hookit,v4-swaps,nft-mints,nft-sales,nft-launches] [--block-reads <1-16>]` (default: every source, 8 block reads). A backfill can run beside `pnpm start` while its platform is not in `INDEXER_SOURCES` (ADR 0038); `--sources` names source groups, `INDEXER_SOURCES` names platforms.
-- `pnpm nft:mark <contract> <real|filtered|continuous|drop|clear>`: a manual verdict or kind for a collection.
+- `pnpm db:migrate`, `pnpm start`, `pnpm backfill --from <block> [--to <block>] [--sources inkypump,inkfun,tsunami,hookit,v4-swaps,nft-mints,nft-sales,nft-launches,nftx] [--block-reads <1-16>]` (default: every source, 8 block reads). A backfill can run beside `pnpm start` while its platform is not in `INDEXER_SOURCES` (ADR 0038); `--sources` names source groups, `INDEXER_SOURCES` names platforms.
+- `pnpm nft:mark <contract> <real|filtered|continuous|drop|clear> [--max-supply <n>]`: a manual verdict, kind or max supply for a collection.
+- `pnpm nft:auction <auction> <contract>`: link a floor-token auction to a collection by hand.
 
 ## Adding an InkyPump hook
 
@@ -36,3 +37,7 @@ xStocks hooks are discovered on-chain. For a new native hook (the indexer logs "
 3. Ingestion goes in `apps/indexer/src/sources/<protocol>/` as a `Source` (the interface in `apps/indexer/src/sources/source.ts`: `filters`, `process`, `write`, `prepareRollback`, `rollback`, `reload`), registered in `apps/indexer/src/main.ts`. A launchpad source that creates Uniswap v4 pools registers each one in the shared `PoolRegistry` (`apps/indexer/src/sources/pools.ts`); the `v4` source then indexes its swaps. Every source shares one cursor, one batch transaction and one rollback. New event types get a case in `entityOf`. If one log can yield several events, give each a distinct `sub`. If a backfill should pick the source's filters, add a name to `BACKFILL_SOURCES` in `source.ts`.
 4. Events with no transaction (marketplace data) go through `store.writeOffchain` (ADR 0018), never a direct insert.
 5. Record the decision in a new ADR.
+
+## Adding an NFTX contract or event
+
+The NFTX source (`apps/indexer/src/sources/nftx/`) binds each contract to the logs it may emit: the topic lists in `constants.ts` name the topics the source reads, the decoder in `packages/sdk/src/nftx/decode.ts` decodes a log by its topic, and `emitterOk` in `sources/nftx/index.ts` checks that a decoded log came from the contract that emits its kind. NFTX pools are not registered in `PoolRegistry`: their prices come from the hook's `PoolStateUpdated` logs, and the `v4` source does not index their swaps. Add the address and topic there, decode it, then handle it in `sources/nftx/index.ts`. Prices are wei per NFT, computed by `packages/sdk/src/nftx/math.ts`; auction state that the contract updates lazily is read with `readAuctionCheckpoint`. Test against recorded transactions (`pnpm tsx scripts/capture-fixture.ts <name> <tx>`), not hand-built logs, except for cases no recorded transaction covers.

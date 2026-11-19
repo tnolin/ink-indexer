@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "address": "0xea8fa1eb53e0465d67c9cd4e77a3f4f6f39220ea",
+    "chain": "ink",
+    "collection": "thinkers-665587726",
+    "contract_standard": "erc721",
+    "name": "Bears by noper"
+  }
+}

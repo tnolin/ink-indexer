@@ -1,0 +1,9 @@
+{
+  "status": 404,
+  "body": {
+    "errors": [
+      "Drop not found"
+    ],
+    "code": "DROP_NOT_FOUND"
+  }
+}

@@ -1,10 +1,12 @@
 import type {
+  AuctionCheckpoint,
   ChainLog,
   ClassicLaunch,
   InkfunLaunchState,
   LaunchKey,
   LaunchState,
   MasterLaunchConfig,
+  NftxListingRead,
   TsunamiCurveState,
 } from "@ink-indexer/sdk"
 import { readErc20Names } from "@ink-indexer/sdk"
@@ -51,7 +53,16 @@ export class FakeChain implements Chain {
   erc20Names = new Map<string, { symbol: string | null; name: string | null }>()
   nameReads: { tokens: Address[]; block: bigint }[] = []
   /** Per block, its hash, each transaction's sender and, when given, its timestamp (else the block number). A block with no entry is not served (null). */
-  senders = new Map<bigint, { hash: Hash; senders: Map<Hash, Address>; timestamp?: number }>()
+  senders = new Map<
+    bigint,
+    {
+      hash: Hash
+      senders: Map<Hash, Address>
+      /** Each transaction's target; a transaction with no entry has none (a creation). */
+      targets?: Map<Hash, Address | null>
+      timestamp?: number
+    }
+  >()
   /** Per `token:holder`, the balance; a function gives it per block. A pair with no entry reads 0. */
   balances = new Map<string, bigint | ((block: bigint) => bigint)>()
   getBlockSendersCalls = 0
@@ -89,10 +100,32 @@ export class FakeChain implements Chain {
   /** Per token, what `metadataURI()` answers; a token with no entry (or null) reverts. */
   metadataUris = new Map<string, string | null>()
   metadataUriReads: { tokens: Address[]; block: bigint }[] = []
+  /** Per `collection:tokenId`, what `readNftxListings` answers (null is a revert); a function gives it per block. An item with no entry reverts. */
+  nftxListings = new Map<
+    string,
+    NftxListingRead | null | ((block: bigint) => NftxListingRead | null)
+  >()
+  nftxListingReads: { items: { collection: Address; tokenId: bigint }[]; block: bigint }[] = []
+  /** Per collection, its NFTX pool size; a function gives it per block, null is a revert. A collection with no entry reverts. */
+  nftxPoolCounts = new Map<string, number | null | ((block: bigint) => number | null)>()
+  poolCountReads: { collections: Address[]; block: bigint }[] = []
+  /** An error `readNftxPoolCounts` throws instead of answering. */
+  poolCountError: Error | undefined
+  /** Per contract, what `owner()` answers; a contract with no entry reverts (null). */
+  owners = new Map<string, Address | null>()
+  ownerReads: { contracts: Address[]; block: bigint }[] = []
+  /** Per auction, what `readAuctionCheckpoint` answers (null is a revert); a function gives it per block. An auction with no entry reverts. */
+  auctionCheckpoints = new Map<
+    string,
+    AuctionCheckpoint | null | ((block: bigint) => AuctionCheckpoint | null)
+  >()
+  auctionCheckpointReads: { auction: Address; block: bigint }[] = []
   /** Every readTotalSupplies call. */
   supplyReads: { tokens: Address[]; block: bigint }[] = []
   /** Every getBlock call. */
   getBlockCalls: bigint[] = []
+  /** What getBlock answers as a block's time; a block with no entry reads as its own number. */
+  blockTimes = new Map<bigint, bigint>()
   getLogsCalls: [bigint, bigint][] = []
   getBlockNumberCalls = 0
   /** When set, getBlockNumber answers this instead of `head`: a provider stuck on an old block. */
@@ -146,7 +179,7 @@ export class FakeChain implements Chain {
   async getBlock(n: bigint) {
     this.getBlockCalls.push(n)
     if (this.nullOnce.delete(n)) return null
-    return n > this.head ? null : { hash: this.hashOf(n), timestamp: n }
+    return n > this.head ? null : { hash: this.hashOf(n), timestamp: this.blockTimes.get(n) ?? n }
   }
 
   async getBlockSenders(n: bigint) {
@@ -163,7 +196,14 @@ export class FakeChain implements Chain {
     const failure = this.sendersErrors.get(n)
     if (failure) throw failure
     const s = this.senders.get(n)
-    return s ? { hash: s.hash, timestamp: s.timestamp ?? Number(n), senders: s.senders } : null
+    return s
+      ? {
+          hash: s.hash,
+          timestamp: s.timestamp ?? Number(n),
+          senders: s.senders,
+          targets: s.targets ?? new Map<Hash, Address | null>(),
+        }
+      : null
   }
 
   async readBalances(pairs: { token: Address; holder: Address }[], block: bigint) {
@@ -242,6 +282,34 @@ export class FakeChain implements Chain {
       if (v === undefined) throw new Error(`no fake Tsunami curve for ${c}`)
       return typeof v === "function" ? v(block) : v
     })
+  }
+
+  async readNftxListings(items: { collection: Address; tokenId: bigint }[], block: bigint) {
+    this.nftxListingReads.push({ items, block })
+    return items.map((i) => {
+      const v = this.nftxListings.get(`${i.collection}:${i.tokenId}`) ?? null
+      return typeof v === "function" ? v(block) : v
+    })
+  }
+
+  async readNftxPoolCounts(collections: Address[], block: bigint) {
+    this.poolCountReads.push({ collections, block })
+    if (this.poolCountError) throw this.poolCountError
+    return collections.map((c) => {
+      const v = this.nftxPoolCounts.get(c) ?? null
+      return typeof v === "function" ? v(block) : v
+    })
+  }
+
+  async readOwners(contracts: Address[], block: bigint) {
+    this.ownerReads.push({ contracts, block })
+    return contracts.map((c) => this.owners.get(c) ?? null)
+  }
+
+  async readAuctionCheckpoint(auction: Address, block: bigint) {
+    this.auctionCheckpointReads.push({ auction, block })
+    const v = this.auctionCheckpoints.get(auction) ?? null
+    return typeof v === "function" ? v(block) : v
   }
 
   async readTotalSupplies(tokens: Address[], block?: bigint) {

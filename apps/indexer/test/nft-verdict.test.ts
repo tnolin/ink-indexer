@@ -1,4 +1,5 @@
 import {
+  type ChainLog,
   decodeNftTransfers,
   decodeSeaDropLog,
   parseCollection,
@@ -9,6 +10,8 @@ import { describe, expect, it } from "vitest"
 import {
   loadFarmWallets,
   loadNftFixture,
+  loadNftReplay,
+  loadNftReplayMeta,
   type NftFixtureName,
 } from "../../../packages/sdk/test/fixtures"
 import { classifyKind, type KindFacts } from "../src/sources/nft/kind"
@@ -81,13 +84,17 @@ const kindFacts = (over: Partial<KindFacts> = {}): KindFacts => ({
 
 /** Fixture block n has time n (as in FakeChain), so differences between blocks are seconds. */
 function chainFacts(name: NftFixtureName, contract: string) {
+  return chainFactsOf(loadNftFixture(name), contract)
+}
+
+function chainFactsOf(logs: ChainLog[], contract: string, time = (block: number) => block) {
   let first: number | null = null
   let last: number | null = null
   let mints = 0
   let burns = 0
   const minters = new Set<string>()
   const stages = new Set<number>()
-  for (const l of loadNftFixture(name)) {
+  for (const l of logs) {
     const sd = decodeSeaDropLog(l)
     if (sd?.kind === "seadropMint" && sd.contract === contract) stages.add(sd.stage)
     for (const t of decodeNftTransfers(l)) {
@@ -96,7 +103,7 @@ function chainFacts(name: NftFixtureName, contract: string) {
         burns++
         continue
       }
-      const ts = Number(l.blockNumber)
+      const ts = time(Number(l.blockNumber))
       first ??= ts
       last = ts
       mints++
@@ -313,6 +320,60 @@ describe("reference collections", () => {
       evaluateGates({ ...f, lastMintTs: c.first + MIN, now: c.first + HOUR, farmShareBps: 9000 })
         .verdict,
     ).toBe("real")
+  })
+
+  // Two SeaDrop clones, replayed from their creation block to the recording head with their
+  // OpenSea responses. In production both were filtered on the page gate (no X or website) and the
+  // structure gate.
+  it.each([
+    {
+      contract: "0xea8fa1eb53e0465d67c9cd4e77a3f4f6f39220ea" as const,
+      slug: "thinkers-665587726",
+      mints: 1866,
+    },
+    {
+      contract: "0x23ca7388125ac7554ed37d04b5e553c8af109cd9" as const,
+      slug: "thinkers-ink",
+      mints: 336,
+    },
+  ])("the SeaDrop clone $slug replayed stays filtered", ({ contract, slug, mints }) => {
+    const meta = loadNftReplayMeta()
+    // Ink makes a block a second; the head's time anchors the earlier ones.
+    const c = chainFactsOf(loadNftReplay(contract), contract, (b) => meta.headTs - (meta.head - b))
+    expect(c.mints).toBe(mints)
+    const replay = (name: string) =>
+      (loadOpenSeaFixture(`replay/${name}`) as { status: number; body: unknown }).body
+    const page = parseCollection(replay(`collection-${slug}`))!
+    const dropResponse = loadOpenSeaFixture(`replay/drop-${slug}`) as {
+      status: number
+      body: unknown
+    }
+    const f = facts({
+      page: {
+        slug: page.slug,
+        name: page.name,
+        imageUrl: page.imageUrl,
+        twitter: page.twitter,
+        website: page.website,
+      },
+      safelist: page.safelist,
+      dropStages:
+        dropResponse.status === 200
+          ? parseDrop(dropResponse.body)!.stages.map((s) => ({ type: s.type }))
+          : [],
+      stageIndexes: c.stages,
+      firstMintTs: c.first,
+      lastMintTs: c.last,
+      soldOutTs: null,
+      now: meta.headTs,
+      traits: { state: "pending", checks: 0 },
+      farmShareBps: farmShare(contract, c.minters),
+      distinctMinters: c.minters.size,
+    })
+    const { gates, verdict } = evaluateGates(f)
+    expect(gates.page).toBe("fail")
+    expect(gates.structure).toBe("fail")
+    expect(verdict).toBe("filtered")
   })
 })
 
@@ -641,6 +702,18 @@ describe("MINT LIVE", () => {
     expect(mintLiveDue(live({ creatorVerified: true }))).toBe(true)
     expect(mintLiveDue(live({ creatorVerified: true, minted: 9 }))).toBe(false)
     expect(mintLiveDue(live({ safelist: "verified", minted: 10 }))).toBe(true)
+  })
+
+  it("a manual real collection gets MINT LIVE after 10 mints, not after 30 minutes", () => {
+    const real = { override: "real" as const }
+    expect(mintLiveDue(live({ ...real, minted: 10 }))).toBe(true)
+    expect(mintLiveDue(live({ ...real, minted: 9 }))).toBe(false)
+    // A manual filtered mark does not take the fast path.
+    expect(mintLiveDue(live({ override: "filtered", minted: 12 }))).toBe(false)
+  })
+
+  it("a pending one still waits for the duration gate", () => {
+    expect(mintLiveDue(live({ override: null, minted: 50 }))).toBe(false)
   })
 
   it("an unverified mint is announced once gate 2 passes by duration", () => {

@@ -9,6 +9,7 @@ import {
   type LaunchEventV1,
   type LaunchpadEvent,
   type LaunchpadKey,
+  type NftAuctionEvent,
   type NftCollectionEvent,
   type NftDropEvent,
   type NftEvent,
@@ -137,7 +138,7 @@ describe("@ink-indexer/events", () => {
   })
 
   it("nft.collection carries the launchpad and its token", () => {
-    expectTypeOf<NftCollectionEvent["launchpad"]>().toEqualTypeOf<"chimera" | null>()
+    expectTypeOf<NftCollectionEvent["launchpad"]>().toEqualTypeOf<"chimera" | "nftx" | null>()
     expectTypeOf<NftCollectionEvent["launchToken"]>().toEqualTypeOf<Address | null>()
     expectTypeOf<NftCollectionEvent["gates"]["structure"]>().toEqualTypeOf<
       "pass" | "fail" | "pending" | "n/a"
@@ -172,7 +173,7 @@ describe("@ink-indexer/events", () => {
       poolId: "0x4",
     }
     expect(e.tokenSymbol).toBeNull()
-    expectTypeOf<NftLaunchEvent["launchpad"]>().toEqualTypeOf<"chimera">()
+    expectTypeOf<NftLaunchEvent["launchpad"]>().toEqualTypeOf<"chimera" | "nftx">()
     expectTypeOf<NftLaunchEvent["campaignId"]>().toEqualTypeOf<string>()
     expectTypeOf<NftLaunchEvent["tokenSymbol"]>().toEqualTypeOf<string | null>()
     expectTypeOf<NftLaunchEvent["tokenName"]>().toEqualTypeOf<string | null>()
@@ -258,5 +259,157 @@ describe("@ink-indexer/events", () => {
       { quoteAsset: Address; poolId: Hash }[] | null | undefined
     >()
     expectTypeOf<SwapEvent["tokenLiquidity"]>().toEqualTypeOf<string | undefined>()
+  })
+
+  it("a v4 sale, listing, stats and launch row without the new fields still parse", () => {
+    const base = {
+      v: 2,
+      chainId: 57073,
+      contract: "0x01",
+      source: "chain",
+      txHash: "0x03",
+      logIndex: 0,
+      blockNumber: "1",
+      blockTimestamp: 1,
+    }
+    const sale = JSON.parse(
+      JSON.stringify({
+        ...base,
+        type: "nft.sale",
+        tokenId: "1",
+        priceWei: "1",
+        currency: "ETH",
+        buyer: "0x04",
+        seller: "0x05",
+        orderHash: "0x06",
+        itemName: null,
+        imageUrl: null,
+        rank: null,
+        maxRank: null,
+        floorWei: null,
+      }),
+    ) as NftSaleEvent
+    const listing = JSON.parse(
+      JSON.stringify({
+        ...base,
+        type: "nft.listing",
+        tokenId: "1",
+        priceWei: "1",
+        currency: "ETH",
+        maker: "0x04",
+        expiresAt: 2,
+        orderHash: "0x06",
+        itemName: null,
+        imageUrl: null,
+        floorWei: null,
+        floorAt: null,
+        rank: null,
+        maxRank: null,
+      }),
+    ) as NftListingEvent
+    const stats = JSON.parse(
+      JSON.stringify({
+        ...base,
+        type: "nft.stats",
+        floorWei: "1",
+        floor24hAgoWei: null,
+        owners: 1,
+        volume24hWei: "1",
+        sales24h: 1,
+        totalSupply: null,
+        maxSupply: null,
+        listedCount: null,
+        listedCapped: false,
+      }),
+    ) as NftStatsEvent
+    const launch = JSON.parse(
+      JSON.stringify({
+        ...base,
+        type: "nft.launch",
+        launchpad: "chimera",
+        campaignId: "7",
+        token: "0x02",
+        tokenSymbol: null,
+        tokenName: null,
+        creator: "0x03",
+        poolId: "0x04",
+      }),
+    ) as NftLaunchEvent
+    const events: NftEvent[] = [sale, listing, stats, launch]
+    expect(events).toHaveLength(4)
+    expect(sale.market ?? "opensea").toBe("opensea")
+    expect(sale.via ?? null).toBeNull()
+    expect(sale.toPool ?? false).toBe(false)
+    expect(listing.floorMultiple ?? null).toBeNull()
+    expect(stats.floorMarket ?? null).toBeNull()
+    expect(launch.poolCount ?? null).toBeNull()
+  })
+
+  it("NFTX fields are optional on sales, listings, stats and launches", () => {
+    expectTypeOf<NftSaleEvent["market"]>().toEqualTypeOf<"opensea" | "nftx" | undefined>()
+    expectTypeOf<NftSaleEvent["via"]>().toEqualTypeOf<
+      "listing" | "instant_sell" | "instant_buy" | null | undefined
+    >()
+    expectTypeOf<NftSaleEvent["toPool"]>().toEqualTypeOf<boolean | undefined>()
+    expectTypeOf<NftListingEvent["floorMultiple"]>().toEqualTypeOf<number | null | undefined>()
+    expectTypeOf<NftListingEvent["listingType"]>().toEqualTypeOf<
+      "liquid" | "dutch" | null | undefined
+    >()
+    expectTypeOf<NftStatsEvent["floorMarket"]>().toEqualTypeOf<
+      "opensea" | "nftx" | null | undefined
+    >()
+    expectTypeOf<NftStatsEvent["owners"]>().toEqualTypeOf<number | null>()
+    expectTypeOf<NftStatsEvent["volume24hWei"]>().toEqualTypeOf<string | null>()
+    expectTypeOf<NftStatsEvent["sales24h"]>().toEqualTypeOf<number | null>()
+    expectTypeOf<NftCollectionEvent["launchpad"]>().toEqualTypeOf<"chimera" | "nftx" | null>()
+    expectTypeOf<NftLaunchEvent["nftxFloorWei"]>().toEqualTypeOf<string | null | undefined>()
+  })
+
+  it("an nft.auction row parses with graduated and cleared null", () => {
+    const row = JSON.parse(
+      JSON.stringify({
+        v: 2,
+        type: "nft.auction",
+        chainId: 57073,
+        contract: "0x01",
+        source: "chain",
+        txHash: "0x03",
+        logIndex: 0,
+        blockNumber: "1",
+        blockTimestamp: 1,
+        phase: "created",
+        auction: "0x02",
+        token: "0x04",
+        currency: "ETH",
+        startBlock: "10",
+        endBlock: "20",
+        claimBlock: "30",
+        startsAt: 10,
+        endsAt: 20,
+        claimsAt: 30,
+        supply: "1100",
+        minBidWei: "99999999999999",
+        clearingPriceWei: "99999999999999",
+        raisedWei: "0",
+        requiredRaiseWei: "0",
+        bidders: 0,
+        graduated: null,
+        cleared: null,
+        nftxSlug: null,
+      }),
+    ) as NftAuctionEvent
+    const events: NftEvent[] = [row]
+    expect(events[0]?.type).toBe("nft.auction")
+    expect(row.graduated).toBeNull()
+    expect(row.cleared).toBeNull()
+    expectTypeOf<NftAuctionEvent["phase"]>().toEqualTypeOf<"created" | "live" | "price" | "ended">()
+    expectTypeOf<NftAuctionEvent["currency"]>().toEqualTypeOf<"ETH" | Address>()
+    expectTypeOf<NftAuctionEvent["graduated"]>().toEqualTypeOf<boolean | null>()
+    expectTypeOf<NftAuctionEvent["cleared"]>().toEqualTypeOf<string | null>()
+    expectTypeOf<NftAuctionEvent["nftxSlug"]>().toEqualTypeOf<string | null>()
+    expectTypeOf<NftAuctionEvent["bidders"]>().toEqualTypeOf<number>()
+    expectTypeOf<NftAuctionEvent>().toExtend<NftEvent>()
+    const onlyAuctions = (x: IndexerEvent) => (x.type === "nft.auction" ? x : null)
+    expectTypeOf(onlyAuctions).returns.toEqualTypeOf<NftAuctionEvent | null>()
   })
 })

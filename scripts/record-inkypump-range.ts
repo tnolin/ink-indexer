@@ -109,7 +109,7 @@ const recording: Chain = {
     calls.push({
       method: "getBlockSenders",
       args: [n],
-      result: result && { ...result, senders: [...result.senders] },
+      result: result && { ...result, senders: [...result.senders], targets: [...result.targets] },
     })
     return result
   },
@@ -131,6 +131,10 @@ const recording: Chain = {
   readMaxSupply: (contract, block) => live.readMaxSupply(contract, block),
   readTotalSupplyAt: (contract, block) => live.readTotalSupplyAt(contract, block),
   hasCodeAt: (address, block) => live.hasCodeAt(address, block),
+  readNftxListings: (items, block) => live.readNftxListings(items, block),
+  readNftxPoolCounts: (collections, block) => live.readNftxPoolCounts(collections, block),
+  readOwners: (contracts, block) => live.readOwners(contracts, block),
+  readAuctionCheckpoint: (auction, block) => live.readAuctionCheckpoint(auction, block),
 }
 
 let stopDb = async () => {}

@@ -27,6 +27,7 @@ import {
   loadChimeraCampaigns,
   loadHookitFixture,
   loadNftFixture,
+  loadNftxFixture,
   loadTsunamiFixture,
   NFT_FIXTURES,
 } from "../../../packages/sdk/test/fixtures"
@@ -73,7 +74,11 @@ const word = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash
 const ADDR_WORD = (a: string) => `0x${"0".repeat(24)}${a.slice(2)}` as Hash
 
 function buildPool(): { logs: ChainLog[]; extra: ChainLog[] } {
-  const nft = [...NFT_FIXTURES.flatMap((n) => loadNftFixture(n)), ...loadChimeraCampaigns()]
+  const nft = [
+    ...NFT_FIXTURES.flatMap((n) => loadNftFixture(n)),
+    ...loadChimeraCampaigns(),
+    ...loadNftxFixture("arbitrage-lildudes").logs,
+  ]
   const blocks = [...new Set(nft.map((l) => l.blockNumber))].sort((a, b) => Number(a - b))
   const slot = new Map(blocks.map((b, i) => [b, from + 1n + BigInt(i)]))
   const moved = nft.map((l) => ({ ...l, blockNumber: slot.get(l.blockNumber)! }))
@@ -296,6 +301,7 @@ class PoolChain implements Chain {
             [TSUNAMI_TX, A1 as Address],
             [HOOKIT_TX, A1 as Address],
           ]),
+          targets: new Map<Hash, Address | null>(),
         }
   }
   readBalances = async (pairs: unknown[]) => pairs.map(() => 0n)
@@ -303,6 +309,10 @@ class PoolChain implements Chain {
   readMaxSupply = async () => null
   readTotalSupplyAt = async () => null
   hasCodeAt = async () => false
+  readNftxListings = async (items: unknown[]) => items.map(() => null)
+  readNftxPoolCounts = async (collections: unknown[]) => collections.map(() => null)
+  readOwners = async (contracts: unknown[]) => contracts.map(() => null)
+  readAuctionCheckpoint = async () => null
 }
 
 /** Every subset of the names, in binary counting order (the first is empty). */

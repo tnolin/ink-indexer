@@ -1,13 +1,22 @@
 import type { Sql } from "@ink-indexer/db"
 import {
+  CCA_FACTORY,
   type ChainLog,
+  ccaConfigParameter,
+  ccaEventsAbi,
   decodeChimeraCampaign,
   NATIVE_QUOTE_ASSET,
+  NFTX_FLETH,
+  NFTX_HOOK,
+  NFTX_LISTINGS,
+  NFTX_LOCKER,
+  nftxEventsAbi,
   SEADROP_V1,
   SEAPORT_1_6,
   UNISWAP_V4_POOL_MANAGER,
 } from "@ink-indexer/sdk"
 import {
+  type Abi,
   type Address,
   encodeAbiParameters,
   encodeEventTopics,
@@ -22,6 +31,7 @@ import { hookitSource } from "../src/sources/hookit/index"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
+import { nftxSource } from "../src/sources/nftx/index"
 import { type PoolEntry, PoolRegistry } from "../src/sources/pools"
 import type { Source } from "../src/sources/source"
 import { tsunamiSource } from "../src/sources/tsunami/index"
@@ -72,6 +82,7 @@ export type HostileScenario = {
  */
 export const HOSTILE_SOURCES: Record<string, (env: HostileEnv) => Promise<HostileScenario>> = {
   nft: nftScenario,
+  nftx: nftxScenario,
   inkypump: inkypumpScenario,
   inkfun: inkfunScenario,
   tsunami: tsunamiScenario,
@@ -298,5 +309,232 @@ async function v4Scenario({ sql, logger }: HostileEnv): Promise<HostileScenario>
     chain,
     sources: [v4Source({ sql, chain, logger, pools })],
     from: B - 1n,
+  }
+}
+
+type EventsAbi = Abi
+/** A log of an event in `abi`, with its indexed arguments as topics and the rest as data. */
+function eventLog(
+  abi: EventsAbi,
+  name: string,
+  args: Record<string, unknown>,
+  address: Address,
+  logIndex: number,
+  block = B,
+): ChainLog {
+  const item = abi.find((i) => i.type === "event" && i.name === name) as {
+    inputs: readonly { name: string; indexed?: boolean }[]
+  }
+  const topics = encodeEventTopics({
+    abi,
+    eventName: name,
+    args: Object.fromEntries(
+      item.inputs.filter((i) => i.indexed).map((i) => [i.name, args[i.name]]),
+    ),
+  }) as Hex[]
+  const plain = item.inputs.filter((i) => !i.indexed)
+  const data = encodeAbiParameters(plain as never, plain.map((i) => args[i.name]) as never)
+  return { address, topics, data, ...meta(logIndex, { blockNumber: block }) }
+}
+
+const poolKey = (hooks: Address, currency1: Address) =>
+  encodeAbiParameters(
+    [
+      { type: "address" },
+      { type: "address" },
+      { type: "uint24" },
+      { type: "int24" },
+      { type: "address" },
+    ],
+    [NFTX_FLETH, currency1, 0x800000, 60, hooks],
+  )
+
+/** The most input one NFTX log can carry: a name that is all noise, an id list of 10,000, a config that does not decode. */
+async function nftxScenario({ sql, logger }: HostileEnv): Promise<HostileScenario> {
+  const chain = new FakeChain(B + 20n)
+  const nft = (n: number) => `0x${n.toString(16).padStart(40, "0")}` as Address
+  const [noisy, huge, odd, listed] = [nft(0xc1), nft(0xc2), nft(0xc3), nft(0xc4)]
+  const tokenOf = (n: number) => nft(0xf00 + n)
+  const created = (collection: Address, i: number, name: string, symbol: string, n: number) =>
+    eventLog(
+      nftxEventsAbi as Abi,
+      "CollectionCreated",
+      {
+        _collection: collection,
+        _collectionToken: tokenOf(n),
+        _name: name,
+        _symbol: symbol,
+        _creator: ALICE,
+      },
+      NFTX_LOCKER,
+      i,
+    )
+  const initialized = (
+    collection: Address,
+    i: number,
+    key: Hex,
+    sqrt: bigint,
+    ids: bigint[] = [1n],
+  ) =>
+    eventLog(
+      nftxEventsAbi as Abi,
+      "CollectionInitialized",
+      {
+        _collection: collection,
+        _poolKey: key,
+        _tokenIds: ids,
+        _sqrtPriceX96: sqrt,
+        _sender: ALICE,
+      },
+      NFTX_LOCKER,
+      i,
+    )
+  const state = (collection: Address, i: number, sqrt: bigint, block = B) =>
+    eventLog(
+      nftxEventsAbi as Abi,
+      "PoolStateUpdated",
+      {
+        _collection: collection,
+        _sqrtPriceX96: sqrt,
+        _tick: 0,
+        _protocolFee: 0,
+        _swapFee: 9000,
+        _liquidity: 1n,
+      },
+      NFTX_HOOK,
+      i,
+      block,
+    )
+
+  // Names and symbols: NUL bytes, a lone surrogate, 10 KB.
+  chain.add(created(noisy, 0, NUL_TEXT, LONE_SURROGATE_TEXT, 1))
+  chain.add(created(huge, 1, TEN_KB, TEN_KB, 2))
+  chain.add(created(odd, 2, "Odd pool", "ODD", 3))
+  chain.add(created(listed, 3, "Listed", "LST", 4))
+  // Pool keys: a valid one at the extreme prices, one 96 bytes long, one with another hook.
+  chain.add(initialized(noisy, 4, poolKey(NFTX_HOOK, tokenOf(1)), 0n))
+  chain.add(initialized(huge, 5, `0x${"00".repeat(96)}`, 1n))
+  chain.add(initialized(odd, 6, poolKey(ALICE, tokenOf(3)), 2n ** 160n - 1n))
+  chain.add(initialized(listed, 7, poolKey(NFTX_HOOK, tokenOf(4)), 2n ** 160n - 1n))
+  for (const [i, sqrt] of [0n, 1n, 2n ** 160n - 1n].entries())
+    chain.add(state(noisy, 8 + i, sqrt, B + 1n))
+  // A Listings fill of 10,000 ids, none of which the Listings contract can answer for.
+  const ids = Array.from({ length: 10_000 }, (_, i) => BigInt(i))
+  chain.add(
+    eventLog(
+      nftxEventsAbi as Abi,
+      "ListingsFilled",
+      { _collection: listed, _tokenIds: [ids], _recipient: ALICE },
+      NFTX_LISTINGS,
+      0,
+      B + 2n,
+    ),
+  )
+  // Auction logs: a config that does not decode, one with 200 KB of step data, and events from
+  // addresses the factory never created.
+  const config = {
+    currency: ZERO,
+    tokensRecipient: ALICE,
+    fundsRecipient: BOB,
+    startBlock: B + 5n,
+    endBlock: B + 50n,
+    claimBlock: B + 60n,
+    tickSpacing: 1n,
+    validationHook: ZERO,
+    floorPrice: 1n,
+    requiredCurrencyRaised: 0n,
+    auctionStepsData: `0x${"ab".repeat(200_000)}` as Hex,
+  }
+  const auction = (a: Address, token: Address, i: number, configData: Hex) =>
+    eventLog(
+      ccaEventsAbi as Abi,
+      "AuctionCreated",
+      { auction: a, token, amount: 10n ** 18n, configData },
+      CCA_FACTORY,
+      i,
+      B + 3n,
+    )
+  chain.add(auction(nft(0xa1), tokenOf(1), 0, "0x1234"))
+  chain.add(auction(nft(0xa2), tokenOf(1), 1, encodeAbiParameters([ccaConfigParameter], [config])))
+  for (const [i, a] of [nft(0xbad1), nft(0xbad2)].entries()) {
+    chain.add(
+      eventLog(ccaEventsAbi as Abi, "TokensReceived", { totalSupply: 1n }, a, 2 + i, B + 4n),
+    )
+    chain.add(
+      eventLog(
+        ccaEventsAbi as Abi,
+        "BidSubmitted",
+        { id: 1n, owner: ALICE, priceQ96: MAX_UINT256, amount: 1n },
+        a,
+        4 + i,
+        B + 4n,
+      ),
+    )
+  }
+  chain.add(
+    eventLog(
+      nftxEventsAbi as Abi,
+      "NFTBoughtWithETH",
+      { collection: noisy, nftCount: 1n, ethSpent: MAX_UINT256, buyer: ALICE },
+      ALICE,
+      6,
+      B + 4n,
+    ),
+  )
+  for (let n = B; n <= B + 4n; n++)
+    chain.senders.set(n, {
+      hash: chain.hashOf(n),
+      // The factory's caller is read for each AuctionCreated.
+      senders: new Map(
+        n === B + 3n
+          ? [
+              [meta(0).transactionHash, ALICE],
+              [meta(1).transactionHash, ALICE],
+            ]
+          : [],
+      ),
+      targets: new Map(),
+      timestamp: 1_790_000_000 + Number(n - B),
+    })
+  const apiBody = JSON.stringify({ slug: "../x", pad: TEN_KB.repeat(8) })
+  return {
+    chain,
+    sources: [
+      nftxSource({
+        sql,
+        chain,
+        logger,
+        launchpad: null,
+        fetch: (async () => new Response(apiBody, { status: 200 })) as unknown as typeof fetch,
+      }),
+    ],
+    from: B - 1n,
+    check: async (db) => {
+      expect(
+        await db`select collection, name, symbol from indexer.nftx_collections where collection in (${noisy}, ${huge}) order by collection`,
+      ).toEqual([
+        { collection: noisy, name: "namewithnul", symbol: "half\ufffdpair" },
+        { collection: huge, name: "x".repeat(64), symbol: "x".repeat(32) },
+      ])
+      // The 96-byte key and the other hook store no side and no prices.
+      expect(
+        await db`select collection from indexer.nftx_collections where fleth_is_currency0 is not null order by collection`,
+      ).toEqual([{ collection: noisy }, { collection: listed }])
+      // A sqrt of 0 and one that rounds to zero wei are stored without a price; 1 gives a huge one.
+      expect(
+        await db`select price_wei is null as none from indexer.nftx_prices where collection = ${noisy} order by log_index`,
+      ).toEqual([{ none: true }, { none: false }, { none: true }])
+      expect(
+        await db`select nftx_slug from indexer.nft_collections where nftx_slug is not null`,
+      ).toEqual([])
+      // The undecodable config is not stored; the one with the 200 KB of step data is.
+      expect(await db`select auction from indexer.nftx_auctions order by auction`).toEqual([
+        { auction: nft(0xa2) },
+      ])
+      expect(await db`select count(*)::int as n from indexer.nftx_auction_bids`).toEqual([{ n: 0 }])
+      expect(
+        await db`select count(*)::int as n from indexer.events where type in ('nft.sale', 'nft.listing', 'nft.auction')`,
+      ).toEqual([{ n: 0 }])
+    },
   }
 }

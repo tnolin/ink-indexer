@@ -1,11 +1,12 @@
 import { parseArgs } from "node:util"
+import { parseAuctionLink } from "./auction-cli"
 import { type MarkValue, parseMark } from "./mark-cli"
 import { BACKFILL_SOURCES, type BackfillSource } from "./sources/source"
 
 export { BACKFILL_SOURCES }
 
 export const USAGE =
-  "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> | collections-from-sales"
+  "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> [--max-supply <n>] | auction <auction> <contract> | collections-from-sales"
 
 export type Cli =
   | { ok: true; command: "start" }
@@ -19,7 +20,8 @@ export type Cli =
       /** Block reads a span keeps in flight; undefined: the default. */
       blockReads?: number
     }
-  | { ok: true; command: "mark"; contract: string; value: MarkValue }
+  | { ok: true; command: "mark"; contract: string; value: MarkValue; maxSupply?: bigint }
+  | { ok: true; command: "auction"; auction: string; contract: string }
   | { ok: true; command: "collections-from-sales" }
   | { ok: false; usage: string; reason: string }
 
@@ -52,8 +54,20 @@ export function parseCli(argv: string[]): Cli {
   if (argv[0] === "mark") {
     const mark = parseMark(argv.slice(1))
     return mark.ok
-      ? { ok: true, command: "mark", contract: mark.contract, value: mark.value }
+      ? {
+          ok: true,
+          command: "mark",
+          contract: mark.contract,
+          value: mark.value,
+          ...(mark.maxSupply === undefined ? {} : { maxSupply: mark.maxSupply }),
+        }
       : mark
+  }
+  if (argv[0] === "auction") {
+    const link = parseAuctionLink(argv.slice(1))
+    return link.ok
+      ? { ok: true, command: "auction", auction: link.auction, contract: link.contract }
+      : { ok: false, usage: USAGE, reason: link.reason }
   }
   let parsed: {
     positionals: string[]

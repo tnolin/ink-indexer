@@ -1,10 +1,15 @@
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import {
+  CCA_AUCTION_TOPICS,
+  CCA_FACTORY,
+  CCA_TOPICS,
   CHIMERA_FACTORY,
   HOOKIT_TOPICS,
   INKFUN_TOPICS,
   NATIVE_QUOTE_ASSET,
+  NFTX_LOCKER,
+  NFTX_TOPICS,
   SEADROP_V1,
   TSUNAMI_TOPICS,
   UNISWAP_V4_POOL_MANAGER,
@@ -18,6 +23,8 @@ import { hookitSource } from "../src/sources/hookit/index"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
+import { nftxSource } from "../src/sources/nftx/index"
+import type { Ranks } from "../src/sources/opensea/ranks"
 import { PoolRegistry } from "../src/sources/pools"
 import { tsunamiSource } from "../src/sources/tsunami/index"
 import { v4Source } from "../src/sources/v4/index"
@@ -39,7 +46,15 @@ describe("readSources", () => {
   it("enables every platform when unset or empty", () => {
     for (const v of [undefined, "", "  "]) {
       const s = sources({ INDEXER_SOURCES: v })
-      expect(s.names).toEqual(["inkypump", "opensea", "chimera", "inkfun", "tsunami", "hookit"])
+      expect(s.names).toEqual([
+        "inkypump",
+        "opensea",
+        "chimera",
+        "inkfun",
+        "tsunami",
+        "hookit",
+        "nftx",
+      ])
       expect(s.openSea).toBe(true)
       expect(s.groups).toEqual([
         "inkypump",
@@ -50,6 +65,7 @@ describe("readSources", () => {
         "inkfun",
         "tsunami",
         "hookit",
+        "nftx",
       ])
     }
   })
@@ -75,6 +91,16 @@ describe("readSources", () => {
       groups: ["hookit", "v4-swaps"],
       openSea: false,
     })
+    expect(sources({ INDEXER_SOURCES: "nftx" })).toMatchObject({
+      groups: ["nftx"],
+      openSea: false,
+    })
+  })
+
+  it("says whether the NFTX source runs", () => {
+    expect(sources({ INDEXER_SOURCES: undefined }).nftx).toBe(true)
+    expect(sources({ INDEXER_SOURCES: "nftx,opensea" }).nftx).toBe(true)
+    expect(sources({ INDEXER_SOURCES: "opensea,chimera" }).nftx).toBe(false)
   })
 
   it("lists a shared backfill group once", () => {
@@ -95,7 +121,7 @@ describe("readSources", () => {
 
   it("rejects an unknown name, naming the allowed ones", () => {
     expect(() => sources({ INDEXER_SOURCES: "inkypump,bogus" })).toThrow(
-      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera, inkfun, tsunami, hookit)",
+      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera, inkfun, tsunami, hookit, nftx)",
     )
   })
 
@@ -155,6 +181,7 @@ describe("the live tick with INDEXER_SOURCES", () => {
         }),
         v4Source({ sql, chain, pools, logger: quiet }),
         nftSource({ sql, chain, logger: quiet }),
+        nftxSource({ sql, chain, logger: quiet }),
       ],
     })
     await idx.init()
@@ -230,6 +257,18 @@ describe("the live tick with INDEXER_SOURCES", () => {
     expect(asked.some((f) => f.address === SEADROP_V1)).toBe(false)
   })
 
+  it("nftx alone reads the NFTX contracts and the auction factory in one address-bound request, and the auctions' events by topic in another", async () => {
+    const asked = await liveFilters({ INDEXER_SOURCES: "nftx" })
+    expect(asked).toHaveLength(2)
+    const bound = asked.find((f) => f.address !== undefined)!
+    const open = asked.find((f) => f.address === undefined)!
+    expect(JSON.stringify(bound.address)).toContain(NFTX_LOCKER)
+    expect(JSON.stringify(bound.address)).toContain(CCA_FACTORY)
+    expect(JSON.stringify(bound.topics)).toContain(NFTX_TOPICS.CollectionCreated)
+    expect(JSON.stringify(bound.topics)).toContain(CCA_TOPICS.AuctionCreated)
+    expect(open.topics).toEqual([[...CCA_AUCTION_TOPICS]])
+  })
+
   it("opensea alone reads the mint and sale filters in 4 requests", async () => {
     expect(await liveFilters({ INDEXER_SOURCES: "opensea" })).toHaveLength(4)
   })
@@ -269,6 +308,23 @@ describe("startSourceServices", () => {
     })
     keyless.stop()
     expect(warnings).toEqual([])
+  })
+
+  it("gives the NFTX source the rank lookup while the OpenSea services run", async () => {
+    const ranks: { current: Pick<Ranks, "getRank"> | null } = { current: null }
+    const d = {
+      ...deps({ OPENSEA_API_KEY: "wiring-test-key-0123456789" }, [], new FakeStream()),
+      ranks,
+    }
+    const services = await startSourceServices(sources({ INDEXER_SOURCES: "opensea,nftx" }), d)
+    expect(ranks.current).toHaveProperty("getRank")
+    services.stop()
+    expect(ranks.current).toBeNull()
+
+    // Without a key the services are off and there is no lookup.
+    const keyless = await startSourceServices(sources({}), { ...d, env: {} })
+    keyless.stop()
+    expect(ranks.current).toBeNull()
   })
 
   it("starts them when opensea is on", async () => {

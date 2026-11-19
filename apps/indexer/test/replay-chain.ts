@@ -40,7 +40,12 @@ export type RecordedCalls = {
   readCurveSold?: { curves: Address[]; block: bigint; result: bigint[] }[]
   getBlockSenders?: {
     block: bigint
-    result: { hash: Hash; timestamp: number; senders: [Hash, Address][] } | null
+    result: {
+      hash: Hash
+      timestamp: number
+      senders: [Hash, Address][]
+      targets?: [Hash, Address | null][]
+    } | null
   }[]
   readBalances?: {
     pairs: { token: Address; holder: Address }[]
@@ -105,7 +110,11 @@ export class ReplayChain implements Chain {
     for (const c of calls.getBlockSenders ?? [])
       this.answers.set(
         `getBlockSenders:${stringify([c.block])}`,
-        c.result && { ...c.result, senders: new Map(c.result.senders) },
+        c.result && {
+          ...c.result,
+          senders: new Map(c.result.senders),
+          targets: new Map(c.result.targets ?? []),
+        },
       )
     for (const c of calls.readBalances ?? [])
       this.answers.set(`readBalances:${stringify([c.pairs, c.block])}`, c.result)
@@ -191,6 +200,7 @@ export class ReplayChain implements Chain {
       hash: Hash
       timestamp: number
       senders: Map<Hash, Address>
+      targets: Map<Hash, Address | null>
     } | null>("getBlockSenders", [n])
   }
 
@@ -212,6 +222,22 @@ export class ReplayChain implements Chain {
 
   async readTotalSupplyAt(): Promise<null> {
     throw new Error("readTotalSupplyAt was not recorded")
+  }
+
+  async readNftxListings(): Promise<never> {
+    throw new Error("readNftxListings was not recorded")
+  }
+
+  async readNftxPoolCounts(): Promise<never> {
+    throw new Error("readNftxPoolCounts was not recorded")
+  }
+
+  async readOwners(): Promise<never> {
+    throw new Error("readOwners was not recorded")
+  }
+
+  async readAuctionCheckpoint(): Promise<never> {
+    throw new Error("readAuctionCheckpoint was not recorded")
   }
 
   async hasCodeAt(): Promise<boolean> {

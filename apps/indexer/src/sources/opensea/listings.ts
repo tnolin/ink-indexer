@@ -6,7 +6,6 @@ import type { Logger } from "../../log"
 import type { Store } from "../../store"
 import {
   FLOOR_MAX_AGE_MS,
-  LISTING_MIN_LIFE_S,
   LISTING_WAIT_MS,
   METADATA_BURST_COUNT,
   METADATA_BURST_WINDOW_MS,
@@ -46,7 +45,7 @@ function itemMeta(payload: unknown): { name: string | null; imageUrl: string | n
   return { name: str(meta?.name), imageUrl: str(meta?.image_url) }
 }
 
-/** A listing that passed the filter's payload checks (steps 1 to 4). */
+/** A listing that passed the filter's payload checks (steps 1, 2 and 4). */
 type Listed = {
   orderHash: Hash
   /** Wei for one unit. */
@@ -59,9 +58,9 @@ type Listed = {
 }
 
 /**
- * Steps 1 to 4 of the listing filter, which need only the payload: private listings are dropped,
- * then anything not paid in ETH or WETH, then a listing that lives under an hour; the price is
- * per unit. Null for a dropped listing and for a payload that cannot be read.
+ * Steps 1, 2 and 4 of the listing filter, which need only the payload: private listings are
+ * dropped, then anything not paid in ETH or WETH; the price is per unit. A listing is kept
+ * whatever its expiry. Null for a dropped listing and for a payload that cannot be read.
  */
 export function parseListed(payload: unknown): Listed | null {
   const p = obj(payload)
@@ -76,7 +75,6 @@ export function parseListed(payload: unknown): Listed | null {
   const listedAt = Date.parse(str(p.listing_date) ?? "")
   const expiresAt = Date.parse(str(p.expiration_date) ?? "")
   if (!Number.isFinite(listedAt) || !Number.isFinite(expiresAt)) return null
-  if (expiresAt - listedAt < LISTING_MIN_LIFE_S * 1000) return null
 
   const total = str(p.base_price)
   const quantity = p.quantity === undefined || p.quantity === null ? 1 : p.quantity
@@ -157,15 +155,16 @@ export function createListings(deps: ListingsDeps) {
   }
 
   /**
-   * The collection's newest floor row, read again first when it is missing or older than
-   * `FLOOR_MAX_AGE_MS`. A read that fails, or that the budget or the per-collection limit refuses,
-   * leaves the stored row, so the event carries that floor with its own time.
+   * The collection's floor, with the OpenSea floor read again first when the newest OpenSea row is
+   * missing or older than `FLOOR_MAX_AGE_MS`. NFTX rows do not count: they say nothing about how
+   * old the OpenSea floor is. A read that fails, or that the budget or the per-collection limit
+   * refuses, leaves the stored row, so the event carries that floor with its own time.
    */
-  async function currentFloor(contract: string) {
-    const first = await stats.latestFloor(contract)
-    if (first && now() - first.at.getTime() <= FLOOR_MAX_AGE_MS) return first
+  async function currentFloor(contract: string, eventAt: Date) {
+    const first = await stats.latestFloor(contract, eventAt)
+    if (first?.osAt && now() - first.osAt.getTime() <= FLOOR_MAX_AGE_MS) return first
     await refresh(contract)
-    return stats.latestFloor(contract)
+    return stats.latestFloor(contract, eventAt)
   }
 
   async function onListed(e: StreamEvent): Promise<void> {
@@ -191,7 +190,7 @@ export function createListings(deps: ListingsDeps) {
     if (state && state.expires_at.getTime() > at && l.unitPriceWei >= BigInt(state.last_price_wei))
       return
 
-    const floor = await currentFloor(contract)
+    const floor = await currentFloor(contract, new Date(e.receivedAt))
     const floorWei = floor?.floorWei ?? null
     const near =
       floorWei !== null && l.unitPriceWei * NEAR_FLOOR_RATIO.den <= floorWei * NEAR_FLOOR_RATIO.num

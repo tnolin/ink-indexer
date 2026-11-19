@@ -1,7 +1,7 @@
 # 0017. OpenSea source: REST jobs, Stream shards and collection quality checks
 
 Date: 2026-10-17
-Status: Accepted. Amends ADR 0006. Amended by ADR 0026 for gate 1.
+Status: Accepted. Amends ADR 0006. Amended by ADR 0026 for gate 1. Item 3 of the listing filter is superseded by [ADR 0045](0045-listings-carry-no-minimum-lifetime.md).
 
 ## Context
 
@@ -74,7 +74,7 @@ All thresholds are named constants in `apps/indexer/src/sources/nft/policy.ts`.
 **Listings.** A Stream listing is written as `nft.listing` only when it passes this filter:
 1. It is not private.
 2. It is priced in ETH or WETH.
-3. It lives at least 1 hour (expiry minus listing time).
+3. ~~It lives at least 1 hour (expiry minus listing time).~~ Superseded by [ADR 0045](0045-listings-carry-no-minimum-lifetime.md): a listing is announced whatever its expiry.
 4. For ERC-1155, the price is per unit.
 5. It is lower than the last price written for that item. The per-item state resets on a sale or cancel, and expires with the listing.
 

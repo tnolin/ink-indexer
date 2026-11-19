@@ -1,0 +1,65 @@
+{
+  "status": 200,
+  "body": {
+    "collection": "thinkers-665587726",
+    "name": "Bears by noper",
+    "description": "",
+    "image_url": "https://i2c.seadn.io/collection/thinkers-665587726/image_type_logo/4e83744a5be9d496c0bf3bacedd682/b44e83744a5be9d496c0bf3bacedd682.jpeg",
+    "banner_image_url": "https://i2c.seadn.io/collection/thinkers-665587726/image_type_hero_desktop/93410578703ed5802291b992a9836d/d893410578703ed5802291b992a9836d.jpeg",
+    "owner": "0x98627d40e7b8a483367b8d0889eec63b080ff4e8",
+    "safelist_status": "not_requested",
+    "category": "",
+    "is_disabled": false,
+    "is_nsfw": false,
+    "trait_offers_enabled": false,
+    "collection_offers_enabled": false,
+    "opensea_url": "https://opensea.io/collection/thinkers-665587726",
+    "project_url": "",
+    "wiki_url": "",
+    "discord_url": "",
+    "telegram_url": "",
+    "twitter_username": null,
+    "instagram_username": "",
+    "contracts": [
+      {
+        "address": "0xea8fa1eb53e0465d67c9cd4e77a3f4f6f39220ea",
+        "chain": "ink"
+      }
+    ],
+    "editors": [
+      "0x98627d40e7b8a483367b8d0889eec63b080ff4e8"
+    ],
+    "fees": [
+      {
+        "fee": 1,
+        "recipient": "0x07d3a100c3880830dd43fe5c938b5144721ce9d6",
+        "required": true
+      }
+    ],
+    "total_supply": 1866,
+    "unique_item_count": 1866,
+    "created_date": "2026-11-18",
+    "pricing_currencies": {
+      "listing_currency": {
+        "symbol": "ETH",
+        "address": "0x0000000000000000000000000000000000000000",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/ETH.svg",
+        "name": "Ethereum",
+        "decimals": 18,
+        "eth_price": "1",
+        "usd_price": "1801.23"
+      },
+      "offer_currency": {
+        "symbol": "WETH",
+        "address": "0x4200000000000000000000000000000000000006",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/WETH.svg",
+        "name": "Wrapped Ethereum",
+        "decimals": 18,
+        "eth_price": "1.000172104617400332",
+        "usd_price": "1801.54"
+      }
+    }
+  }
+}

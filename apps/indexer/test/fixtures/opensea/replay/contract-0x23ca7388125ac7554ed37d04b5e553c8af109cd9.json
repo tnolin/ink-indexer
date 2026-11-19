@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "body": {
+    "address": "0x23ca7388125ac7554ed37d04b5e553c8af109cd9",
+    "chain": "ink",
+    "collection": "thinkers-ink",
+    "contract_standard": "erc721",
+    "name": "Thinkers ink"
+  }
+}

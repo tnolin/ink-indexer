@@ -1,4 +1,5 @@
 import { connect, migrate } from "@ink-indexer/db"
+import { applyAuctionLink } from "./auction-cli"
 import { viemChain } from "./chain"
 import { parseCli } from "./cli"
 import { log } from "./log"
@@ -12,6 +13,8 @@ import { inkfunSource } from "./sources/inkfun/index"
 import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { createCollectionsFromSales } from "./sources/nft/write"
+import { nftxSource } from "./sources/nftx/index"
+import type { Ranks } from "./sources/opensea/ranks"
 import { PoolRegistry } from "./sources/pools"
 import { tsunamiSource } from "./sources/tsunami/index"
 import { v4Source } from "./sources/v4/index"
@@ -57,6 +60,8 @@ const sql = connect(databaseUrl)
 const store = createStore(sql)
 let current: Promise<void> | undefined
 let stopNft = () => {}
+// The rank lookup the OpenSea services share with the NFTX source once they run.
+const ranks: { current: Pick<Ranks, "getRank"> | null } = { current: null }
 const shutdown = createShutdown({
   stop: () => {
     // The NFT and OpenSea parts first, then the chain loop.
@@ -86,13 +91,26 @@ try {
     await sql.end()
     process.exit(0)
   }
+  if (cli.command === "auction") {
+    await applyAuctionLink(sql, { auction: cli.auction, contract: cli.contract })
+    log("info", "auction linked", { auction: cli.auction, contract: cli.contract })
+    await sql.end()
+    process.exit(0)
+  }
   rpc = await connectRpc(urls.length > 0 ? urls : DEFAULT_WS_URLS)
   const chain = viemChain(rpc.client, rpc.router, { isStopping: shutdown.isStopping })
   if (cli.command === "mark") {
     const { historyStartBlock } = readNftSettings(process.env, log)
     const verdict = await createNftVerdictJob({ historyStartBlock, sql, store, chain, log })
-    await applyMark({ sql, verdict }, { contract: cli.contract, value: cli.value })
-    log("info", "mark applied", { contract: cli.contract, mark: cli.value })
+    await applyMark(
+      { sql, verdict },
+      { contract: cli.contract, value: cli.value, maxSupply: cli.maxSupply },
+    )
+    log("info", "mark applied", {
+      contract: cli.contract,
+      mark: cli.value,
+      maxSupply: cli.maxSupply?.toString(),
+    })
     await sql.end()
     process.exit(0)
   }
@@ -133,13 +151,22 @@ try {
       }),
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools, blockReads }),
-      nftSource({ sql, chain, logger: log }),
+      nftSource({ sql, chain, logger: log, nftx: sources.nftx }),
+      nftxSource({ sql, chain, logger: log, report: reporter, blockReads, ranks }),
     ],
   })
   await indexer.init()
   if (cli.command === "start")
     stopNft = (
-      await startSourceServices(sources, { env: process.env, sql, store, chain, log, report })
+      await startSourceServices(sources, {
+        env: process.env,
+        sql,
+        store,
+        chain,
+        log,
+        report,
+        ranks,
+      })
     ).stop
 } catch (err) {
   log("error", cli.command === "start" ? "startup failed" : `${cli.command} failed`, {

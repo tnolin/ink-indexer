@@ -26,6 +26,7 @@ describe("entityOf", () => {
     "nft.sale",
     "nft.stats",
     "nft.launch",
+    "nft.auction",
   ] as const)("returns the contract for %s", (type) => {
     expect(entityOf(nft(type))).toBe(contract)
   })

@@ -149,6 +149,8 @@ export type MilestoneContext = {
   priorMinted: boolean | null
   /** A manual kind mark (`nft_overrides.kind`) decides the kind without the prior supply. */
   kindOverride: boolean
+  /** A max supply set by hand (`nft_overrides.max_supply`); it wins over the contract's. */
+  maxSupplyOverride: bigint | null
   drop: StoredDrop | null
   /** The first mint of each stage not stored yet, in chain order. */
   newStageRows: SeaDropMintRow[]
@@ -200,11 +202,12 @@ export async function loadMilestoneContexts(
       prior_supply: string | null
       prior_minted: boolean | null
       kind_override: boolean
+      max_supply_override: string | null
     }[]
   >`
     select c.contract, c.last_mark_bps, c.sold_out_block, extract(epoch from c.first_mint_ts)::bigint as first_ts,
       c.first_mint_block::text as first_block, c.prior_supply::text as prior_supply, c.prior_minted,
-      o.kind is not null as kind_override
+      o.kind is not null as kind_override, o.max_supply::text as max_supply_override
     from indexer.nft_collections c
     left join indexer.nft_overrides o on o.contract = c.contract
     where c.contract = any(${contracts}::text[])`
@@ -247,6 +250,7 @@ export async function loadMilestoneContexts(
             ? false
             : null,
       kindOverride: c?.kind_override ?? false,
+      maxSupplyOverride: c?.max_supply_override == null ? null : BigInt(c.max_supply_override),
       drop: drop
         ? {
             slug: drop.slug,
@@ -354,6 +358,8 @@ export async function milestoneEvents(
     let prior: boolean
     try {
       stats = await deps.chain.readMintStats(ctx.contract, last.minter, at.toBlock)
+      if (stats && ctx.maxSupplyOverride !== null)
+        stats = { ...stats, maxSupply: ctx.maxSupplyOverride }
       if (!stats || stats.maxSupply === 0n) {
         deps.logger("debug", "no mint stats for a SeaDrop contract; skipping its milestones", {
           contract: ctx.contract,
@@ -481,4 +487,140 @@ async function countStages(
         ${sql.array(batch.map((m) => m.qty.toString()))}::numeric[])
     ) m group by stage order by stage`
   return rows.map((r) => ({ stageIndex: r.stage, minted: BigInt(r.minted) }))
+}
+
+// ---- Real collections that are not SeaDrop ----
+
+/**
+ * A collection whose mints the source counts itself: marked or judged real, a drop, with a known
+ * max supply and nothing minted before its first stored mint.
+ */
+export type RealMintContext = {
+  contract: Address
+  /** Quantity of the stored mints below the batch's first mint of the contract. */
+  storedMinted: bigint
+  maxSupply: bigint
+  lastMarkBps: number
+  soldOut: boolean
+  /** Unix seconds of the collection's first mint. */
+  firstMintTs: number
+}
+
+const sameOrder = (a: TransferRow, b: TransferRow) =>
+  a.block === b.block ? a.logIndex - b.logIndex || a.idx - b.idx : a.block < b.block ? -1 : 1
+
+/**
+ * The batch's contracts that get progress and sold-out events from the source's own mint count,
+ * with what is already stored for them. Only mints already stored below the batch count as
+ * stored, so scanning a range again does not count its mints twice.
+ *
+ * shortcut: stored mints are kept `MINTS_RETENTION_S` seconds, so a mint that runs longer counts
+ * low. Keep a running count per collection to lift the limit.
+ */
+export async function loadRealMintContexts(
+  sql: Sql,
+  mints: TransferRow[],
+): Promise<RealMintContext[]> {
+  const first = new Map<Address, bigint>()
+  for (const m of mints) {
+    const b = first.get(m.contract)
+    if (b === undefined || m.block < b) first.set(m.contract, m.block)
+  }
+  if (first.size === 0) return []
+  const rows = await sql<
+    {
+      contract: Address
+      max_supply: string
+      last_mark_bps: number
+      sold_out: boolean
+      first_ts: string
+      stored: string
+    }[]
+  >`
+    select b.contract, coalesce(o.max_supply, c.max_supply)::text as max_supply, c.last_mark_bps,
+      c.sold_out_block is not null as sold_out, extract(epoch from c.first_mint_ts)::bigint::text as first_ts,
+      (select coalesce(sum(m.qty), 0)::text from indexer.nft_mints m
+        where m.contract = b.contract and m.block < b.block) as stored
+    from unnest(${sql.array([...first.keys()])}::text[], ${sql.array([...first.values()].map(String))}::bigint[]) as b(contract, block)
+    join indexer.nft_collections c on c.contract = b.contract
+    left join indexer.nft_overrides o on o.contract = c.contract
+    where not c.seadrop and c.verdict = 'real' and c.kind = 'drop' and c.prior_minted = false
+      and c.first_mint_ts is not null
+      and coalesce(o.max_supply, c.max_supply) > 0`
+  return rows.map((r) => ({
+    contract: r.contract,
+    storedMinted: BigInt(r.stored),
+    maxSupply: BigInt(r.max_supply),
+    lastMarkBps: r.last_mark_bps,
+    soldOut: r.sold_out,
+    firstMintTs: Number(r.first_ts),
+  }))
+}
+
+/** The block of each contract's last counted mint, whose time `realMintMilestones` wants. */
+export function realMintBlocks(contexts: RealMintContext[], mints: TransferRow[]): bigint[] {
+  const wanted = new Set(contexts.map((c) => c.contract))
+  return [...new Set(mints.filter((m) => wanted.has(m.contract)).map((m) => m.block))]
+}
+
+/**
+ * Progress and sold-out events for real collections the source counts itself. A collection with no
+ * stages reports one stage, `Mint`, with no price and no per-stage counts; each event sits at the
+ * contract's last counted mint in the batch.
+ */
+export async function realMintMilestones(
+  contexts: RealMintContext[],
+  batchMints: TransferRow[],
+  deps: { sql: Sql },
+  at: { times: Map<bigint, number>; blockHash: (block: bigint) => Hash },
+): Promise<Milestones> {
+  const out: Milestones = { events: [], stages: [], updates: [] }
+  for (const ctx of contexts) {
+    const rows = batchMints.filter((m) => m.contract === ctx.contract).sort(sameOrder)
+    const last = rows.at(-1)
+    if (!last) continue
+    const totalSupply = rows.reduce((n, m) => n + m.qty, ctx.storedMinted)
+    const base: MilestoneInput = {
+      contract: ctx.contract,
+      lastMarkBps: ctx.lastMarkBps,
+      soldOut: ctx.soldOut,
+      totalSupply,
+      maxSupply: ctx.maxSupply,
+      newStages: [],
+      current: { index: 0, priceWei: 0n },
+      drop: null,
+      mintStartTs: ctx.firstMintTs,
+      stageStartTs: new Map([[0, ctx.firstMintTs]]),
+      minters: 0,
+      stageCounts: [],
+    }
+    let drafts = planMilestones(base)
+    if (drafts.length === 0) continue
+    const minters = await countMinters(deps.sql, ctx.contract, batchMints)
+    drafts = planMilestones({ ...base, minters })
+    for (const d of drafts) {
+      const { contract, sub, stageCounts: _perStage, ...payload } = d
+      const event: NftMintEvent = {
+        v: SCHEMA_VERSION,
+        chainId: INK_CHAIN_ID,
+        type: "nft.mint",
+        contract,
+        source: "chain",
+        txHash: last.txHash,
+        logIndex: last.logIndex,
+        blockNumber: last.block.toString(),
+        blockTimestamp: at.times.get(last.block)!,
+        ...payload,
+        stageLabel: "Mint",
+      }
+      out.events.push({ event, block: last.block, blockHash: at.blockHash(last.block), sub })
+    }
+    out.updates.push({
+      contract: ctx.contract,
+      maxSupply: ctx.maxSupply,
+      lastMarkBps: Math.max(ctx.lastMarkBps, ...drafts.map((d) => d.markBps ?? 0)),
+      soldOutBlock: drafts.some((d) => d.kind === "sold_out") ? last.block : null,
+    })
+  }
+  return out
 }

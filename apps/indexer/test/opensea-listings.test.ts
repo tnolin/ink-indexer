@@ -106,10 +106,11 @@ const RANKED = "489"
 function setup(
   routes: Parameters<typeof fakeFetch>[0] = {},
   withStore: Pick<Store, "writeOffchain"> = store,
+  nftx = false,
 ) {
   const fetch = fakeFetch({ [statsPath]: osStats(0.1), ...routes })
   const rest = createOpenSeaRest({ key: KEY, budget, fetch, log, report, now })
-  const stats = createStats({ sql, store, rest, log, now })
+  const stats = createStats({ sql, store, rest, log, now, nftx })
   const ranks = createRanks({ sql, rest, log, now })
   const listings = createListings({ sql, store: withStore, stats, ranks, log, report, now })
   return { fetch, rest, stats, ranks, listings, handle: listings.handleStreamEvent }
@@ -226,15 +227,19 @@ const collectionOf = async (contract: string): Promise<Record<string, any>> =>
   (await sql`select * from indexer.nft_collections where contract = ${contract}`)[0]!
 
 describe("the filter", () => {
-  it("15-minute expiry is dropped", async () => {
+  it("a listing that expires 20 minutes after it is posted is announced", async () => {
+    const s = setup()
+    await s.handle(listed({ life: 20 * 60 }))
+    expect(await listingEvents()).toHaveLength(1)
+    expect(await stateOf("1506")).toBeDefined()
+  })
+
+  it("listings of 15 minutes, 3599 seconds and an hour are all announced", async () => {
     const s = setup()
     await s.handle(listed({ life: 15 * 60 }))
     await s.handle(listed({ life: 3599, token: "2" }))
-    expect(await listingEvents()).toEqual([])
-    expect(await stateOf("1506")).toBeUndefined()
-    // One hour is long enough.
     await s.handle(listed({ life: 3600, token: "3" }))
-    expect(await listingEvents()).toHaveLength(1)
+    expect(await listingEvents()).toHaveLength(3)
   })
 
   it("private and non-ETH listings are dropped", async () => {
@@ -490,6 +495,62 @@ describe("the floor", () => {
         floorWei: (2n * FLOOR).toString(),
         floorAt: Math.floor(T0 / SEC),
       })
+  })
+
+  /** A collection with an open NFTX pool and one price at `price`. */
+  async function addPool(price: bigint) {
+    await sql`insert into indexer.nftx_collections ${sql({
+      collection: PRTSCN,
+      floor_token: "0x00000000000000000000000000000000000000f1",
+      creator: MAKER,
+      created_block: "100",
+      initialized_block: "110",
+      fleth_is_currency0: true,
+    })}`
+    await sql`insert into indexer.nftx_prices ${sql({
+      collection: PRTSCN,
+      block: "200",
+      log_index: 0,
+      sqrt_price_x96: "1",
+      price_wei: price.toString(),
+      at: new Date(T0 - 3 * DAY),
+    })}`
+  }
+
+  it("an NFTX-floored listing carries floorAt equal to the listing time, so it is never stale", async () => {
+    await addPool(FLOOR / 2n)
+    const s = setup({}, store, true)
+    await s.handle(listed({ price: FAR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(0)
+    expect((await listingEvents())[0]).toMatchObject({
+      floorWei: (FLOOR / 2n).toString(),
+      floorAt: Math.floor(T0 / SEC),
+    })
+  })
+
+  it("a listing ignores the pool's price while the NFTX source is off", async () => {
+    await addPool(FLOOR / 2n)
+    const s = setup()
+    await s.handle(listed({ price: FAR }))
+    expect((await listingEvents())[0]).toMatchObject({ floorWei: FLOOR.toString() })
+  })
+
+  it("listings still refresh the OpenSea floor when only nftx rows are new", async () => {
+    await sql`delete from indexer.nft_stats`
+    await addFloor(PRTSCN, FLOOR, T0 - 3 * HOUR)
+    await addPool(FLOOR / 2n)
+    // A row written from a pool move a minute ago: new, but not an OpenSea row.
+    await sql`insert into indexer.nft_stats ${sql({
+      contract: PRTSCN,
+      at: new Date(T0 - MIN),
+      floor_wei: (FLOOR / 2n).toString(),
+      floor_market: "nftx",
+      os_floor_wei: FLOOR.toString(),
+      block: "300",
+    })}`
+    const s = setup({ [statsPath]: osStats(0.2) })
+    await s.handle(listed({ price: FAR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(1)
   })
 
   it("a floor exactly 10 minutes old is not refreshed; a collection with no stats row is", async () => {
@@ -795,15 +856,15 @@ describe("the event", () => {
     const s = setup()
     const seen = () =>
       sql`select token_id::text as token_id, name, image_url from indexer.nft_items_seen order by token_id`
-    // Dropped by the filter (private, 15 minutes), yet the names are kept.
+    // Dropped by the filter (both private), yet the names are kept.
     await s.handle(
       listed({ token: "1", priv: true, name: "Private #1", image: "https://img.example/1.png" }),
     )
-    await s.handle(listed({ token: "2", life: 900, name: "Short #2", image: null }))
+    await s.handle(listed({ token: "2", priv: true, name: "Private #2", image: null }))
     expect(await listingEvents()).toEqual([])
     expect(await seen()).toEqual([
       { token_id: "1", name: "Private #1", image_url: "https://img.example/1.png" },
-      { token_id: "2", name: "Short #2", image_url: null },
+      { token_id: "2", name: "Private #2", image_url: null },
     ])
 
     // A later dropped frame does not replace what is known.

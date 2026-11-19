@@ -187,8 +187,8 @@ export type NftCollectionEvent = NftBase & {
   /** Unix seconds, from the collection's rarity data. Null when absent. */
   rarityCalculatedAt: number | null
   maxRank: number | null
-  launchpad: "chimera" | null
-  /** The Chimera token of a collection launched there. */
+  launchpad: "chimera" | "nftx" | null
+  /** The Chimera token of a collection launched there, or the floor token of one created on NFTX. */
   launchToken: Address | null
   /**
    * Who made the collection: the launch creator for a Chimera collection, else the owner OpenSea
@@ -265,6 +265,14 @@ export type NftListingEvent = NftBase & {
   floorAt: number | null
   rank: number | null
   maxRank: number | null
+  /** The market the listing is on. Absent means OpenSea. */
+  market?: "opensea" | "nftx"
+  /** NFTX only: the listing's price as a multiple of the floor, 150 meaning 1.50x. */
+  floorMultiple?: number | null
+  /** NFTX only. */
+  listingType?: "liquid" | "dutch" | null
+  /** NFTX only: the collection's name in NFTX's URLs. */
+  nftxSlug?: string | null
 }
 
 export type NftSaleEvent = NftBase & {
@@ -282,6 +290,17 @@ export type NftSaleEvent = NftBase & {
   maxRank: number | null
   /** The latest known floor, decimal string. */
   floorWei: string | null
+  /** The market the sale happened on. Absent means OpenSea. */
+  market?: "opensea" | "nftx"
+  /**
+   * NFTX only: how the item changed hands. The pool side of an instant trade is the NFTX Locker's
+   * address, in `buyer` for an instant sell and in `seller` for an instant buy.
+   */
+  via?: "listing" | "instant_sell" | "instant_buy" | null
+  /** True on an OpenSea sale whose item went to the NFTX Locker in the same transaction. */
+  toPool?: boolean
+  /** NFTX only: the collection's name in NFTX's URLs. */
+  nftxSlug?: string | null
 }
 
 export type NftStatsEvent = NftBase & {
@@ -290,10 +309,12 @@ export type NftStatsEvent = NftBase & {
   floorWei: string | null
   /** From the indexer's own stats history, null under 24 hours of history. */
   floor24hAgoWei: string | null
-  owners: number
-  /** Decimal string. */
-  volume24hWei: string
-  sales24h: number
+  /** Null on a row built from a pool price before any OpenSea stats exist. */
+  owners: number | null
+  /** Decimal string. Null as `owners`. */
+  volume24hWei: string | null
+  /** Null as `owners`. */
+  sales24h: number | null
   /** Decimal string. Null when the supply is not known. */
   totalSupply: string | null
   /** Decimal string. The supply cap, where the collection has one; null when it is not known. */
@@ -302,14 +323,26 @@ export type NftStatsEvent = NftBase & {
   listedCount: number | null
   /** True when `listedCount` stopped at the counting limit and the real number is higher. */
   listedCapped: boolean
+  /** Which market `floorWei` comes from, for a collection on NFTX. */
+  floorMarket?: "opensea" | "nftx" | null
+  /** NFTX pool spot price per NFT, decimal string. */
+  nftxFloorWei?: string | null
+  /** NFTs in the NFTX pool. */
+  poolCount?: number | null
+  /** The collection's name in NFTX's URLs. */
+  nftxSlug?: string | null
 }
 
-/** A Chimera campaign was created: the launch of a collection and its token. */
+/**
+ * A collection and its token launched: a Chimera campaign was created, or a collection opened
+ * trading on NFTX.
+ */
 export type NftLaunchEvent = NftBase & {
   type: "nft.launch"
-  launchpad: "chimera"
-  /** Decimal string. */
+  launchpad: "chimera" | "nftx"
+  /** Decimal string for Chimera; the floor token address for NFTX. */
   campaignId: string
+  /** The Chimera token, or the NFTX floor token. */
   token: Address
   /** The token's `symbol()` at launch; null when the call reverts. */
   tokenSymbol: string | null
@@ -317,6 +350,53 @@ export type NftLaunchEvent = NftBase & {
   tokenName: string | null
   creator: Address
   poolId: Hash
+  /** NFTX only: the pool's spot price per NFT when trading opened, decimal string. */
+  nftxFloorWei?: string | null
+  /** NFTX only: the NFTs seeded into the pool when it opened, each counted once. */
+  poolCount?: number | null
+  /** NFTX only: the collection's name in NFTX's URLs. */
+  nftxSlug?: string | null
+}
+
+/**
+ * A Uniswap continuous clearing auction of an NFTX collection's floor token. One type covers its
+ * life: `created` when it is recognised, `live` when bidding opens, `price` when its clearing
+ * price updates and `ended` at the end block. `contract` is the collection.
+ */
+export type NftAuctionEvent = NftBase & {
+  type: "nft.auction"
+  phase: "created" | "live" | "price" | "ended"
+  auction: Address
+  /** The floor token the auction sells. */
+  token: Address
+  /** `"ETH"` only for the zero address; any other currency is its lowercase address. */
+  currency: "ETH" | Address
+  /** Decimal strings. */
+  startBlock: string
+  endBlock: string
+  claimBlock: string
+  /** Unix seconds, estimated from the block time while the block is still ahead. */
+  startsAt: number
+  endsAt: number
+  claimsAt: number
+  /** Whole NFTs on sale, decimal string. */
+  supply: string
+  /** The starting minimum bid per NFT, in the currency's smallest unit. */
+  minBidWei: string
+  /** The clearing price per NFT: the minimum bid now. Equal to `minBidWei` on `created`. */
+  clearingPriceWei: string
+  /** Decimal string. */
+  raisedWei: string
+  /** The raise below which the auction fails and bids are refunded. Decimal string. */
+  requiredRaiseWei: string
+  /** Distinct bid owners up to this phase. */
+  bidders: number
+  /** Set on `ended` only. */
+  graduated: boolean | null
+  /** Whole NFTs sold, decimal string. Set on `ended` only. */
+  cleared: string | null
+  /** The collection's name in NFTX's URLs. */
+  nftxSlug: string | null
 }
 
 export type NftEvent =
@@ -327,6 +407,7 @@ export type NftEvent =
   | NftSaleEvent
   | NftStatsEvent
   | NftLaunchEvent
+  | NftAuctionEvent
 
 export type IndexerEvent = LaunchpadEvent | NftEvent
 export type IndexerEventType = IndexerEvent["type"]

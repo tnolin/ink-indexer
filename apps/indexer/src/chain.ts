@@ -1,4 +1,5 @@
 import {
+  type AuctionCheckpoint,
   type ChainLog,
   type ClassicLaunch,
   type CodeReader,
@@ -8,6 +9,9 @@ import {
   type LaunchState,
   type MasterLaunchConfig,
   type NftReader,
+  type NftxListingRead,
+  type NftxReader,
+  readAuctionCheckpoint,
   readBalances,
   readClassicLaunches,
   readCurveSold,
@@ -20,6 +24,9 @@ import {
   readMetadataUris,
   readMintStats,
   readNftTotalSupply,
+  readNftxListings,
+  readNftxPoolCounts,
+  readOwners,
   readTotalSupplies,
   readTsunamiCurves,
   type StateReader,
@@ -48,15 +55,33 @@ export type Chain = {
   ): Promise<{ logs: ChainLog[]; toBlock: bigint }>
   /**
    * One block read with its transactions: the block's hash and timestamp, and each transaction's
-   * sender by transaction hash. null when the serving endpoint does not have the block yet.
+   * sender and target by transaction hash (the target is null for a contract creation). null when
+   * the serving endpoint does not have the block yet.
    */
-  getBlockSenders(
-    n: bigint,
-  ): Promise<{ hash: Hash; timestamp: number; senders: Map<Hash, Address> } | null>
+  getBlockSenders(n: bigint): Promise<{
+    hash: Hash
+    timestamp: number
+    senders: Map<Hash, Address>
+    targets: Map<Hash, Address | null>
+  } | null>
   /** `balanceOf(holder)` on each token at a block, in the order given. */
   readBalances(pairs: { token: Address; holder: Address }[], block: bigint): Promise<bigint[]>
   readLaunchStates(keys: LaunchKey[], block: bigint): Promise<LaunchState[]>
   readTotalSupplies(tokens: Address[], block: bigint): Promise<bigint[]>
+  /**
+   * The NFTX Listings contract's record, price and type of each item at a block, in the order
+   * given; null for an item whose `listings` call reverts. Two multicalls.
+   */
+  readNftxListings(
+    items: { collection: Address; tokenId: bigint }[],
+    block: bigint,
+  ): Promise<(NftxListingRead | null)[]>
+  /** NFTs in each collection's NFTX pool at a block; null when a read reverts. */
+  readNftxPoolCounts(collections: Address[], block: bigint): Promise<(number | null)[]>
+  /** `owner()` of each contract at a block; null when it reverts. */
+  readOwners(contracts: Address[], block: bigint): Promise<(Address | null)[]>
+  /** An auction's up-to-date state at a block; null when `checkpoint()` reverts. */
+  readAuctionCheckpoint(auction: Address, block: bigint): Promise<AuctionCheckpoint | null>
   /** Curve parameters, token supply and metadata URI of ink.fun launches at a block, in the order given. */
   readInkfunLaunches(
     launches: { token: Address; curve: Address }[],
@@ -104,7 +129,7 @@ export type BlockReader = {
   getBlock(args: { blockNumber: bigint; includeTransactions?: boolean }): Promise<{
     hash: Hash | null
     timestamp: bigint
-    transactions?: ({ hash: Hash; from: Address } | Hash)[]
+    transactions?: ({ hash: Hash; from: Address; to?: Address | null } | Hash)[]
   }>
 }
 
@@ -152,7 +177,7 @@ async function retryOnTransportError<T>(
 }
 
 export function viemChain(
-  client: StateReader & NftReader & CodeReader & BlockReader,
+  client: StateReader & NftReader & NftxReader & CodeReader & BlockReader,
   router: LogRouter,
   opts: {
     logger?: Logger
@@ -181,10 +206,19 @@ export function viemChain(
         )
         if (!b.hash) return null
         const senders = new Map<Hash, Address>()
+        const targets = new Map<Hash, Address | null>()
         for (const tx of b.transactions ?? [])
-          if (typeof tx !== "string")
-            senders.set(tx.hash.toLowerCase() as Hash, tx.from.toLowerCase() as Address)
-        return { hash: b.hash.toLowerCase() as Hash, timestamp: Number(b.timestamp), senders }
+          if (typeof tx !== "string") {
+            const hash = tx.hash.toLowerCase() as Hash
+            senders.set(hash, tx.from.toLowerCase() as Address)
+            targets.set(hash, tx.to ? (tx.to.toLowerCase() as Address) : null)
+          }
+        return {
+          hash: b.hash.toLowerCase() as Hash,
+          timestamp: Number(b.timestamp),
+          senders,
+          targets,
+        }
       } catch (err) {
         if (err instanceof BlockNotFoundError) return null
         throw err
@@ -197,6 +231,14 @@ export function viemChain(
       retry("readLaunchStates", () => readLaunchStates(client, keys, block)),
     readTotalSupplies: (tokens, block) =>
       retry("readTotalSupplies", () => readTotalSupplies(client, tokens, block)),
+    readNftxListings: (items, block) =>
+      retry("readNftxListings", () => readNftxListings(client, items, block)),
+    readNftxPoolCounts: (collections, block) =>
+      retry("readNftxPoolCounts", () => readNftxPoolCounts(client, collections, block)),
+    readOwners: (contracts, block) =>
+      retry("readOwners", () => readOwners(client, contracts, block)),
+    readAuctionCheckpoint: (auction, block) =>
+      retry("readAuctionCheckpoint", () => readAuctionCheckpoint(client, auction, block)),
     readInkfunLaunches: (launches, block) =>
       retry("readInkfunLaunches", () => readInkfunLaunches(client, launches, block)),
     readTsunamiCurves: (curves, block) =>
