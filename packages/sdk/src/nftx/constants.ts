@@ -79,8 +79,8 @@ export const CCA_EVENTS = {
 export const NFTX_TOPICS = {
   CollectionCreated: "0xe721ab2f9f866ad70d72eddc396ac2c039b896b857829e61033b7a3e93ff8445",
   CollectionInitialized: "0x1fe1afb21e15dc445b6c2b68a3f112c0f08134dabb337fee679509181d6172bc",
-  TokenDeposit: "0x2a0292910cfeebf41d27d707aee2c6fcae2c9b2a538927a3204e5782346c021d",
-  TokenWithdrawal: "0x6bfad0e48c8e154d9407db2826f60a46a17cbe110183eddfb0b7a2551d19dd24",
+  TokenDeposit: "0x2a0292910cfeebf41d27d707aee2c6fcae2c9b2a538927a3204e5782346c021d", // gitleaks:allow
+  TokenWithdrawal: "0x6bfad0e48c8e154d9407db2826f60a46a17cbe110183eddfb0b7a2551d19dd24", // gitleaks:allow
   CollectionSunset: "0x7576233f6fb38f5fc2017b6e90e002abdc9b7887168493ff3dedb6791276392f",
   NFTBoughtWithETH: "0xf4eb2c5d56f1fb65a491d1883b173c9a576b48d5d2bda99ee22f68ce1268b589",
   FloorRedeemedWithETH: "0x234d2a31986967eb33e16ead698a5baded816f6249e58b32ab26e9b69ab0250e",
@@ -98,11 +98,11 @@ export const NFTX_TOPICS = {
 /** topic0 of each auction event. `AuctionCreated` comes from the factory, the rest from each auction. */
 export const CCA_TOPICS = {
   AuctionCreated: "0x7ede475fad18ccf0039f2b956c4d43a8b4ed0853de4daaa8ae25299f331ae3b9",
-  TokensReceived: "0x468160b6769cb8abc9324bc14fe70ee0ce87f1e92087186c6ae22a964a04c572",
+  TokensReceived: "0x468160b6769cb8abc9324bc14fe70ee0ce87f1e92087186c6ae22a964a04c572", // gitleaks:allow
   BidSubmitted: "0x650baad5cd8ca09b8f580be220fa04ce2ba905a041f764b6a3fe2c848eb70540",
   ClearingPriceUpdated: "0x30adbe996d7a69a21fdebcc1f8a46270bf6c22d505a7d872c1ab4767aa707609",
   BidExited: "0x054fe6469466a0b4d2a6ae4b100e5f9c494c958f04b4000f44d470088dd97930",
-  TokensClaimed: "0x880f2ef2613b092f1a0a819f294155c98667eb294b7e6bf7a3810278142c1a1c",
+  TokensClaimed: "0x880f2ef2613b092f1a0a819f294155c98667eb294b7e6bf7a3810278142c1a1c", // gitleaks:allow
 } as const satisfies Record<keyof typeof CCA_EVENTS, Hex>
 
 /** The topic0s emitted by an auction contract, not the factory. */
