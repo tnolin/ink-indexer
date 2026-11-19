@@ -157,15 +157,16 @@ export function createListings(deps: ListingsDeps) {
   }
 
   /**
-   * The collection's newest floor row, read again first when it is missing or older than
-   * `FLOOR_MAX_AGE_MS`. A read that fails, or that the budget or the per-collection limit refuses,
-   * leaves the stored row, so the event carries that floor with its own time.
+   * The collection's floor, with the OpenSea floor read again first when the newest OpenSea row is
+   * missing or older than `FLOOR_MAX_AGE_MS`. NFTX rows do not count: they say nothing about how
+   * old the OpenSea floor is. A read that fails, or that the budget or the per-collection limit
+   * refuses, leaves the stored row, so the event carries that floor with its own time.
    */
-  async function currentFloor(contract: string) {
-    const first = await stats.latestFloor(contract)
-    if (first && now() - first.at.getTime() <= FLOOR_MAX_AGE_MS) return first
+  async function currentFloor(contract: string, eventAt: Date) {
+    const first = await stats.latestFloor(contract, eventAt)
+    if (first?.osAt && now() - first.osAt.getTime() <= FLOOR_MAX_AGE_MS) return first
     await refresh(contract)
-    return stats.latestFloor(contract)
+    return stats.latestFloor(contract, eventAt)
   }
 
   async function onListed(e: StreamEvent): Promise<void> {
@@ -191,7 +192,7 @@ export function createListings(deps: ListingsDeps) {
     if (state && state.expires_at.getTime() > at && l.unitPriceWei >= BigInt(state.last_price_wei))
       return
 
-    const floor = await currentFloor(contract)
+    const floor = await currentFloor(contract, new Date(e.receivedAt))
     const floorWei = floor?.floorWei ?? null
     const near =
       floorWei !== null && l.unitPriceWei * NEAR_FLOOR_RATIO.den <= floorWei * NEAR_FLOOR_RATIO.num

@@ -290,7 +290,10 @@ describe("an opening at the extremes of the price range", () => {
       // Zero has no price. The others give whatever the formula gives, never a throw.
       expect(launch!.payload.nftxFloorWei).toBe(nftxSpotWei(sqrt, true)?.toString() ?? null)
       if (sqrt === 0n) expect(launch!.payload.nftxFloorWei).toBeNull()
-      expect(await events("nft.stats")).toHaveLength(0)
+      // The opening's own price is not announced; the pool's first PoolStateUpdated is.
+      const stats = await events("nft.stats")
+      expect(stats).toHaveLength(1)
+      expect(stats[0]!.payload.nftxFloorWei).toBe("899999999999999")
       expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(2)
     },
   )
@@ -753,5 +756,288 @@ describe("sunset and rollback", () => {
     expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(0)
     expect(await sql`select 1 from indexer.nft_launches`).toHaveLength(0)
     expect((await nftRow()).launchpad).toBe("nftx")
+  })
+})
+
+// Stats from pool moves.
+
+const ARB_BLOCK = 60_998_579n
+const ARB_PRICE = 308_559_859_825_663n
+
+/** The sqrt price that gives `price` wei per NFT with flETH as currency0. */
+function sqrtFor(price: bigint): bigint {
+  const target = ((10n ** 18n) << 192n) / price
+  let x = 1n << (BigInt(target.toString(2).length) / 2n + 1n)
+  for (;;) {
+    const y = (x + target / x) >> 1n
+    if (y >= x) return x
+    x = y
+  }
+}
+
+/** Lil Dudes' opening read live, then its stored last announced price set, then the arbitrage block read live. */
+async function arbitrageAfter(
+  t: ReturnType<typeof setup>,
+  previous: bigint | null,
+  extra: (t: ReturnType<typeof setup>) => void = () => {},
+) {
+  await t.live()
+  if (previous !== null)
+    await sql`
+      update indexer.nftx_collections set stats_price_wei = ${previous.toString()},
+        stats_block = ${INIT_BLOCK.toString()}
+      where collection = ${LD}`
+  addFixture(t.chain, loadNftxFixture("arbitrage-lildudes"))
+  extra(t)
+  t.chain.head = ARB_BLOCK + 100n
+  await t.idx.trigger()
+}
+const statsEvents = () => events("nft.stats")
+const statRows = () =>
+  sql<Record<string, unknown>[]>`
+    select contract, at, floor_wei::text, floor_market, os_floor_wei::text, nftx_floor_wei::text,
+      pool_count, owners, volume_24h_wei::text, sales_24h, block::text
+    from indexer.nft_stats where block is not null order by block, at`
+
+describe("stats from pool moves", () => {
+  const ARB_STATS = (e: { block: string | bigint }) => String(e.block) === ARB_BLOCK.toString()
+
+  it.each([
+    ["a 0.9% move emits no stats", (ARB_PRICE * 1000n) / 991n, 0],
+    ["a 3.4% move does", (ARB_PRICE * 1000n) / 966n, 1],
+  ])("%s (arbitrage fixture with a stored previous price)", async (_name, previous, emitted) => {
+    const t = setup(["lildudes-created", "lildudes-init"])
+    t.chain.nftxPoolCounts.set(LD, 61)
+    await arbitrageAfter(t, previous)
+    expect((await statsEvents()).filter(ARB_STATS)).toHaveLength(emitted)
+    expect((await statRows()).filter((r) => r.block === ARB_BLOCK.toString())).toHaveLength(emitted)
+  })
+
+  it("announces a move with the combined floor, the pool size read at its block and its own id", async () => {
+    const t = setup(["lildudes-created", "lildudes-init"], { fetch: slugFetch("lil-dudes") })
+    t.chain.nftxPoolCounts.set(LD, (b) => (b >= ARB_BLOCK ? 61 : 60))
+    await arbitrageAfter(t, null)
+    const [first, second] = await statsEvents()
+    expect(String(first!.block)).toBe(INIT_BLOCK.toString())
+    expect(second).toMatchObject({
+      tx_hash: `nftx:stats:${LD}:${ARB_BLOCK}:11`,
+      block: ARB_BLOCK,
+      payload: {
+        type: "nft.stats",
+        source: "chain",
+        floorWei: ARB_PRICE.toString(),
+        nftxFloorWei: ARB_PRICE.toString(),
+        floorMarket: "nftx",
+        poolCount: 61,
+        nftxSlug: "lil-dudes",
+        // Combined history began with the opening's row, more than a day before.
+        floor24hAgoWei: "899999999999999",
+        maxSupply: null,
+      },
+    })
+    expect(t.chain.poolCountReads.map((r) => r.block)).toEqual([INIT_BLOCK, ARB_BLOCK])
+    expect(await collectionRow()).toMatchObject({
+      stats_price_wei: String(ARB_PRICE),
+      stats_block: ARB_BLOCK,
+      pool_count: 61,
+      pool_count_block: ARB_BLOCK,
+    })
+  })
+
+  it("two qualifying moves in one block keep both events and one row per second", async () => {
+    const t = setup(["lildudes-created", "lildudes-init"])
+    t.chain.nftxPoolCounts.set(LD, 60)
+    await arbitrageAfter(t, ARB_PRICE * 2n, (t) => {
+      const real = t.chain.logs.find(
+        (l) => l.blockNumber === ARB_BLOCK && l.topics[0] === NFTX_TOPICS.PoolStateUpdated,
+      )!
+      t.chain.add({ ...real, logIndex: 14, data: setWord(real.data, 0, sqrtFor(ARB_PRICE * 3n)) })
+    })
+    const atBlock = (await statsEvents()).filter(ARB_STATS)
+    expect(atBlock.map((e) => e.tx_hash.split(":").at(-1))).toEqual(["11", "14"])
+    const rows = (await statRows()).filter((r) => r.block === ARB_BLOCK.toString())
+    expect(rows).toHaveLength(1)
+    // The later move is the row.
+    expect(BigInt(rows[0]!.nftx_floor_wei as string)).toBe(
+      BigInt(atBlock[1]!.payload.nftxFloorWei as string),
+    )
+  })
+
+  it("with no OpenSea row the nftx stats event has floorMarket nftx and null owners, volume and sales", async () => {
+    const t = setup(["lildudes-created", "lildudes-init"])
+    await t.live()
+    const [event] = await statsEvents()
+    expect(event!.payload).toMatchObject({
+      floorMarket: "nftx",
+      owners: null,
+      volume24hWei: null,
+      sales24h: null,
+      totalSupply: null,
+      listedCount: null,
+      listedCapped: false,
+      nftxSlug: null,
+    })
+  })
+
+  it("after the stats table is pruned, a 0.5% move emits no stats", async () => {
+    const t = setup(["lildudes-created", "lildudes-init"])
+    await t.live()
+    await sql`delete from indexer.nft_stats`
+    await sql`
+      update indexer.nftx_collections set stats_price_wei = ${((ARB_PRICE * 1000n) / 995n).toString()},
+        stats_block = ${INIT_BLOCK.toString()}`
+    addFixture(t.chain, loadNftxFixture("arbitrage-lildudes"))
+    t.chain.head = ARB_BLOCK + 100n
+    await t.idx.trigger()
+    expect((await statsEvents()).filter(ARB_STATS)).toHaveLength(0)
+  })
+
+  it("a backfilled stats row copies the OpenSea row at or before its own time, not a newer one", async () => {
+    const arbitrage = loadNftxFixture("arbitrage-lildudes")
+    const osRow = (offsetS: number, owners: number) => ({
+      contract: LD,
+      at: new Date((arbitrage.timestamp + offsetS) * 1000),
+      floor_wei: "500000000000000",
+      owners,
+      volume_24h_wei: "7",
+      sales_24h: owners,
+      total_supply: 827,
+    })
+    await sql`insert into indexer.nft_stats ${sql([osRow(-60, 10), osRow(60, 99)])}`
+    const t = setup(["lildudes-created", "lildudes-init", "arbitrage-lildudes"])
+    t.chain.nftxPoolCounts.set(LD, 61)
+    await t.backfill()
+    const row = (await statRows()).find((r) => r.block === ARB_BLOCK.toString())!
+    expect(row).toMatchObject({ owners: 10, sales_24h: 10, os_floor_wei: "500000000000000" })
+    // The OpenSea floor is the higher one, so the pool's price is the floor.
+    expect(row.floor_market).toBe("nftx")
+  })
+
+  it("a backfill of earlier blocks leaves the last announced price of later ones", async () => {
+    const t = setup(["lildudes-created", "lildudes-init", "arbitrage-lildudes"])
+    t.chain.nftxPoolCounts.set(LD, (b) => (b >= ARB_BLOCK ? 61 : 60))
+    await t.live()
+    await t.idx.backfill(t.firstBlock(), INIT_BLOCK + 10n)
+    expect(await collectionRow()).toMatchObject({
+      stats_block: ARB_BLOCK,
+      stats_price_wei: String(ARB_PRICE),
+      pool_count: 61,
+      pool_count_block: ARB_BLOCK,
+    })
+  })
+
+  it("a move in the same second as an OpenSea row leaves that row alone", async () => {
+    const arbitrage = loadNftxFixture("arbitrage-lildudes")
+    await sql`insert into indexer.nft_stats ${sql({
+      contract: LD,
+      at: new Date(arbitrage.timestamp * 1000),
+      floor_wei: "500000000000000",
+      owners: 5,
+      volume_24h_wei: "7",
+      sales_24h: 1,
+      total_supply: 827,
+    })}`
+    const t = setup(["lildudes-created", "lildudes-init", "arbitrage-lildudes"])
+    t.chain.nftxPoolCounts.set(LD, 61)
+    await t.backfill()
+    const [row] = await sql<{ owners: number; block: bigint | null; floor_wei: string }[]>`
+      select owners, block, floor_wei::text from indexer.nft_stats
+      where contract = ${LD} and at = ${new Date(arbitrage.timestamp * 1000)}`
+    expect(row).toEqual({ owners: 5, block: null, floor_wei: "500000000000000" })
+  })
+
+  it("after a backfill (live false) combined history has not begun; the first live row begins it", async () => {
+    const t = setup(["lildudes-created", "lildudes-init", "arbitrage-lildudes"])
+    t.chain.nftxPoolCounts.set(LD, 60)
+    await t.backfill()
+    expect((await statsEvents()).length).toBeGreaterThan(0)
+    expect((await collectionRow()).combined_since).toBeNull()
+    t.chain.head += 20n
+    const block = t.chain.head - 5n
+    const base = t.chain.logs.find((l) => l.topics[0] === NFTX_TOPICS.PoolStateUpdated)!
+    const tx = pad("0x7002", { size: 32 })
+    t.chain.add({
+      ...base,
+      blockNumber: block,
+      logIndex: 1,
+      transactionHash: tx,
+      data: setWord(base.data, 0, sqrtFor(ARB_PRICE * 2n)),
+    })
+    t.chain.senders.set(block, {
+      hash: t.chain.hashOf(block),
+      senders: new Map([[tx, CREATOR]]),
+      targets: new Map([[tx, NFTX_HOOK]]),
+    })
+    await t.live()
+    expect((await collectionRow()).combined_since).not.toBeNull()
+    expect((await statsEvents()).at(-1)!.payload.floor24hAgoWei).toBeNull()
+  })
+
+  it("the same span twice writes one row and one event per move", async () => {
+    const t = setup(["lildudes-created", "lildudes-init", "arbitrage-lildudes"])
+    t.chain.nftxPoolCounts.set(LD, (b) => (b >= ARB_BLOCK ? 61 : 60))
+    await t.live()
+    const rows = async () => ({
+      stats: await statRows(),
+      events: await sql`select type, tx_hash, payload from indexer.events order by id`,
+      collection: await collectionRow(),
+    })
+    const before = await rows()
+    await t.idx.backfill(t.firstBlock(), t.chain.head)
+    expect(await rows()).toEqual(before)
+    expect(before.stats).toHaveLength(2)
+  })
+
+  it("a transport error from readNftxPoolCounts fails the span and writes no price or stats row", async () => {
+    const t = setup(["lildudes-created", "lildudes-init"])
+    t.chain.poolCountError = new Error("rpc down")
+    await expect(t.live()).rejects.toThrow("rpc down")
+    expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(0)
+    expect(await sql`select 1 from indexer.nft_stats`).toHaveLength(0)
+    expect(await sql`select 1 from indexer.events where type = 'nft.stats'`).toHaveLength(0)
+    // The loop retries the span once the read works.
+    t.chain.poolCountError = undefined
+    await t.idx.trigger()
+    expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(2)
+    expect((await statsEvents()).length).toBe(1)
+  })
+
+  it("a move whose pool size read reverts is announced with a null pool size", async () => {
+    const t = setup(["lildudes-created", "lildudes-init"])
+    t.chain.nftxPoolCounts.set(LD, null)
+    await t.live()
+    expect((await statsEvents())[0]!.payload.poolCount).toBeNull()
+  })
+})
+
+describe("rolling back stats", () => {
+  it("removes the moves above the fork, restores the pool size and the last announced price", async () => {
+    const t = setup(["lildudes-created", "lildudes-init", "arbitrage-lildudes"], { both: true })
+    t.chain.nftxPoolCounts.set(LD, (b) => (b >= ARB_BLOCK ? 61 : 60))
+    await t.live()
+    expect(await collectionRow()).toMatchObject({ stats_block: ARB_BLOCK, pool_count: 61 })
+    t.chain.reorg(ARB_BLOCK)
+    await t.idx.trigger()
+    expect((await statRows()).map((r) => r.block)).toEqual([INIT_BLOCK.toString()])
+    expect(await collectionRow()).toMatchObject({
+      stats_block: INIT_BLOCK,
+      stats_price_wei: "899999999999999",
+      pool_count: 60,
+      // The fork is the last block the loop has on record: the opening's.
+      pool_count_block: INIT_BLOCK,
+    })
+    expect(
+      await sql`select 1 from indexer.events where type = 'nft.stats' and block >= ${ARB_BLOCK.toString()}`,
+    ).toHaveLength(0)
+  })
+
+  it("rolling back to before the first announcement clears the last announced price", async () => {
+    const t = setup(["lildudes-created", "lildudes-init"], { both: true })
+    t.chain.nftxPoolCounts.set(LD, 60)
+    await t.live()
+    t.chain.reorg(INIT_BLOCK)
+    await t.idx.trigger()
+    expect(await sql`select 1 from indexer.nft_stats where block is not null`).toHaveLength(0)
+    expect(await collectionRow()).toMatchObject({ stats_price_wei: null, stats_block: null })
   })
 })

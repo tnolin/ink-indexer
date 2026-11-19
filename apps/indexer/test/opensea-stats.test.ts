@@ -73,10 +73,10 @@ const listings = (n: number, next: string | null): FakeResponse => ({
   body: { listings: Array.from({ length: n }, (_, i) => ({ order_hash: `0x${i}` })), next },
 })
 
-function setup(routes: Parameters<typeof fakeFetch>[0]) {
+function setup(routes: Parameters<typeof fakeFetch>[0], opts: { nftx?: boolean } = {}) {
   const fetch = fakeFetch(routes)
   const rest = createOpenSeaRest({ key: KEY, budget, fetch, log, report, now })
-  const stats = createStats({ sql, store, rest, log, now })
+  const stats = createStats({ sql, store, rest, log, now, nftx: opts.nftx })
   return { fetch, rest, stats }
 }
 const callsTo = (fetch: { calls: FakeRequest[] }, path: string) =>
@@ -726,7 +726,7 @@ describe("requestStats", () => {
 describe("latestFloor", () => {
   it("is the newest row's floor and time, null without rows", async () => {
     const s = setup({})
-    expect(await s.stats.latestFloor(A)).toBeNull()
+    expect(await s.stats.latestFloor(A, new Date(T0))).toBeNull()
     const row = (ageMs: number, floor: string | null) => ({
       contract: A,
       at: new Date(T0 - ageMs),
@@ -737,9 +737,19 @@ describe("latestFloor", () => {
       total_supply: null,
     })
     await sql`insert into indexer.nft_stats ${sql([row(3 * HOUR, "5"), row(1 * HOUR, "7")])}`
-    expect(await s.stats.latestFloor(A)).toEqual({ floorWei: 7n, at: new Date(T0 - HOUR) })
+    expect(await s.stats.latestFloor(A, new Date(T0))).toEqual({
+      floorWei: 7n,
+      at: new Date(T0 - HOUR),
+      market: "opensea",
+      osAt: new Date(T0 - HOUR),
+    })
     await sql`insert into indexer.nft_stats ${sql(row(0, null))}`
-    expect(await s.stats.latestFloor(A)).toEqual({ floorWei: null, at: new Date(T0) })
+    expect(await s.stats.latestFloor(A, new Date(T0))).toEqual({
+      floorWei: null,
+      at: new Date(T0),
+      market: null,
+      osAt: new Date(T0),
+    })
   })
 
   it("latestFloors reads many contracts at once", async () => {
@@ -778,3 +788,175 @@ describe("latestFloor", () => {
     expect(floors.has(addr(0xee))).toBe(false)
   })
 })
+
+describe("a collection trading on NFTX", () => {
+  /** Lil Dudes' pool price on 2026-11-12 and its pool size. */
+  const SPOT = 308_559_859_825_663n
+  async function addPool(
+    contract: string,
+    opts: { poolCount?: number; combinedSince?: Date | null } = {},
+  ) {
+    await sql`insert into indexer.nftx_collections ${sql({
+      collection: contract,
+      floor_token: `0x${contract.slice(-4).padStart(40, "f")}`,
+      creator: addr(1),
+      created_block: "100",
+      initialized_block: "110",
+      fleth_is_currency0: true,
+      pool_count: opts.poolCount ?? 60,
+      pool_count_block: "250",
+      combined_since: opts.combinedSince ?? null,
+    })}`
+    await sql`insert into indexer.nftx_prices ${sql({
+      collection: contract,
+      block: "200",
+      log_index: 0,
+      sqrt_price_x96: "1",
+      price_wei: SPOT.toString(),
+      at: new Date(T0 - 3 * DAY),
+    })}`
+  }
+  const poll = (s: ReturnType<typeof setup>, contract: string) =>
+    s.stats.requestStats(contract, 1000)
+  const oldRow = (contract: string, ageMs: number, floor: bigint, market?: "nftx" | "opensea") => ({
+    contract,
+    at: new Date(T0 - ageMs),
+    floor_wei: floor.toString(),
+    floor_market: market ?? null,
+    os_floor_wei: market ? ((4n * ETH) / 10n).toString() : null,
+    owners: 1,
+    volume_24h_wei: "0",
+    sales_24h: 0,
+    total_supply: null,
+  })
+
+  it("an OpenSea poll of Lil Dudes carries floorMarket, nftxFloorWei, poolCount 60 and nftxSlug", async () => {
+    const s = setup({ [statsPath(A)]: osStats({ floor: 0.4 }) }, { nftx: true })
+    await addCollection(A, { nftx_slug: "lil-dudes" })
+    await addPool(A)
+    expect(await poll(s, A)).toBe(true)
+    expect((await statsEvents())[0]).toMatchObject({
+      floorWei: SPOT.toString(),
+      floorMarket: "nftx",
+      nftxFloorWei: SPOT.toString(),
+      poolCount: 60,
+      nftxSlug: "lil-dudes",
+    })
+    expect((await statRows(A))[0]).toMatchObject({
+      floor_wei: SPOT.toString(),
+      floor_market: "nftx",
+      os_floor_wei: ((4n * ETH) / 10n).toString(),
+      nftx_floor_wei: SPOT.toString(),
+      pool_count: 60,
+      block: null,
+    })
+  })
+
+  it("a collection not on NFTX is written as OpenSea's, with no NFTX fields in its event", async () => {
+    const s = setup({ [statsPath(B)]: osStats({ floor: 0.4 }) }, { nftx: true })
+    await addCollection(B)
+    await poll(s, B)
+    expect((await statRows(B))[0]).toMatchObject({
+      floor_wei: ((4n * ETH) / 10n).toString(),
+      floor_market: "opensea",
+      os_floor_wei: ((4n * ETH) / 10n).toString(),
+      nftx_floor_wei: null,
+    })
+    const [event] = await statsEvents()
+    expect(event).not.toHaveProperty("floorMarket")
+    expect(event).not.toHaveProperty("poolCount")
+  })
+
+  it("with nftx off the OpenSea job writes floor_market null and the raw floor", async () => {
+    const s = setup({ [statsPath(A)]: osStats({ floor: 0.4 }) })
+    await addCollection(A, { nftx_slug: "lil-dudes" })
+    await addPool(A)
+    await poll(s, A)
+    expect((await statRows(A))[0]).toMatchObject({
+      floor_wei: ((4n * ETH) / 10n).toString(),
+      floor_market: null,
+      os_floor_wei: null,
+      nftx_floor_wei: null,
+    })
+    expect((await statsEvents())[0]).not.toHaveProperty("floorMarket")
+    expect((await rowOfPool(A)).combined_since).toBeNull()
+  })
+
+  it("the OpenSea floor stays the floor when it is the lower one", async () => {
+    const s = setup({ [statsPath(A)]: osStats({ floor: 0.0001 }) }, { nftx: true })
+    await addCollection(A)
+    await addPool(A)
+    await poll(s, A)
+    expect((await statsEvents())[0]).toMatchObject({
+      floorWei: (ETH / 10_000n).toString(),
+      floorMarket: "opensea",
+      nftxFloorWei: SPOT.toString(),
+    })
+  })
+
+  it("after the stats table is pruned, an OpenSea poll still carries poolCount 60", async () => {
+    const s = setup({ [statsPath(A)]: osStats({ floor: 0.4 }) }, { nftx: true })
+    await addCollection(A)
+    await addPool(A)
+    await poll(s, A)
+    await sql`delete from indexer.nft_stats`
+    clock += 31 * MIN
+    await poll(s, A)
+    expect((await statsEvents()).at(-1)).toMatchObject({ poolCount: 60 })
+  })
+
+  it("on the first day after the switch-over an NFTX collection's floor24hAgoWei is null, and a collection not on NFTX keeps its old row", async () => {
+    await sql`insert into indexer.nft_stats ${sql([
+      oldRow(A, 25 * HOUR, 5n * ETH),
+      oldRow(B, 25 * HOUR, 5n * ETH),
+    ])}`
+    await addCollection(A)
+    await addCollection(B)
+    await addPool(A)
+    const s = setup(
+      { [statsPath(A)]: osStats({ floor: 0.4 }), [statsPath(B)]: osStats({ floor: 0.4 }) },
+      { nftx: true },
+    )
+    await poll(s, A)
+    await poll(s, B)
+    const events = await statsEvents()
+    expect(events.find((e) => e.floorMarket === "nftx")?.floor24hAgoWei).toBeNull()
+    expect(events.find((e) => e.floorMarket === undefined)?.floor24hAgoWei).toBe(
+      (5n * ETH).toString(),
+    )
+    expect((await rowOfPool(A)).combined_since).toEqual(new Date(T0))
+  })
+
+  it("a FLOOR comparison uses a combined 24h-ago floor", async () => {
+    // Combined history began 26 hours ago; the row nearest 24 hours back is a combined one.
+    await addCollection(A)
+    await addPool(A, { combinedSince: new Date(T0 - 26 * HOUR) })
+    await sql`insert into indexer.nft_stats ${sql([
+      oldRow(A, 27 * HOUR, 5n * ETH),
+      oldRow(A, 25 * HOUR, SPOT, "nftx"),
+    ])}`
+    const s = setup({ [statsPath(A)]: osStats({ floor: 0.4 }) }, { nftx: true })
+    await poll(s, A)
+    expect((await statsEvents())[0]?.floor24hAgoWei).toBe(SPOT.toString())
+  })
+
+  it("a row from before combined history is not a 24h-ago floor", async () => {
+    await addCollection(A)
+    await addPool(A, { combinedSince: new Date(T0 - 20 * HOUR) })
+    await sql`insert into indexer.nft_stats ${sql(oldRow(A, 25 * HOUR, 5n * ETH))}`
+    const s = setup({ [statsPath(A)]: osStats({ floor: 0.4 }) }, { nftx: true })
+    await poll(s, A)
+    expect((await statsEvents())[0]?.floor24hAgoWei).toBeNull()
+  })
+
+  it("combined history is not reset by later polls", async () => {
+    await addCollection(A)
+    await addPool(A, { combinedSince: new Date(T0 - 26 * HOUR) })
+    const s = setup({ [statsPath(A)]: osStats({ floor: 0.4 }) }, { nftx: true })
+    await poll(s, A)
+    expect((await rowOfPool(A)).combined_since).toEqual(new Date(T0 - 26 * HOUR))
+  })
+})
+
+const rowOfPool = async (contract: string): Promise<Row> =>
+  (await sql`select * from indexer.nftx_collections where collection = ${contract}`)[0] as Row

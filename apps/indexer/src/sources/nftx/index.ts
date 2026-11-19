@@ -27,6 +27,7 @@ import { droppedLogs } from "../dropped"
 import { blockSendersFor } from "../senders"
 import { pick, type Source, type SourceBatch } from "../source"
 import { fetchNftxSlug } from "./slug"
+import { type PricePoint, planStats, type StatsBasis, type StatsPlan } from "./stats"
 import { rollbackRows, writeRows } from "./write"
 
 /** Slug lookups per batch, and the wait before a collection is asked about again. */
@@ -37,7 +38,7 @@ const SYMBOL_MAX = 32
 
 export type NftxDeps = {
   sql: Sql
-  chain: Pick<Chain, "getBlockSenders">
+  chain: Pick<Chain, "getBlockSenders" | "readNftxPoolCounts">
   logger: Logger
   /** NFTX's API for the slug; tests pass a stub. */
   fetch?: typeof fetch
@@ -85,7 +86,14 @@ export type NftxBatch = SourceBatch & {
   prices: PriceRow[]
   sunsets: { collection: Address; block: bigint }[]
   slugs: { collection: Address; slug: string }[]
+  /** Pool moves announced as stats (see `planStats`). */
+  stats: StatsPlan["rows"]
+  statsLast: StatsPlan["last"]
+  combinedSince: StatsPlan["combinedSince"]
 }
+
+/** The pool sizes at a fork, read before the rollback transaction opens. */
+export type NftxRollback = { poolCounts: { collection: Address; count: number | null }[] }
 
 type Known = {
   collection: Address
@@ -98,6 +106,10 @@ type Known = {
   flethIsCurrency0: boolean | null
   sunsetBlock: bigint | null
   slug: string | null
+  statsPriceWei: bigint | null
+  statsBlock: bigint | null
+  combinedSince: Date | null
+  maxSupply: string | null
 }
 
 /**
@@ -149,7 +161,7 @@ const text = (s: string, max: number) => cleanText(cleanText(s).slice(0, max)) |
  * pool's price. A collection is the ERC-721 contract; its floor token is the ERC-20 the Locker
  * mints for it. Each kind of log is accepted only from the contract that emits it.
  */
-export function nftxSource(deps: NftxDeps): Source<NftxBatch, null> {
+export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
   const { sql, chain, logger } = deps
   const now = deps.now ?? Date.now
   const launchpad = deps.launchpad === undefined ? NFTX_LAUNCHPAD : deps.launchpad
@@ -178,10 +190,15 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, null> {
         fleth_is_currency0: boolean | null
         sunset_block: string | null
         nftx_slug: string | null
+        stats_price_wei: string | null
+        stats_block: string | null
+        combined_since: Date | null
+        max_supply: string | null
       }[]
     >`
       select c.collection, c.floor_token, c.creator, c.name, c.symbol, c.created_block::text,
-        c.initialized_block::text, c.fleth_is_currency0, c.sunset_block::text, n.nftx_slug
+        c.initialized_block::text, c.fleth_is_currency0, c.sunset_block::text, n.nftx_slug,
+        c.stats_price_wei::text, c.stats_block::text, c.combined_since, n.max_supply::text
       from indexer.nftx_collections c
       left join indexer.nft_collections n on n.contract = c.collection
       where c.collection = any(${sql.array(collections)}::text[])`
@@ -199,6 +216,10 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, null> {
           flethIsCurrency0: r.fleth_is_currency0,
           sunsetBlock: r.sunset_block === null ? null : BigInt(r.sunset_block),
           slug: r.nftx_slug,
+          statsPriceWei: r.stats_price_wei === null ? null : BigInt(r.stats_price_wei),
+          statsBlock: r.stats_block === null ? null : BigInt(r.stats_block),
+          combinedSince: r.combined_since,
+          maxSupply: r.max_supply,
         },
       ]),
     )
@@ -214,6 +235,9 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, null> {
       prices: [],
       sunsets: [],
       slugs: [],
+      stats: [],
+      statsLast: [],
+      combinedSince: [],
       events: [],
       blocks: [],
     }
@@ -278,6 +302,10 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, null> {
             flethIsCurrency0: null,
             sunsetBlock: null,
             slug: null,
+            statsPriceWei: null,
+            statsBlock: null,
+            combinedSince: null,
+            maxSupply: null,
           })
           break
         }
@@ -364,6 +392,31 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, null> {
       state.get(collection)!.slug = slug
     }
 
+    const plan = await planStats(
+      { sql, chain },
+      {
+        prices: batch.prices satisfies PricePoint[],
+        basis: new Map(
+          [...state].map(([a, c]): [Address, StatsBasis] => [
+            a,
+            {
+              statsPriceWei: c.statsPriceWei,
+              statsBlock: c.statsBlock,
+              combinedSince: c.combinedSince,
+              slug: c.slug,
+              maxSupply: c.maxSupply,
+            },
+          ]),
+        ),
+        blockHash: (n) => items.find((i) => i.log.blockNumber === n)!.log.blockHash,
+        live: ctx.live,
+      },
+    )
+    batch.stats = plan.rows
+    batch.statsLast = plan.last
+    batch.combinedSince = plan.combinedSince
+    batch.events.push(...plan.events)
+
     for (const { log, d } of opens) {
       const c = state.get(d.collection)!
       if (c.flethIsCurrency0 === null) continue
@@ -383,8 +436,21 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, null> {
     filters: (only) => [pick(only, "nftx", ADDRESSES)],
     process: (logs, ctx) => process(logs, ctx),
     write: (tx, batch) => writeRows(tx, batch),
-    prepareRollback: async () => null,
-    rollback: (tx, fork) => rollbackRows(tx, fork),
+    prepareRollback: async (fork) => {
+      const rows = await sql<{ collection: Address }[]>`
+        select collection from indexer.nftx_collections where pool_count_block > ${fork.toString()}`
+      const counts =
+        rows.length === 0
+          ? []
+          : await chain.readNftxPoolCounts(
+              rows.map((r) => r.collection),
+              fork,
+            )
+      return {
+        poolCounts: rows.map((r, i) => ({ collection: r.collection, count: counts[i] ?? null })),
+      }
+    },
+    rollback: (tx, fork, prepared) => rollbackRows(tx, fork, prepared),
     reload: async () => {},
   }
 }

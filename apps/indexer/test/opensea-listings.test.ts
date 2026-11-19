@@ -492,6 +492,55 @@ describe("the floor", () => {
       })
   })
 
+  /** A collection with an open NFTX pool and one price at `price`. */
+  async function addPool(price: bigint) {
+    await sql`insert into indexer.nftx_collections ${sql({
+      collection: PRTSCN,
+      floor_token: "0x00000000000000000000000000000000000000f1",
+      creator: MAKER,
+      created_block: "100",
+      initialized_block: "110",
+      fleth_is_currency0: true,
+    })}`
+    await sql`insert into indexer.nftx_prices ${sql({
+      collection: PRTSCN,
+      block: "200",
+      log_index: 0,
+      sqrt_price_x96: "1",
+      price_wei: price.toString(),
+      at: new Date(T0 - 3 * DAY),
+    })}`
+  }
+
+  it("an NFTX-floored listing carries floorAt equal to the listing time, so it is never stale", async () => {
+    await addPool(FLOOR / 2n)
+    const s = setup()
+    await s.handle(listed({ price: FAR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(0)
+    expect((await listingEvents())[0]).toMatchObject({
+      floorWei: (FLOOR / 2n).toString(),
+      floorAt: Math.floor(T0 / SEC),
+    })
+  })
+
+  it("listings still refresh the OpenSea floor when only nftx rows are new", async () => {
+    await sql`delete from indexer.nft_stats`
+    await addFloor(PRTSCN, FLOOR, T0 - 3 * HOUR)
+    await addPool(FLOOR / 2n)
+    // A row written from a pool move a minute ago: new, but not an OpenSea row.
+    await sql`insert into indexer.nft_stats ${sql({
+      contract: PRTSCN,
+      at: new Date(T0 - MIN),
+      floor_wei: (FLOOR / 2n).toString(),
+      floor_market: "nftx",
+      os_floor_wei: FLOOR.toString(),
+      block: "300",
+    })}`
+    const s = setup({ [statsPath]: osStats(0.2) })
+    await s.handle(listed({ price: FAR }))
+    expect(callsTo(s.fetch, statsPath)).toBe(1)
+  })
+
   it("a floor exactly 10 minutes old is not refreshed; a collection with no stats row is", async () => {
     await sql`delete from indexer.nft_stats`
     await addFloor(PRTSCN, FLOOR, T0 - 10 * MIN)

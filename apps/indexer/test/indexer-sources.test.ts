@@ -93,6 +93,12 @@ describe("readSources", () => {
     })
   })
 
+  it("says whether the NFTX source runs", () => {
+    expect(sources({ INDEXER_SOURCES: undefined }).nftx).toBe(true)
+    expect(sources({ INDEXER_SOURCES: "nftx,opensea" }).nftx).toBe(true)
+    expect(sources({ INDEXER_SOURCES: "opensea,chimera" }).nftx).toBe(false)
+  })
+
   it("lists a shared backfill group once", () => {
     expect(sources({ INDEXER_SOURCES: "inkypump,inkfun" }).groups).toEqual([
       "inkypump",

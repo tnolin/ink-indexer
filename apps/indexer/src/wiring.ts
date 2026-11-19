@@ -56,6 +56,8 @@ export type SourceSelection = {
   groups: BackfillSource[]
   /** Whether `startNftServices` runs. */
   openSea: boolean
+  /** Whether the NFTX source runs, so the OpenSea stats combine its pool price into the floor. */
+  nftx: boolean
 }
 
 /**
@@ -81,6 +83,7 @@ export function readSources(env: Env, log: Logger): SourceSelection {
     names,
     groups: [...new Set(names.flatMap((n) => PLATFORMS[n].groups))],
     openSea: names.some((n) => PLATFORMS[n].openSea),
+    nftx: names.includes("nftx"),
   }
 }
 
@@ -342,6 +345,8 @@ export async function startNftServices(
     fetch?: typeof fetch
     socket?: (url: string) => WebSocketLike
     tickMs?: number
+    /** Whether the NFTX source runs in this process (see `SourceSelection.nftx`). */
+    nftx?: boolean
   },
 ): Promise<{ stop(): void }> {
   const { sql, store, log, report, now } = deps
@@ -369,7 +374,7 @@ export async function startNftServices(
     const snapshots = createSnapshots({ sql, store, now })
     const accounts = createAccounts({ sql, rest, now })
     const jobDeps = { sql, store, rest, snapshots, accounts, log, now }
-    const stats = createStats({ sql, store, rest, log, now })
+    const stats = createStats({ sql, store, rest, log, now, nftx: deps.nftx })
     const ranks = createRanks({ sql, rest, log, now })
     const listings = createListings({ sql, store, stats, ranks, log, report, now })
 
@@ -423,5 +428,5 @@ export async function startSourceServices(
   sources: SourceSelection,
   deps: Parameters<typeof startNftServices>[0],
 ): Promise<{ stop(): void }> {
-  return sources.openSea ? startNftServices(deps) : { stop() {} }
+  return sources.openSea ? startNftServices({ ...deps, nftx: sources.nftx }) : { stop() {} }
 }

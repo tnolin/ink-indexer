@@ -24,6 +24,7 @@ import {
   TRANSIENT_RETRY_MS,
   WARM_SIZE,
 } from "../nft/policy"
+import { combineFloor, floorParts, onNftx } from "../nftx/floor"
 import type { Tx } from "../source"
 import { answeredFor, failedFor } from "./backoff"
 import type { OsResult } from "./rest"
@@ -116,17 +117,16 @@ export async function assignTiers(sql: Sql, now: Date): Promise<void> {
     where stats_tier is not null and contract <> all(${sql.array(contracts)}::text[])`
 }
 
-/** The newest floor of each contract that has a stats row (null when that row has none). */
+/**
+ * The floor of each contract that has a stats row or an NFTX price: the lower of the newest OpenSea
+ * floor and the NFTX pool's spot price (null when neither exists).
+ */
 export async function latestFloors(
   sql: Sql,
   contracts: string[],
 ): Promise<Map<string, bigint | null>> {
-  if (contracts.length === 0) return new Map()
-  const rows = await sql<{ contract: string; floor_wei: string | null }[]>`
-    select distinct on (contract) contract, floor_wei::text as floor_wei
-    from indexer.nft_stats where contract = any(${sql.array(contracts)}::text[])
-    order by contract, at desc`
-  return new Map(rows.map((r) => [r.contract, r.floor_wei === null ? null : BigInt(r.floor_wei)]))
+  const parts = await floorParts(sql, contracts)
+  return new Map([...parts].map(([contract, p]) => [contract, combineFloor(p).floorWei]))
 }
 
 /** One page of `GET /listings/collection/{slug}/best`: how many listings it holds and the cursor. */
@@ -153,10 +153,17 @@ class StatsRaced extends Error {
 
 export type StatsDeps = Pick<OsJobDeps, "sql" | "store" | "rest" | "log"> & {
   now?: () => number
+  /**
+   * Whether this process runs the NFTX source. Only then does a poll combine the OpenSea floor with
+   * the NFTX pool's price; without it rows are written as before NFTX, so a backfill window that
+   * runs without the source leaves the combined history to the first live poll.
+   */
+  nftx?: boolean
 }
 
 type CollectionRow = {
   slug: string | null
+  nftx_slug: string | null
   stats_tier: Tier | null
   max_supply: string | null
   total_supply: number | null
@@ -255,7 +262,7 @@ export function createStats(deps: StatsDeps) {
     opts: { scheduled: boolean; maxWaitMs: number },
   ): Promise<Poll> {
     const [row] = await sql<CollectionRow[]>`
-      select slug, stats_tier, max_supply::text as max_supply, total_supply,
+      select slug, nftx_slug, stats_tier, max_supply::text as max_supply, total_supply,
         listed_due_at, listed_counted_at, stats_n
       from indexer.nft_collections where contract = ${contract}`
     if (!row?.slug) return { wrote: false, outcome: undefined }
@@ -299,6 +306,18 @@ export function createStats(deps: StatsDeps) {
     }
     const supply = supplyOf(row)
 
+    // A collection trading on NFTX is floored by the cheaper of the two markets.
+    const onPool = deps.nftx === true && (await onNftx(sql, [contract])).has(contract)
+    const spot = onPool
+      ? ((await floorParts(sql, [contract])).get(contract)?.nftxFloorWei ?? null)
+      : null
+    const combined = combineFloor({ osFloorWei: stats.floorWei, osAt: at, nftxFloorWei: spot })
+    const [pool] = onPool
+      ? await sql<{ pool_count: number | null; combined_since: Date | null }[]>`
+          select pool_count, combined_since from indexer.nftx_collections
+          where collection = ${contract}`
+      : []
+
     const [prev] = await sql<
       { floor_wei: string | null; owners: number | null; volume: string | null }[]
     >`
@@ -308,15 +327,25 @@ export function createStats(deps: StatsDeps) {
     const [counted] = await sql<{ listed_count: number; listed_capped: boolean }[]>`
       select listed_count, listed_capped from indexer.nft_stats
       where contract = ${contract} and listed_count is not null order by at desc limit 1`
-    const [ago] = await sql<{ floor_wei: string | null }[]>`
-      select floor_wei::text as floor_wei from indexer.nft_stats
-      where contract = ${contract} and at <= ${new Date(at.getTime() - FLOOR_CHANGE_WINDOW_MS)}
-      order by at desc limit 1`
+    // Combined rows begin at `combined_since`; before it a collection on NFTX has no history to
+    // compare with. Other collections keep theirs.
+    const [ago] =
+      onPool && pool?.combined_since == null
+        ? []
+        : await sql<{ floor_wei: string | null }[]>`
+            select floor_wei::text as floor_wei from indexer.nft_stats
+            where contract = ${contract} and at <= ${new Date(at.getTime() - FLOOR_CHANGE_WINDOW_MS)}
+              and (${onPool}::boolean = false or at >= ${pool?.combined_since ?? at})
+            order by at desc limit 1`
 
     const values = {
       contract,
       at,
-      floor_wei: toDb(stats.floorWei),
+      floor_wei: toDb(deps.nftx === true ? combined.floorWei : stats.floorWei),
+      floor_market: deps.nftx === true ? (onPool ? combined.market : "opensea") : null,
+      os_floor_wei: deps.nftx === true ? toDb(stats.floorWei) : null,
+      nftx_floor_wei: onPool ? toDb(spot) : null,
+      pool_count: pool?.pool_count ?? null,
       owners: int(stats.owners),
       volume_24h_wei: toDb(stats.volume24hWei),
       sales_24h: int(stats.sales24h),
@@ -346,6 +375,14 @@ export function createStats(deps: StatsDeps) {
           type: "nft.stats",
           floorWei: values.floor_wei,
           floor24hAgoWei: ago?.floor_wei ?? null,
+          ...(onPool
+            ? {
+                floorMarket: combined.market,
+                nftxFloorWei: toDb(spot),
+                poolCount: pool?.pool_count ?? null,
+                nftxSlug: row.nftx_slug,
+              }
+            : {}),
           // shortcut: unknown owners, sales and volume report 0 (NftStatsEvent has no null for them); widen the event type to null if readers need to tell unknown from zero.
           owners: values.owners ?? 0,
           volume24hWei: values.volume_24h_wei ?? "0",
@@ -364,6 +401,10 @@ export function createStats(deps: StatsDeps) {
     const retryListed = new Date(at.getTime() + LISTED_RETRY_MS)
     const step = async (tx: Tx) => {
       await tx`insert into indexer.nft_stats ${tx(values)} on conflict (contract, at) do nothing`
+      if (onPool)
+        await tx`
+          update indexer.nftx_collections set combined_since = ${at}
+          where collection = ${contract} and combined_since is null`
       const moved = await tx`
         update indexer.nft_collections set
           stats_n = stats_n + ${event ? 1 : 0},
@@ -449,15 +490,26 @@ export function createStats(deps: StatsDeps) {
     }
   }
 
+  /**
+   * The collection's floor: the newest OpenSea floor or, for a collection on NFTX, the pool's price
+   * when that is lower. `at` is when the floor was read: the OpenSea row's time, or `eventAt` for a
+   * pool price, which holds until the next trade and so is as fresh as the event it enriches.
+   * `osAt` is the newest OpenSea row's time whichever floor won.
+   */
   async function latestFloor(
     contract: string,
-  ): Promise<{ floorWei: bigint | null; at: Date } | null> {
-    const [row] = await sql<{ floor_wei: string | null; at: Date }[]>`
-      select floor_wei::text as floor_wei, at from indexer.nft_stats
-      where contract = ${contract} order by at desc limit 1`
-    return row
-      ? { floorWei: row.floor_wei === null ? null : BigInt(row.floor_wei), at: row.at }
-      : null
+    eventAt: Date,
+  ): Promise<{
+    floorWei: bigint | null
+    at: Date
+    market: "opensea" | "nftx" | null
+    osAt: Date | null
+  } | null> {
+    const parts = (await floorParts(sql, [contract])).get(contract)
+    if (!parts) return null
+    const { floorWei, market } = combineFloor(parts)
+    const at = market === "nftx" ? eventAt : parts.osAt
+    return at ? { floorWei, at, market, osAt: parts.osAt } : null
   }
 
   return { job, tierJob, requestStats, latestFloor }
