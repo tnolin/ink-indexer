@@ -23,6 +23,7 @@ import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
 import { nftSource } from "../src/sources/nft/index"
 import { createVerdictJob } from "../src/sources/nft/verdict"
+import { onNftx } from "../src/sources/nftx/floor"
 import { nftxSource } from "../src/sources/nftx/index"
 import { fetchNftxSlug } from "../src/sources/nftx/slug"
 import { moved } from "../src/sources/nftx/stats"
@@ -127,6 +128,37 @@ const collectionRow = () =>
   )
 const nftRow = () =>
   one(sql<Record<string, unknown>[]>`select * from indexer.nft_collections where contract = ${LD}`)
+
+/**
+ * A collection created in one run and then opened, in a later one, by an opening that `edit` has
+ * made odd. The collection's verdict is clean before the opening is read.
+ */
+async function oddOpening(edit: (init: ChainLog) => void) {
+  const t = setup(["lildudes-created"])
+  await t.backfill()
+  await sql`update indexer.nft_collections set verdict_dirty = false where contract = ${LD}`
+  const f = loadNftxFixture("lildudes-init")
+  edit(f.logs.find((l) => l.topics[0] === NFTX_TOPICS.CollectionInitialized)!)
+  addFixture(t.chain, f)
+  t.chain.head = f.blockNumber + 100n
+  await t.idx.backfill(f.blockNumber, t.chain.head)
+  return t
+}
+
+async function expectNothingWritten(t: { warnings: { msg: string }[] }) {
+  expect(await collectionRow()).toMatchObject({
+    initialized_block: null,
+    pool_id: null,
+    fleth_is_currency0: null,
+    seeded: null,
+  })
+  expect(await nftRow()).toMatchObject({ verdict_dirty: false })
+  expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(0)
+  expect(await sql`select 1 from indexer.nft_launches`).toHaveLength(0)
+  expect(await events("nft.launch")).toHaveLength(0)
+  expect([...(await onNftx(sql, [LD]))]).toEqual([])
+  expect(t.warnings.filter((w) => w.msg.includes("pool"))).toHaveLength(1)
+}
 
 const CHIMERA_ABI = parseAbi([
   "event CampaignCreated(uint256 indexed campaignId, bytes32 indexed poolId, address indexed creator, address token, address core, address collection, address rewards, address vault, uint256 chainId)",
@@ -656,38 +688,25 @@ describe("trusted emitters", () => {
     expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(0)
   })
 
-  it("a pool key with another hook stores no side and no prices (synthetic)", async () => {
-    const t = setup(["lildudes-created", "lildudes-init"])
-    const init = t.chain.logs.find((l) => l.topics[0] === NFTX_TOPICS.CollectionInitialized)!
-    // The key's last word is the hook; replace it inside the ABI-encoded bytes.
-    init.data = init.data.replace(
-      NFTX_HOOK.slice(2),
-      "00000000000000000000000000000000000000dd",
-    ) as Hex
-    await t.backfill()
-    expect(await collectionRow()).toMatchObject({
-      initialized_block: INIT_BLOCK,
-      fleth_is_currency0: null,
+  it("an opening whose pool key has another hook writes nothing (synthetic)", async () => {
+    const t = await oddOpening((init) => {
+      // The key's last word is the hook; replace it inside the ABI-encoded bytes.
+      init.data = init.data.replace(
+        NFTX_HOOK.slice(2),
+        "00000000000000000000000000000000000000dd",
+      ) as Hex
     })
-    expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(0)
-    expect(await sql`select 1 from indexer.nft_launches`).toHaveLength(0)
-    expect(await events("nft.launch")).toHaveLength(0)
-    expect(t.warnings.filter((w) => w.msg.includes("pool"))).toHaveLength(1)
+    await expectNothingWritten(t)
   })
 
-  it("a pool with neither currency flETH stores no side, no launch and no prices (synthetic)", async () => {
-    const t = setup(["lildudes-created", "lildudes-init"])
-    const init = t.chain.logs.find((l) => l.topics[0] === NFTX_TOPICS.CollectionInitialized)!
-    init.data = init.data.replace(
-      NFTX_FLETH.slice(2),
-      "00000000000000000000000000000000000000dd",
-    ) as Hex
-    await t.backfill()
-    expect((await collectionRow()).fleth_is_currency0).toBeNull()
-    expect(await sql`select 1 from indexer.nftx_prices`).toHaveLength(0)
-    expect(await sql`select 1 from indexer.nft_launches`).toHaveLength(0)
-    expect(await events("nft.launch")).toHaveLength(0)
-    expect(t.warnings.filter((w) => w.msg.includes("pool"))).toHaveLength(1)
+  it("an opening whose pool has neither currency flETH writes nothing (synthetic)", async () => {
+    const t = await oddOpening((init) => {
+      init.data = init.data.replace(
+        NFTX_FLETH.slice(2),
+        "00000000000000000000000000000000000000dd",
+      ) as Hex
+    })
+    await expectNothingWritten(t)
   })
 
   it("a pool with flETH as currency1 reads the price the other way round (synthetic)", async () => {

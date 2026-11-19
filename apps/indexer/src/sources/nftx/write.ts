@@ -60,17 +60,16 @@ export async function writeRows(tx: Tx, batch: NftxBatch) {
         fleth_is_currency0 = ${o.flethIsCurrency0}, seeded = ${o.seeded}
       where collection = ${o.collection}
         and (initialized_block is null or initialized_block = ${s(o.block)})`
-    if (o.launch)
-      await tx`
-        insert into indexer.nft_launches ${tx({
-          collection: o.collection,
-          launchpad: "nftx",
-          token: o.launch.token,
-          pool_id: o.poolId,
-          creator: o.launch.creator,
-          block: s(o.block),
-        })}
-        on conflict do nothing`
+    await tx`
+      insert into indexer.nft_launches ${tx({
+        collection: o.collection,
+        launchpad: "nftx",
+        token: o.launch.token,
+        pool_id: o.poolId,
+        creator: o.launch.creator,
+        block: s(o.block),
+      })}
+      on conflict do nothing`
     await tx`update indexer.nft_collections set verdict_dirty = true where contract = ${o.collection}`
   }
 

@@ -85,13 +85,10 @@ export type CreatedRow = {
 export type OpenedRow = {
   collection: Address
   block: bigint
-  /** Null when the pool key did not decode. */
-  poolId: Hash | null
-  /** Null when the pool is not an NFTX pool with a flETH side. */
-  flethIsCurrency0: boolean | null
+  poolId: Hash
+  flethIsCurrency0: boolean
   seeded: number
-  /** Written only for a pool with a side. */
-  launch: { token: Address; creator: Address } | null
+  launch: { token: Address; creator: Address }
 }
 export type PriceRow = {
   collection: Address
@@ -387,7 +384,9 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
                   ? false
                   : null
               : null
-          if (side === null)
+          // An opening of a pool that is not an NFTX flETH pool is not the collection's opening: it
+          // writes nothing, so a later opening of the real pool can still stand.
+          if (key === null || side === null) {
             logger(
               "warn",
               "ignoring a CollectionInitialized whose pool is not an NFTX flETH pool",
@@ -396,16 +395,18 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
                 tx: log.transactionHash,
               },
             )
+            break
+          }
           c.initializedBlock = log.blockNumber
           c.flethIsCurrency0 = side
           opens.push({ log, d })
           batch.opened.push({
             collection: d.collection,
             block: log.blockNumber,
-            poolId: key?.poolId ?? null,
+            poolId: key.poolId,
             flethIsCurrency0: side,
             seeded: new Set(d.tokenIds.map(String)).size,
-            launch: side === null ? null : { token: c.floorToken, creator: c.creator },
+            launch: { token: c.floorToken, creator: c.creator },
           })
           break
         }
