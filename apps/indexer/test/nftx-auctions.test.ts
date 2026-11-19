@@ -8,7 +8,6 @@ import {
   ccaConfigParameter,
   decodeCcaLog,
   NFTX_LOCKER,
-  NFTX_TOPICS,
 } from "@ink-indexer/sdk"
 import {
   type Address,
