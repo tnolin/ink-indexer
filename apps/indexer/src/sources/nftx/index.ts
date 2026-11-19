@@ -423,6 +423,14 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       }
     }
 
+    /** A log after the collection's sunset: the pool is closed and nothing it logs counts. */
+    const pastSunset = (collection: Address, log: ChainLog) => {
+      const c = state.get(collection)
+      const sunset = sunsetAt.get(collection)
+      if (c && c.sunsetBlock !== null && log.blockNumber > c.sunsetBlock) return true
+      return !!sunset && log.blockNumber === sunset.block && log.logIndex > sunset.logIndex
+    }
+
     // Prices come after the whole span's openings: an opening transaction logs the pool's first
     // prices before the opening itself.
     for (const { log, d } of items) {
@@ -430,9 +438,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       const c = state.get(d.collection)
       if (!c || c.flethIsCurrency0 === null || c.initializedBlock === null) continue
       if (log.blockNumber < c.initializedBlock) continue
-      const sunset = sunsetAt.get(d.collection)
-      if (c.sunsetBlock !== null && log.blockNumber > c.sunsetBlock) continue
-      if (sunset && log.blockNumber === sunset.block && log.logIndex > sunset.logIndex) continue
+      if (pastSunset(d.collection, log)) continue
       batch.prices.push({
         collection: d.collection,
         block: log.blockNumber,
@@ -484,10 +490,12 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
     batch.combinedSince = plan.combinedSince
     batch.events.push(...plan.events)
 
+    // Sales and listings of a closed pool are not announced.
+    const trading = items.filter((i) => !pastSunset(i.d.collection, i.log))
     const salesPlan = await planSales(
       { sql, chain, logger },
       {
-        items,
+        items: trading,
         slugOf: (a) => state.get(a)?.slug,
         prices: batch.prices,
         timestamp: (n) => blocks.get(n)!.timestamp,
@@ -501,7 +509,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       ...(await planListings(
         { sql, chain, logger, ranks: deps.ranks ?? { current: null } },
         {
-          items,
+          items: trading,
           slugOf: (a) => state.get(a)?.slug,
           prices: batch.prices,
           timestamp: (n) => blocks.get(n)!.timestamp,

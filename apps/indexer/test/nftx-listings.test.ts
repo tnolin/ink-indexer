@@ -413,3 +413,12 @@ describe("revert and price floor", () => {
     expect(drafts).toEqual([])
   })
 })
+
+describe("after CollectionSunset", () => {
+  it("a listing in a block after the sunset gives no event (synthetic)", async () => {
+    await run(["eth-listing-created"], async () => {
+      await sql`update indexer.nftx_collections set sunset_block = 1`
+    })
+    expect(await listings()).toEqual([])
+  })
+})

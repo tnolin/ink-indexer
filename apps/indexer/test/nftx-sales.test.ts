@@ -38,7 +38,7 @@ const SPOT_BEFORE_RELIST = 261_739_850_963_615_528n
 /** Runs recorded transactions through the NFTX source with their pools open and their listings readable. */
 async function run(
   names: NftxFixtureName[],
-  edit: (t: ReturnType<typeof nftxHarness>) => void = () => {},
+  edit: (t: ReturnType<typeof nftxHarness>) => unknown = () => {},
   opts: { both?: boolean } = {},
 ) {
   const t = nftxHarness(sql, store, names, opts)
@@ -46,7 +46,7 @@ async function run(
     await seedPools(sql, f)
     stubListings(t.chain, f)
   }
-  edit(t)
+  await edit(t)
   await t.live()
   return t
 }
@@ -315,6 +315,23 @@ describe("listing fills", () => {
       expect(await sales()).toEqual([])
       expect(t.warnings.filter((w) => w.msg.includes("listing read"))).toHaveLength(1)
     })
+  })
+})
+
+describe("after CollectionSunset", () => {
+  it("a sale in a block after the sunset gives no sale row and no event (synthetic)", async () => {
+    await run(["eth-zap-buy"], async () => {
+      await sql`update indexer.nftx_collections set sunset_block = ${(ZAP_BLOCK - 1n).toString()}`
+    })
+    expect(await sales()).toEqual([])
+    expect(await saleEvents()).toEqual([])
+  })
+
+  it("a sale in the sunset's own block, before its log, still counts (synthetic)", async () => {
+    await run(["eth-zap-buy"], async () => {
+      await sql`update indexer.nftx_collections set sunset_block = ${ZAP_BLOCK.toString()}`
+    })
+    expect(await sales()).toHaveLength(1)
   })
 })
 
