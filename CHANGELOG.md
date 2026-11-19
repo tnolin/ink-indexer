@@ -2,7 +2,7 @@
 
 Notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## [indexer-v0.8.0] - 2026-11-19
 
 ### Added
 
@@ -10,7 +10,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Indexer: `nft.sale` events for NFTX trades, with `market: "nftx"` and `via` set to `listing`, `instant_sell` or `instant_buy`, and `nft.listing` events for NFTX listings priced at their floor multiple of the pool price.
 - Indexer: a collection with an NFTX market has a combined floor, the lower of its OpenSea floor and its NFTX pool price, in `nft.stats` and `nft.listing`. A pool price that moves 1% or more emits `nft.stats`. See ADR 0042.
 - Indexer: `nft.launch` for a collection that opens trading on NFTX, and `nft.collection` snapshots with `launchpad: "nftx"` from the collection's creation.
-- Indexer: Uniswap continuous clearing auctions of NFTX floor tokens, followed through `created`, `live`, `price` and `ended` as `nft.auction` events, with the amount raised, the clearing price, the bidders and whether the auction graduated read from the contract as of each event's block. `pnpm nft:auction <auction> <contract>` links an auction the automatic check missed to a collection. See ADR 0044.
+- Indexer: CCA auctions of NFTX floor tokens, followed through `created`, `live`, `price` and `ended` as `nft.auction` events, with the amount raised, the clearing price, the bidders and whether the auction graduated read from the contract as of each event's block. `pnpm nft:auction <auction> <contract>` links an auction the automatic check missed to a collection. See ADR 0044.
 - Indexer: `pnpm nft:mark <contract> <mark> --max-supply <n>` sets a collection's max supply by hand, and `clear` forgets it. See ADR 0043.
 - Indexer: a Seaport sale whose item goes into the NFTX Locker in the same transaction carries `toPool: true`, and mints into the Locker are no longer stored, counted toward milestones or counted as a minting wallet.
 - Events: optional NFTX fields on `nft.collection`, `nft.listing`, `nft.sale` and `nft.stats` (`market`, `via`, `toPool`, `floorMultiple`, `listingType`, `floorMarket`, `nftxFloorWei`, `poolCount`, `nftxSlug`) and the `nft.auction` event (`events-v5`). Schema version stays 2.
