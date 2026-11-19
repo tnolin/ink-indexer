@@ -1,0 +1,65 @@
+{
+  "status": 200,
+  "body": {
+    "collection": "thinkers-ink",
+    "name": "Thinkers ink",
+    "description": null,
+    "image_url": "https://i2c.seadn.io/collection/thinkers-ink/image_type_logo/4e83744a5be9d496c0bf3bacedd682/b44e83744a5be9d496c0bf3bacedd682.jpeg",
+    "banner_image_url": "https://i2c.seadn.io/collection/thinkers-ink/image_type_hero_desktop/93410578703ed5802291b992a9836d/d893410578703ed5802291b992a9836d.jpeg",
+    "owner": "0x7291f6a1130c2a6a349f18301ce92f2dbc7b18a7",
+    "safelist_status": "not_requested",
+    "category": "",
+    "is_disabled": false,
+    "is_nsfw": false,
+    "trait_offers_enabled": false,
+    "collection_offers_enabled": true,
+    "opensea_url": "https://opensea.io/collection/thinkers-ink",
+    "project_url": "",
+    "wiki_url": "",
+    "discord_url": "",
+    "telegram_url": "",
+    "twitter_username": null,
+    "instagram_username": "",
+    "contracts": [
+      {
+        "address": "0x23ca7388125ac7554ed37d04b5e553c8af109cd9",
+        "chain": "ink"
+      }
+    ],
+    "editors": [
+      "0x7291f6a1130c2a6a349f18301ce92f2dbc7b18a7"
+    ],
+    "fees": [
+      {
+        "fee": 1,
+        "recipient": "0x07d3a100c3880830dd43fe5c938b5144721ce9d6",
+        "required": true
+      }
+    ],
+    "total_supply": 336,
+    "unique_item_count": 336,
+    "created_date": "2026-11-18",
+    "pricing_currencies": {
+      "listing_currency": {
+        "symbol": "ETH",
+        "address": "0x0000000000000000000000000000000000000000",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/ETH.svg",
+        "name": "Ethereum",
+        "decimals": 18,
+        "eth_price": "1",
+        "usd_price": "1799.93"
+      },
+      "offer_currency": {
+        "symbol": "WETH",
+        "address": "0x4200000000000000000000000000000000000006",
+        "chain": "ink",
+        "image": "https://raw2.seadn.io/currency_logos/WETH.svg",
+        "name": "Wrapped Ethereum",
+        "decimals": 18,
+        "eth_price": "1.000572244476174073",
+        "usd_price": "1800.96"
+      }
+    }
+  }
+}

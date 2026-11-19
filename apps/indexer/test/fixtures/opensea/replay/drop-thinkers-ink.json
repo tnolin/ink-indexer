@@ -1,0 +1,43 @@
+{
+  "status": 200,
+  "body": {
+    "collection_slug": "thinkers-ink",
+    "collection_name": "Thinkers ink",
+    "chain": "ink",
+    "contract_address": "0x23ca7388125ac7554ed37d04b5e553c8af109cd9",
+    "drop_type": "seadrop_v1_erc721",
+    "is_minting": true,
+    "image_url": "https://i2c.seadn.io/collection/thinkers-ink/image_type_logo/4e83744a5be9d496c0bf3bacedd682/b44e83744a5be9d496c0bf3bacedd682.jpeg",
+    "opensea_url": "https://opensea.io/collection/thinkers-ink",
+    "active_stage": {
+      "uuid": "53b3a896-4cea-4398-8a4e-03501cd5bd4a",
+      "stage_type": "public_sale",
+      "label": "Public stage",
+      "price": "5000000000000000",
+      "price_currency_address": "0x0000000000000000000000000000000000000000",
+      "start_time": "2026-11-18T08:34:08Z",
+      "end_time": "2027-04-01T08:34:08Z",
+      "max_per_wallet": "10",
+      "allowlist_wallet_count": null,
+      "max_token_supply_for_stage": null
+    },
+    "next_stage": null,
+    "stages": [
+      {
+        "uuid": "53b3a896-4cea-4398-8a4e-03501cd5bd4a",
+        "stage_type": "public_sale",
+        "label": "Public stage",
+        "price": "5000000000000000",
+        "price_currency_address": "0x0000000000000000000000000000000000000000",
+        "start_time": "2026-11-18T08:34:08Z",
+        "end_time": "2027-04-01T08:34:08Z",
+        "max_per_wallet": "10",
+        "allowlist_wallet_count": null,
+        "max_token_supply_for_stage": null
+      }
+    ],
+    "total_supply": "336",
+    "max_supply": "3333",
+    "fee_bps": 1000
+  }
+}

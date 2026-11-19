@@ -1,0 +1,18 @@
+{
+  "head": 61565541,
+  "headTs": 1795063952,
+  "collections": {
+    "0xea8fa1eb53e0465d67c9cd4e77a3f4f6f39220ea": {
+      "created": 61484709,
+      "slug": "thinkers-665587726",
+      "mints": 1866,
+      "seadropLogs": 1870
+    },
+    "0x23ca7388125ac7554ed37d04b5e553c8af109cd9": {
+      "created": 61492390,
+      "slug": "thinkers-ink",
+      "mints": 336,
+      "seadropLogs": 11
+    }
+  }
+}

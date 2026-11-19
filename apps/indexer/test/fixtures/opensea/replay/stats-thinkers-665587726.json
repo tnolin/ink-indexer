@@ -1,0 +1,33 @@
+{
+  "status": 200,
+  "body": {
+    "total": {
+      "volume": 8e-18,
+      "volume_symbol": "ETH",
+      "sales": 1859,
+      "num_owners": 38,
+      "floor_price": 0,
+      "floor_price_symbol": ""
+    },
+    "intervals": [
+      {
+        "interval": "one_day",
+        "volume": 1.5e-17,
+        "volume_symbol": "ETH",
+        "sales": 1866
+      },
+      {
+        "interval": "seven_day",
+        "volume": 1.5e-17,
+        "volume_symbol": "ETH",
+        "sales": 1866
+      },
+      {
+        "interval": "thirty_day",
+        "volume": 1.5e-17,
+        "volume_symbol": "ETH",
+        "sales": 1866
+      }
+    ]
+  }
+}

@@ -133,6 +133,22 @@ export function loadNftFixture(name: NftFixtureName): ChainLog[] {
   }))
 }
 
+/**
+ * One collection's mints and SeaDrop logs from its creation block to the recording head, as
+ * recorded by `record-nft-fixtures.ts --collections`.
+ */
+export function loadNftReplay(contract: Address): ChainLog[] {
+  return readNftJson<SavedLog[]>(`replay/${contract}.json`).map((l) => ({
+    ...l,
+    blockNumber: BigInt(l.blockNumber),
+  }))
+}
+
+/** The block and time the replay recordings end at. */
+export function loadNftReplayMeta(): { head: number; headTs: number } {
+  return readNftJson("replay/meta.json")
+}
+
 /** The recipient sets of the ten largest recent mint bursts, keyed by collection, and the wallets in five or more of them under `farmWallets`. */
 export function loadFarmWallets(): Record<string, Address[]> {
   return readNftJson("farm-wallets.json")
