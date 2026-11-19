@@ -6,7 +6,6 @@ import type { Logger } from "../../log"
 import type { Store } from "../../store"
 import {
   FLOOR_MAX_AGE_MS,
-  LISTING_MIN_LIFE_S,
   LISTING_WAIT_MS,
   METADATA_BURST_COUNT,
   METADATA_BURST_WINDOW_MS,
@@ -46,7 +45,7 @@ function itemMeta(payload: unknown): { name: string | null; imageUrl: string | n
   return { name: str(meta?.name), imageUrl: str(meta?.image_url) }
 }
 
-/** A listing that passed the filter's payload checks (steps 1 to 4). */
+/** A listing that passed the filter's payload checks (steps 1, 2 and 4). */
 type Listed = {
   orderHash: Hash
   /** Wei for one unit. */
@@ -59,9 +58,9 @@ type Listed = {
 }
 
 /**
- * Steps 1 to 4 of the listing filter, which need only the payload: private listings are dropped,
- * then anything not paid in ETH or WETH, then a listing that lives under an hour; the price is
- * per unit. Null for a dropped listing and for a payload that cannot be read.
+ * Steps 1, 2 and 4 of the listing filter, which need only the payload: private listings are
+ * dropped, then anything not paid in ETH or WETH; the price is per unit. A listing is kept
+ * whatever its expiry. Null for a dropped listing and for a payload that cannot be read.
  */
 export function parseListed(payload: unknown): Listed | null {
   const p = obj(payload)
@@ -76,7 +75,6 @@ export function parseListed(payload: unknown): Listed | null {
   const listedAt = Date.parse(str(p.listing_date) ?? "")
   const expiresAt = Date.parse(str(p.expiration_date) ?? "")
   if (!Number.isFinite(listedAt) || !Number.isFinite(expiresAt)) return null
-  if (expiresAt - listedAt < LISTING_MIN_LIFE_S * 1000) return null
 
   const total = str(p.base_price)
   const quantity = p.quantity === undefined || p.quantity === null ? 1 : p.quantity

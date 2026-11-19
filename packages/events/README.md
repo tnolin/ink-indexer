@@ -226,7 +226,7 @@ A mint milestone: `stage_start`, `progress` or `sold_out`. A contract that had i
 
 ### `nft.listing`
 
-A listing that passed the indexer's filter: public, paid in ETH or WETH, open for at least an hour, and priced below the last listing written for that item.
+A listing that passed the indexer's filter: public, paid in ETH or WETH, and priced below the last listing written for that item. A listing is announced whatever its expiry.
 
 ```json
 {
@@ -245,7 +245,7 @@ A listing that passed the indexer's filter: public, paid in ETH or WETH, open fo
 
 `priceWei` is per unit. `floorWei` and `floorAt` are the collection's newest stored floor and the time it was read. For a collection with an NFTX market that floor is the lower of the OpenSea floor and the NFTX pool's spot price; when it comes from the pool, `floorAt` is the event's own time, because the pool price holds until the next trade. A floor more than 10 minutes old is read again before the event is written, at most once per collection every 10 minutes; when that read fails, the event carries the older floor with its own `floorAt`. `rank` is OpenSea's rarity rank. It is fetched only for listings priced at or under the floor plus 10%, so it is `null` for the rest, and `null` where OpenSea has no rank.
 
-An NFTX listing has `market: "nftx"`, `currency: "ETH"`, `maker` (the listing owner), `orderHash` (the keccak of the transaction hash, log index and token id), `floorMultiple` (150 is 1.50x), `listingType` (`liquid` or `dutch`) and `nftxSlug`. Its `priceWei` is the multiple applied to the pool's spot price at the listing's block, and `expiresAt` is the listing's creation time plus its duration. Every NFTX listing is emitted whatever its price, except one with less than an hour left and one whose pool has no price.
+An NFTX listing has `market: "nftx"`, `currency: "ETH"`, `maker` (the listing owner), `orderHash` (the keccak of the transaction hash, log index and token id), `floorMultiple` (150 is 1.50x), `listingType` (`liquid` or `dutch`) and `nftxSlug`. Its `priceWei` is the multiple applied to the pool's spot price at the listing's block, and `expiresAt` is the listing's creation time plus its duration. Every NFTX listing is emitted whatever its price and expiry, except one whose pool has no price.
 
 ### `nft.sale`
 

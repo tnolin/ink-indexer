@@ -181,8 +181,6 @@ export const FIREHOSE_METER_EVERY_MS = 10 * MINUTE_MS
 
 // Listings and ranks (ADR 0017).
 
-/** A listing must live at least this long (its expiry minus its listing time). */
-export const LISTING_MIN_LIFE_S = 3600
 /** A rank is fetched for a listing priced at or under the floor times this ratio (11/10). */
 export const NEAR_FLOOR_RATIO = { num: 11n, den: 10n } as const
 /** A floor older than this is read again from OpenSea before a listing carries it. */

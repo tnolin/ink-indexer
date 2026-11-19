@@ -258,12 +258,17 @@ describe("listing logs that are not read", () => {
 })
 
 describe("short life", () => {
-  it("a listing with under an hour left gives no event (synthetic)", async () => {
-    await run(["eth-listing-created"], (t) => created(t, { duration: 3599 }))
-    expect(await listings()).toEqual([])
+  it("a listing that expires 20 minutes after it is posted is announced (synthetic)", async () => {
+    await run(["eth-listing-created"], (t) => created(t, { duration: 20 * 60 }))
+    expect(await listings()).toHaveLength(1)
   })
 
-  it("a listing with exactly an hour left gives an event (synthetic)", async () => {
+  it("a listing with under an hour left is announced (synthetic)", async () => {
+    await run(["eth-listing-created"], (t) => created(t, { duration: 3599 }))
+    expect(await listings()).toHaveLength(1)
+  })
+
+  it("a listing with exactly an hour left is announced (synthetic)", async () => {
     await run(["eth-listing-created"], (t) => created(t, { duration: 3600 }))
     expect(await listings()).toHaveLength(1)
   })

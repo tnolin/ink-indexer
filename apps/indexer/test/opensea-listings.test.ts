@@ -226,15 +226,19 @@ const collectionOf = async (contract: string): Promise<Record<string, any>> =>
   (await sql`select * from indexer.nft_collections where contract = ${contract}`)[0]!
 
 describe("the filter", () => {
-  it("15-minute expiry is dropped", async () => {
+  it("a listing that expires 20 minutes after it is posted is announced", async () => {
+    const s = setup()
+    await s.handle(listed({ life: 20 * 60 }))
+    expect(await listingEvents()).toHaveLength(1)
+    expect(await stateOf("1506")).toBeDefined()
+  })
+
+  it("listings of 15 minutes, 3599 seconds and an hour are all announced", async () => {
     const s = setup()
     await s.handle(listed({ life: 15 * 60 }))
     await s.handle(listed({ life: 3599, token: "2" }))
-    expect(await listingEvents()).toEqual([])
-    expect(await stateOf("1506")).toBeUndefined()
-    // One hour is long enough.
     await s.handle(listed({ life: 3600, token: "3" }))
-    expect(await listingEvents()).toHaveLength(1)
+    expect(await listingEvents()).toHaveLength(3)
   })
 
   it("private and non-ETH listings are dropped", async () => {
@@ -844,15 +848,15 @@ describe("the event", () => {
     const s = setup()
     const seen = () =>
       sql`select token_id::text as token_id, name, image_url from indexer.nft_items_seen order by token_id`
-    // Dropped by the filter (private, 15 minutes), yet the names are kept.
+    // Dropped by the filter (both private), yet the names are kept.
     await s.handle(
       listed({ token: "1", priv: true, name: "Private #1", image: "https://img.example/1.png" }),
     )
-    await s.handle(listed({ token: "2", life: 900, name: "Short #2", image: null }))
+    await s.handle(listed({ token: "2", priv: true, name: "Private #2", image: null }))
     expect(await listingEvents()).toEqual([])
     expect(await seen()).toEqual([
       { token_id: "1", name: "Private #1", image_url: "https://img.example/1.png" },
-      { token_id: "2", name: "Short #2", image_url: null },
+      { token_id: "2", name: "Private #2", image_url: null },
     ])
 
     // A later dropped frame does not replace what is known.

@@ -23,7 +23,7 @@ NFTX turns an NFT collection into a fungible floor token and a Uniswap v4 pool. 
 
 A transaction's total is split evenly across its items, rounded down, with the remainder on the last. An item is sold once per transaction: the first log that classifies it wins. A listing's record is read from the Listings contract one block before the transaction, because the fill removes it.
 
-**Listings.** Each id of `ListingsCreated`, each relist and each floor-multiple update is announced as `nft.listing` with `market: "nftx"`. The price is the listing's floor multiple times the pool's spot price at the log. A listing with less than an hour left, and one whose pool has no price, is not announced.
+**Listings.** Each id of `ListingsCreated`, each relist and each floor-multiple update is announced as `nft.listing` with `market: "nftx"`. The price is the listing's floor multiple times the pool's spot price at the log. A listing is announced whatever its expiry; one whose pool has no price is not announced.
 
 **The Locker and OpenSea sales.** A mint into the Locker, or to a wallet that deposits the token into the Locker in the same transaction, is not stored, counted toward milestones or counted as a minting wallet. A Seaport sale whose item reaches the Locker in the same transaction is stored with `toPool: true`.
 

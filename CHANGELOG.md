@@ -17,6 +17,10 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - SDK: NFTX and auction log decoding, pool and auction price math, and readers for listings, pool sizes, owners and auction checkpoints at a block.
 - DB: migration 0019 adds the `nftx_collections`, `nftx_prices`, `nftx_auctions` and `nftx_auction_bids` tables, the market columns on `nft_sales` and `nft_stats`, the collection slug and a max supply override. `nft_launches` is keyed by collection and launchpad, so a collection can have a Chimera launch and an NFTX launch.
 
+### Changed
+
+- Indexer: OpenSea and NFTX listings are now announced whatever their expiry. Listings that live under an hour were dropped before. Every other listing filter is unchanged. See ADR 0045.
+
 ## [indexer-v0.7.1] - 2026-11-10
 
 ### Fixed

@@ -4,7 +4,7 @@ import { INK_CHAIN_ID, type NftxListingRead, nftxOrderHash } from "@ink-indexer/
 import type { Address, Hash } from "viem"
 import type { Chain } from "../../chain"
 import type { Logger } from "../../log"
-import { LISTING_MIN_LIFE_S, LISTING_WAIT_MS, NEAR_FLOOR_RATIO } from "../nft/policy"
+import { LISTING_WAIT_MS, NEAR_FLOOR_RATIO } from "../nft/policy"
 import { seenItems } from "../opensea/listings"
 import { cachedRanks, itemKey, type Ranks } from "../opensea/ranks"
 import type { EventRow } from "../source"
@@ -45,11 +45,10 @@ const key = (collection: Address, tokenId: bigint) => `${collection}:${tokenId}`
 
 /**
  * The listings the logs announce: one per id of a `ListingsCreated`, and one for each relist and
- * floor-multiple update. Every listing counts, whatever its price. The price is the listing's floor
- * multiple times the pool's spot price at the log. A listing with less than an hour left, and one
- * whose pool has no price, is not announced. A relist and an update take their type, and an update
- * its owner and times, from the Listings contract at the block; a read that reverts announces
- * nothing.
+ * floor-multiple update. Every listing counts, whatever its price and expiry; one whose pool has no
+ * price is not announced. The price is the listing's floor multiple times the pool's spot price at
+ * the log. A relist and an update take their type, and an update its owner and times, from the
+ * Listings contract at the block; a read that reverts announces nothing.
  */
 export function listingDrafts(logs: TxLog[], reads: ListingReads): ListingDraft[] {
   const out: ListingDraft[] = []
@@ -63,7 +62,6 @@ export function listingDrafts(logs: TxLog[], reads: ListingReads): ListingDraft[
     const spot = reads.spotAt(log.block, log.logIndex, l.collection)
     if (spot === null) return
     const expiresAt = l.created + l.duration
-    if (expiresAt - reads.timestamp(log.block) < LISTING_MIN_LIFE_S) return
     const { created: _c, duration: _d, ...rest } = l
     out.push({ ...rest, ...log, priceWei: (BigInt(l.floorMultiple) * spot) / 100n, expiresAt })
   }
