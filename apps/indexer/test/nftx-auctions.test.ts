@@ -475,7 +475,7 @@ describe("keeping a stored auction later", () => {
     expect((await phase("created")).map((e) => e.payload.auction)).toEqual([AUCTION])
   })
 
-  it("a source already loaded and processing batches emits created at the next batch's toBlock after applyAuctionLink runs from another connection, with no reload", async () => {
+  it("a source already loaded and processing batches emits created before the phase the link found already passed, after applyAuctionLink runs from another connection, with no reload", async () => {
     const t = await setup({ head: 60_400_000n })
     await t.live()
     expect(await auctionEvents()).toEqual([])
@@ -488,10 +488,30 @@ describe("keeping a stored auction later", () => {
     t.chain.head = 60_400_010n
     await t.idx.trigger()
     const events = await auctionEvents()
-    // Created at the batch's last block, then the phase that block has already passed. The price
-    // log the first batch read before the link is not announced.
-    expect(events.map((e) => e.tx_hash)).toEqual([id("live", START), id("created", 60_400_010n)])
+    // Created comes first, at the block of the first phase the link found already passed, then that
+    // phase. The price log the first batch read before the link is not announced.
+    expect(events.map((e) => e.tx_hash)).toEqual([id("created", START), id("live", START)])
     expect(await auctionRow()).toMatchObject({ kept: true, manual: true, kept_block: null })
+  })
+})
+
+describe("a keep that comes after the auction has ended", () => {
+  it("announces created first, then every phase the link found already passed", async () => {
+    const t = await setup({ head: END + 10n })
+    await t.live()
+    expect(await auctionEvents()).toEqual([])
+    const other = connect(inject("databaseUrl"))
+    try {
+      await applyAuctionLink(other, { auction: AUCTION, contract: COLLECTION })
+    } finally {
+      await other.end()
+    }
+    t.chain.head = END + 20n
+    await t.idx.trigger()
+    const phases = (await auctionEvents()).map((e) => e.payload.phase)
+    expect(phases[0]).toBe("created")
+    expect(phases.at(-1)).toBe("ended")
+    expect(phases.filter((p) => p === "created")).toHaveLength(1)
   })
 })
 

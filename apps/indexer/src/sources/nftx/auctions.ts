@@ -486,7 +486,7 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
 
   // What each kept auction announces now.
   type Emit =
-    | { kind: "created"; a: KeptAuction; at: "log" | "batch" }
+    | { kind: "created"; a: KeptAuction; at: "log" | "batch"; block: bigint }
     | { kind: "live"; a: KeptAuction; block: bigint }
     | { kind: "price"; a: KeptAuction; log: ChainLog; priceQ96: bigint }
     | { kind: "ended"; a: KeptAuction; block: bigint }
@@ -504,8 +504,16 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
     const due = duePhases(a, input.toBlock)
     if (a.createdEmittedBlock === null) {
       const atLog = keptAtCreation.has(a.auction)
-      emits.push({ kind: "created", a, at: atLog ? "log" : "batch" })
-      a.createdEmittedBlock = atLog ? a.createdBlock : input.toBlock
+      // A keep that comes after the auction has started is announced at the block of its first
+      // announced phase, so `created` never follows `live`, a price or `ended`.
+      const block = [
+        input.toBlock,
+        ...(due.live === null ? [] : [due.live]),
+        ...priceLogs.filter((p) => p.a.auction === a.auction).map((p) => p.log.blockNumber),
+        ...(due.ended === null ? [] : [due.ended]),
+      ].reduce((m, b) => (b < m ? b : m))
+      emits.push({ kind: "created", a, at: atLog ? "log" : "batch", block })
+      a.createdEmittedBlock = atLog ? a.createdBlock : block
       dirty.add(a.auction)
     }
     if (due.live !== null) {
@@ -593,16 +601,16 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
               meta.hash,
             )
           } else {
-            const h = await header(input.toBlock)
+            const h = await header(e.block)
             push(
               auctionEvent(
                 a,
                 "created",
-                { block: input.toBlock, ts: h.ts },
+                { block: e.block, ts: h.ts },
                 {
                   clearingPriceWei: minBid(a),
                   raisedWei: 0n,
-                  bidders: biddersAt(a.auction, input.toBlock),
+                  bidders: biddersAt(a.auction, e.block),
                   ended: null,
                   slug,
                 },
