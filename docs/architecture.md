@@ -8,7 +8,7 @@ All sources are on Ink mainnet (chain ID 57073).
 
 | Part | Path | License | What it does |
 | --- | --- | --- | --- |
-| SDK | `packages/sdk` | MIT | Event decoders, curve math, event builders and readers for InkyPump V2, ink.fun, Tsunami and Hookit, decoders for NFT mints, SeaDrop, Seaport and Chimera, and OpenSea response parsers |
+| SDK | `packages/sdk` | MIT | Event decoders, curve math, event builders and readers for InkyPump V2, ink.fun, Tsunami and Hookit, decoders for NFT mints, SeaDrop, Seaport and Chimera, NFTX and continuous clearing auction decoders, pool price math and state readers, and OpenSea response parsers |
 | Events | `packages/events` | MIT | Typed, versioned event schema. The public contract between the indexer and anything that reads it |
 | DB | `packages/db` | AGPL-3.0 | Postgres schema and migrations |
 | Indexer | `apps/indexer` | AGPL-3.0 | Follows Ink, reads OpenSea, writes normalized rows |
@@ -31,7 +31,7 @@ All sources are on Ink mainnet (chain ID 57073).
  │  one module per source:               │
  │  InkyPump · ink.fun · Tsunami         │
  │  Hookit                               │
- │  NFTs · OpenSea                       │
+ │  NFTs · OpenSea · NFTX                │
  └───────────────────────────────────────┘
                     │
                     ▼
@@ -58,6 +58,7 @@ Each source is a module in `apps/indexer/src/sources/`. Adding a protocol means 
 | Hookit | Master launches that trade in concentrated Uniswap v4 pools from their first block (one pool per market), Classic launches on a bonding curve with their buys, sells, progress and graduation into a pool, and each launch's IPFS or inline metadata | One topic-only filter merged with the other launchpads' (Master `TokenLaunched`, `MarketLaunched`, `LaunchConfigured` and `DevBuyExecuted`; Classic `TokenLaunched`, `Bought`, `Sold`, `HktHolderDrop` and `Graduated`), trusted by emitter: the five Master factories for Master events, the Classic factory for Classic events. See ADR 0039 |
 | Uniswap v4 pools | Swaps in the pools of tracked tokens, with the trader, market cap, all-time-high market cap and pool liquidity; transfers of those tokens to the dead address (and, for Hookit tokens, to the zero address) | PoolManager `Swap` logs filtered to the pool ids in the pool registry, and `Transfer` logs to the dead address, read with `eth_getLogs`. See ADR 0033 |
 | NFTs (chain) | ERC-721 and ERC-1155 mints and burns, SeaDrop drops and mint progress, Seaport sales, Chimera collection launches | `Transfer`, SeaDrop, `OrderFulfilled` and `CampaignCreated` logs on Ink. See ADR 0016 |
+| NFTX | Collections and their floor tokens, the opening of each pool, pool prices, listings, listing fills, instant sells and buys, and continuous clearing auctions of floor tokens | One address-bound filter over the Locker, Zaps, royalty gate, Listings contract and hook, each kind of log accepted only from the contract that emits it, plus the auction factory and its auctions. Auction state the contract updates lazily is read with one multicall at the block. See ADR 0041, ADR 0042 and ADR 0044 |
 | OpenSea | Collection pages, drop schedules, floors and stats, listings, item ranks, creator accounts | API v2 with chain slug `ink`, and the Stream API for listings, both drawing on one shared request budget. See ADR 0017 and ADR 0019 |
 
 **Mechanics the SDK models**
@@ -73,16 +74,20 @@ NFT events share a `contract` (also the row's `entity`) and a `source` of `chain
 | `nft.collection` | A collection is discovered, and whenever its page, kind, quality-check result or creator changes | chain and OpenSea |
 | `nft.drop` | A drop schedule is first read or changes | OpenSea |
 | `nft.mint` | A stage starts, a mint passes 25%, 50% or 75% of the max supply, and at sell-out | chain, with stage starts from the drop schedule and, for a verified collection with no SeaDrop stages, after 10 mints (`nft:start:<contract>`). A contract that had items minted before its first stored mint gets only `sold_out` (ADR 0027) |
-| `nft.listing` | A Stream listing passes the listing filter | OpenSea |
-| `nft.sale` | A Seaport fill | chain |
-| `nft.stats` | Floor, owners, volume, sales or listed count changes | OpenSea |
-| `nft.launch` | A Chimera campaign is created | chain |
+| `nft.listing` | A Stream listing passes the listing filter, or an NFTX listing is created | OpenSea and chain |
+| `nft.sale` | A Seaport fill, an NFTX listing fill, or an instant sell or buy against an NFTX pool | chain |
+| `nft.stats` | Floor, owners, volume, sales or listed count changes, and an NFTX pool price moves 1% or more | OpenSea and chain |
+| `nft.launch` | A Chimera campaign is created, or an NFTX collection opens trading | chain |
+| `nft.auction` | A floor-token auction is kept, opens for bids, updates its clearing price, or ends | chain |
 
 - **Quality checks.** The indexer judges each collection on four checks (OpenSea page, mint structure, traits, and not being farm-minted). A page needs an X or website link that is not on more than 5 collections, and a name that no verified or manually real collection holds and writes the result into `nft.collection`. Collections that pass appear in feeds; the others can still be looked up and followed. ADR 0017 has the rules.
+- **Combined floor.** For a collection with an NFTX market, the floor in `nft.stats` and `nft.listing` is the lower of the OpenSea floor and the NFTX pool's spot price, with `floorMarket` saying which one. Pool prices come from the pool's `PoolStateUpdated` logs and are stored per log, so a reorg removes them with their block (ADR 0042).
+- **Floor-token auctions.** Every auction the factory creates is stored with its bids. Only an auction that sells a collection's floor token, was created by the collection's NFTX creator, its contract's owner or NFTX's launchpad, is paid in ETH, sells at least half the floor token's supply and is the collection's first such auction is announced, once per phase. `pnpm nft:auction` links one by hand (ADR 0044).
+- **Mint milestones.** Any collection judged or marked real gets progress and sold-out events from the indexer's own mint count, not only SeaDrop drops (ADR 0043).
 - **One log, several events.** `indexer.events` is unique on `(tx_hash, log_index, sub)`, so a sweep or a log that crosses two mint milestones yields one row per event (ADR 0016).
 - **OpenSea budget.** Every process using the key draws from one request budget in Postgres (ADR 0019), so the hourly limit holds across processes.
 - **Stream.** Listings arrive over the Stream in shards of 50 collections per connection, with a one-connection fallback for every collection (ADR 0017).
-- **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `inkfun` (ink.fun launches, curve trades and migrations), `tsunami` (Tsunami launches, curve trades and graduations), `hookit` (Hookit launches, Classic curve trades and graduations), `v4-swaps` (Uniswap v4 swaps and burns for registered pools), `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera).
+- **Backfill.** `pnpm backfill --sources` reads only the named sources: `inkypump`, `inkfun` (ink.fun launches, curve trades and migrations), `tsunami` (Tsunami launches, curve trades and graduations), `hookit` (Hookit launches, Classic curve trades and graduations), `v4-swaps` (Uniswap v4 swaps and burns for registered pools), `nft-mints` (mints, burns, SeaDrop), `nft-sales` (Seaport) and `nft-launches` (Chimera) and `nftx` (NFTX collections, pool prices, sales, listings and auctions).
 - **Backfill beside `start`.** A backfill write reads the chain head, confirms the rows below it and checks that no confirmed row is above an unconfirmed one, and writes again at a newer head when one is (ADR 0038). A platform stays out of `INDEXER_SOURCES` while its own backfill runs, and a short final stop backfills the last blocks up to the cursor and hands it over. The source groups it backfills may overlap the live tick's rows: duplicates are dropped, the ath only rises, and a dead balance is written only for a newer block.
 
 ## Data model
@@ -101,10 +106,12 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 | `nft_sales` | tx_hash, log_index, contract, token_id, qty, price_wei, currency, buyer, seller, order_hash, block. Kept 90 days |
 | `nft_drops`, `nft_stages` | The drop schedule from OpenSea, and each stage's first mint |
 | `nft_seadrop_config`, `nft_items_seen` | SeaDrop configuration logs, and the item names and images the listings saw |
-| `nft_launches` | Chimera campaigns: collection, token, creator, pool, block |
+| `nft_launches` | Chimera campaigns and NFTX openings, keyed by collection and launchpad: token, creator, pool, block |
+| `nftx_collections`, `nftx_prices` | NFTX collections with their floor token, pool, creator and the last emitted pool state, and one price row per `PoolStateUpdated` |
+| `nftx_auctions`, `nftx_auction_bids` | Every auction the factory created, whether kept or not, and each bid, exit and claim in it |
 | `nft_job_failures` | Consecutive failed OpenSea requests per collection and job, for the retry back-off (ADR 0030) |
 | `nft_stats`, `nft_listing_state`, `nft_ranks`, `nft_accounts` | Floor and stats history, the last listed price per item, cached item ranks, cached creator accounts |
-| `nft_overrides` | Manual verdicts and kinds set with `pnpm nft:mark` |
+| `nft_overrides` | Manual verdicts, kinds and max supplies set with `pnpm nft:mark` |
 | `opensea_budget` | The shared OpenSea request budget (ADR 0019) |
 | `events` | id, type, entity, payload (normalized JSON), block, confirmed, tx_hash, log_index, sub |
 | `cursors`, `recent_blocks` | The shared chain cursor, and the last 128 block hashes the reorg check compares |

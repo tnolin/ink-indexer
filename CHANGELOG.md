@@ -2,6 +2,21 @@
 
 Notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- Indexer: NFTX, as the `nftx` platform and backfill name (part of the default `INDEXER_SOURCES`). It follows NFTX collections and their floor tokens, the opening of each Uniswap v4 pool, pool prices, instant sells and buys, listings and listing fills (including fills paid through a Zap). See ADR 0041.
+- Indexer: `nft.sale` events for NFTX trades, with `market: "nftx"` and `via` set to `listing`, `instant_sell` or `instant_buy`, and `nft.listing` events for NFTX listings priced at their floor multiple of the pool price.
+- Indexer: a collection with an NFTX market has a combined floor, the lower of its OpenSea floor and its NFTX pool price, in `nft.stats` and `nft.listing`. A pool price that moves 1% or more emits `nft.stats`. See ADR 0042.
+- Indexer: `nft.launch` for a collection that opens trading on NFTX, and `nft.collection` snapshots with `launchpad: "nftx"` from the collection's creation.
+- Indexer: Uniswap continuous clearing auctions of NFTX floor tokens, followed through `created`, `live`, `price` and `ended` as `nft.auction` events, with the amount raised, the clearing price, the bidders and whether the auction graduated read from the contract as of each event's block. `pnpm nft:auction <auction> <contract>` links an auction the automatic check missed to a collection. See ADR 0044.
+- Indexer: mint progress and sold-out events for every collection that is judged or marked real, counted from the indexer's own stored mints, not only for SeaDrop drops. `pnpm nft:mark <contract> <mark> --max-supply <n>` sets a max supply by hand, and `clear` forgets it. See ADR 0043.
+- Indexer: a Seaport sale whose item goes into the NFTX Locker in the same transaction carries `toPool: true`, and mints into the Locker are no longer stored, counted toward milestones or counted as a minting wallet.
+- Events: optional NFTX fields on `nft.collection`, `nft.listing`, `nft.sale` and `nft.stats` (`market`, `via`, `toPool`, `floorMultiple`, `listingType`, `floorMarket`, `nftxFloorWei`, `poolCount`, `nftxSlug`) and the `nft.auction` event (`events-v5`). Schema version stays 2.
+- SDK: NFTX and auction log decoding, pool and auction price math, and readers for listings, pool sizes, owners and auction checkpoints at a block.
+- DB: migration 0019 adds the `nftx_collections`, `nftx_prices`, `nftx_auctions` and `nftx_auction_bids` tables, the market columns on `nft_sales` and `nft_stats`, the collection slug and a max supply override. `nft_launches` is keyed by collection and launchpad, so a collection can have a Chimera launch and an NFTX launch.
+
 ## [indexer-v0.7.1] - 2026-11-10
 
 ### Fixed
