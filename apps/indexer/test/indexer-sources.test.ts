@@ -5,6 +5,8 @@ import {
   HOOKIT_TOPICS,
   INKFUN_TOPICS,
   NATIVE_QUOTE_ASSET,
+  NFTX_LOCKER,
+  NFTX_TOPICS,
   SEADROP_V1,
   TSUNAMI_TOPICS,
   UNISWAP_V4_POOL_MANAGER,
@@ -18,6 +20,7 @@ import { hookitSource } from "../src/sources/hookit/index"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { nftSource } from "../src/sources/nft/index"
+import { nftxSource } from "../src/sources/nftx/index"
 import { PoolRegistry } from "../src/sources/pools"
 import { tsunamiSource } from "../src/sources/tsunami/index"
 import { v4Source } from "../src/sources/v4/index"
@@ -39,7 +42,15 @@ describe("readSources", () => {
   it("enables every platform when unset or empty", () => {
     for (const v of [undefined, "", "  "]) {
       const s = sources({ INDEXER_SOURCES: v })
-      expect(s.names).toEqual(["inkypump", "opensea", "chimera", "inkfun", "tsunami", "hookit"])
+      expect(s.names).toEqual([
+        "inkypump",
+        "opensea",
+        "chimera",
+        "inkfun",
+        "tsunami",
+        "hookit",
+        "nftx",
+      ])
       expect(s.openSea).toBe(true)
       expect(s.groups).toEqual([
         "inkypump",
@@ -50,6 +61,7 @@ describe("readSources", () => {
         "inkfun",
         "tsunami",
         "hookit",
+        "nftx",
       ])
     }
   })
@@ -75,6 +87,10 @@ describe("readSources", () => {
       groups: ["hookit", "v4-swaps"],
       openSea: false,
     })
+    expect(sources({ INDEXER_SOURCES: "nftx" })).toMatchObject({
+      groups: ["nftx"],
+      openSea: false,
+    })
   })
 
   it("lists a shared backfill group once", () => {
@@ -95,7 +111,7 @@ describe("readSources", () => {
 
   it("rejects an unknown name, naming the allowed ones", () => {
     expect(() => sources({ INDEXER_SOURCES: "inkypump,bogus" })).toThrow(
-      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera, inkfun, tsunami, hookit)",
+      "INDEXER_SOURCES: unknown platform: bogus (expected inkypump, opensea, chimera, inkfun, tsunami, hookit, nftx)",
     )
   })
 
@@ -155,6 +171,7 @@ describe("the live tick with INDEXER_SOURCES", () => {
         }),
         v4Source({ sql, chain, pools, logger: quiet }),
         nftSource({ sql, chain, logger: quiet }),
+        nftxSource({ sql, chain, logger: quiet }),
       ],
     })
     await idx.init()
@@ -228,6 +245,13 @@ describe("the live tick with INDEXER_SOURCES", () => {
     expect(asked).toHaveLength(4)
     expect(asked.filter((f) => f.address === CHIMERA_FACTORY)).toHaveLength(1)
     expect(asked.some((f) => f.address === SEADROP_V1)).toBe(false)
+  })
+
+  it("nftx alone reads the NFTX contracts in one address-bound request", async () => {
+    const asked = await liveFilters({ INDEXER_SOURCES: "nftx" })
+    expect(asked).toHaveLength(1)
+    expect(JSON.stringify(asked[0]?.address)).toContain(NFTX_LOCKER)
+    expect(JSON.stringify(asked[0]?.topics)).toContain(NFTX_TOPICS.CollectionCreated)
   })
 
   it("opensea alone reads the mint and sale filters in 4 requests", async () => {

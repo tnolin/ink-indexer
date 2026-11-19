@@ -61,6 +61,7 @@ describe("blockSendersFor", () => {
           hash: chain.hashOf(n),
           timestamp: 1_000 + Number(n - FIRST),
           senders: new Map([[tx(n), who(n)]]),
+          targets: new Map(),
         },
       )
     }

@@ -12,6 +12,7 @@ import { inkfunSource } from "./sources/inkfun/index"
 import { inkypumpSource } from "./sources/inkypump/index"
 import { nftSource } from "./sources/nft/index"
 import { createCollectionsFromSales } from "./sources/nft/write"
+import { nftxSource } from "./sources/nftx/index"
 import { PoolRegistry } from "./sources/pools"
 import { tsunamiSource } from "./sources/tsunami/index"
 import { v4Source } from "./sources/v4/index"
@@ -141,6 +142,7 @@ try {
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools, blockReads }),
       nftSource({ sql, chain, logger: log }),
+      nftxSource({ sql, chain, logger: log, report: reporter, blockReads }),
     ],
   })
   await indexer.init()

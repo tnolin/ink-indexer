@@ -1,6 +1,8 @@
 import {
   BlockNotFoundError,
   ContractFunctionExecutionError,
+  encodeFunctionResult,
+  parseAbi,
   SocketClosedError,
   TimeoutError,
   WebSocketRequestError,
@@ -587,5 +589,169 @@ describe("viemChain Hookit reads", () => {
       [11n, ["launches"]],
     ])
     expect(sleeps).toEqual([1_000, 1_000])
+  })
+})
+
+describe("viemChain NFTX reads", () => {
+  const COLLECTION = "0x00000000000000000000000000000000000000c1" as const
+  const OWNER = "0x00000000000000000000000000000000000000A1"
+  const ok = (result: unknown) => ({ status: "success", result })
+  const failed = { status: "failure", error: new Error("execution reverted") }
+
+  /** A chain over a client whose `multicall` and `call` are the given functions. */
+  function nftxChain(client: { multicall?: unknown; call?: unknown }) {
+    const sleeps: number[] = []
+    const base = {
+      getBlockNumber: async () => 1n,
+      getBlock: async () => {
+        throw new Error("not used")
+      },
+      ...client,
+    } as unknown as Parameters<typeof viemChain>[0] & BlockReader
+    const chain = viemChain(base, {} as LogRouter, {
+      logger: () => {},
+      sleep: async (ms) => {
+        sleeps.push(ms)
+      },
+    })
+    return { chain, sleeps }
+  }
+
+  it("getBlockSenders maps each transaction to its target, null for a creation", async () => {
+    const TO = "0xAbCdEf0000000000000000000000000000000009"
+    const { chain } = fullChain(
+      async () => [],
+      async () => ({
+        hash: `0x${"AB".repeat(32)}`,
+        timestamp: 7n,
+        transactions: [
+          { hash: `0x${"CD".repeat(32)}`, from: OWNER, to: TO },
+          { hash: `0x${"EF".repeat(32)}`, from: OWNER, to: null },
+        ],
+      }),
+    )
+    const r = await chain.getBlockSenders(9n)
+    expect([...(r?.targets ?? [])]).toEqual([
+      [`0x${"cd".repeat(32)}`, TO.toLowerCase()],
+      [`0x${"ef".repeat(32)}`, null],
+    ])
+  })
+
+  it("readNftxListings makes two multicalls, listing and price then type, and a revert gives null", async () => {
+    const seen: string[][] = []
+    const { chain } = nftxChain({
+      multicall: async (a: { contracts: { functionName: string }[] }) => {
+        seen.push(a.contracts.map((c) => c.functionName))
+        if (a.contracts[0]?.functionName === "listings")
+          return [
+            ok({ owner: OWNER, created: 100, duration: 3600, floorMultiple: 150 }),
+            ok([true, 7n]),
+            failed,
+            failed,
+          ]
+        return [ok(1)]
+      },
+    })
+    const out = await chain.readNftxListings(
+      [
+        { collection: COLLECTION, tokenId: 1n },
+        { collection: COLLECTION, tokenId: 2n },
+      ],
+      10n,
+    )
+    expect(seen).toEqual([
+      ["listings", "getListingPrice", "listings", "getListingPrice"],
+      ["getListingType"],
+    ])
+    expect(out).toEqual([
+      {
+        owner: OWNER.toLowerCase(),
+        created: 100,
+        duration: 3600,
+        floorMultiple: 150,
+        priceTokens: 7n,
+        type: "liquid",
+      },
+      null,
+    ])
+  })
+
+  it("readNftxPoolCounts and readOwners make one multicall each", async () => {
+    let calls = 0
+    const { chain } = nftxChain({
+      multicall: async (a: { contracts: { functionName: string }[] }) => {
+        calls++
+        return a.contracts[0]?.functionName === "owner" ? [ok(OWNER)] : [ok(10n), ok(3n)]
+      },
+    })
+    expect(await chain.readNftxPoolCounts([COLLECTION], 10n)).toEqual([7])
+    expect(await chain.readOwners([COLLECTION], 10n)).toEqual([OWNER.toLowerCase()])
+    expect(calls).toBe(2)
+  })
+
+  it("readNftxListings, readNftxPoolCounts and readOwners each retry a transport error", async () => {
+    for (const read of [
+      (c: ReturnType<typeof nftxChain>["chain"]) =>
+        c.readNftxListings([{ collection: COLLECTION, tokenId: 1n }], 10n),
+      (c: ReturnType<typeof nftxChain>["chain"]) => c.readNftxPoolCounts([COLLECTION], 10n),
+      (c: ReturnType<typeof nftxChain>["chain"]) => c.readOwners([COLLECTION], 10n),
+    ]) {
+      let calls = 0
+      const { chain, sleeps } = nftxChain({
+        multicall: async () => {
+          if (++calls === 1) throw socketError()
+          return [failed, failed]
+        },
+      })
+      await read(chain)
+      expect(calls).toBe(2)
+      expect(sleeps).toEqual([1_000])
+    }
+  })
+
+  describe("readAuctionCheckpoint", () => {
+    const AUCTION = "0x00000000000000000000000000000000000000d1" as const
+    const aggregate = parseAbi([
+      "struct Result { bool success; bytes returnData; }",
+      "function aggregate3(Result[] calls) payable returns (Result[] returnData)",
+    ])
+    const word = (n: bigint) => `0x${n.toString(16).padStart(64, "0")}` as const
+    const answer = (graduated: boolean) =>
+      encodeFunctionResult({
+        abi: aggregate,
+        functionName: "aggregate3",
+        result: [
+          { success: true, returnData: "0x" },
+          { success: true, returnData: word(500n) },
+          { success: true, returnData: word(40n) },
+          { success: true, returnData: word(graduated ? 1n : 0n) },
+          { success: true, returnData: word(3n << 96n) },
+        ],
+      })
+
+    it("returns the checkpoint, reads at the given block and retries a transport error", async () => {
+      let calls = 0
+      const blocks: unknown[] = []
+      const { chain, sleeps } = nftxChain({
+        call: async (a: { blockNumber: bigint }) => {
+          if (++calls === 1) throw socketError()
+          blocks.push(a.blockNumber)
+          return { data: answer(true) }
+        },
+      })
+      expect(await chain.readAuctionCheckpoint(AUCTION, 12n)).toEqual({
+        clearingPriceQ96: 3n << 96n,
+        currencyRaised: 500n,
+        totalCleared: 40n,
+        graduated: true,
+      })
+      expect(blocks).toEqual([12n])
+      expect(sleeps).toEqual([1_000])
+    })
+
+    it("returns null when the call is empty", async () => {
+      const { chain } = nftxChain({ call: async () => ({ data: undefined }) })
+      expect(await chain.readAuctionCheckpoint(AUCTION, 12n)).toBeNull()
+    })
   })
 })

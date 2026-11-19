@@ -54,7 +54,7 @@ export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
 
 /**
  * The names `backfill --sources` takes. `inkypump` is the InkyPump source, `inkfun` the ink.fun
- * source and `tsunami` the Tsunami source (launches, curve trades and graduations), `hookit` the Hookit source (launches, markets and Classic curve trades), and
+ * source and `tsunami` the Tsunami source (launches, curve trades and graduations), `hookit` the Hookit source (launches, markets and Classic curve trades), `nftx` the NFTX source (collections, pool prices, sales, listings and auctions), and
  * `v4-swaps` the swaps and burns of tokens with a registered Uniswap v4 pool, whichever
  * PoolManager holds it. The NFT source's filters come in three
  * groups: `nft-mints` (mints, burns and SeaDrop logs), `nft-sales` (Seaport) and `nft-launches`
@@ -70,6 +70,7 @@ export const BACKFILL_SOURCES = [
   "nft-mints",
   "nft-sales",
   "nft-launches",
+  "nftx",
 ] as const
 export type BackfillSource = (typeof BACKFILL_SOURCES)[number]
 

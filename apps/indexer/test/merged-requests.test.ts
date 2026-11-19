@@ -301,6 +301,7 @@ class PoolChain implements Chain {
             [TSUNAMI_TX, A1 as Address],
             [HOOKIT_TX, A1 as Address],
           ]),
+          targets: new Map<Hash, Address | null>(),
         }
   }
   readBalances = async (pairs: unknown[]) => pairs.map(() => 0n)
@@ -308,6 +309,10 @@ class PoolChain implements Chain {
   readMaxSupply = async () => null
   readTotalSupplyAt = async () => null
   hasCodeAt = async () => false
+  readNftxListings = async (items: unknown[]) => items.map(() => null)
+  readNftxPoolCounts = async (collections: unknown[]) => collections.map(() => null)
+  readOwners = async (contracts: unknown[]) => contracts.map(() => null)
+  readAuctionCheckpoint = async () => null
 }
 
 /** Every subset of the names, in binary counting order (the first is empty). */
