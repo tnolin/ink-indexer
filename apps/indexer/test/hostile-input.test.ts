@@ -1,6 +1,7 @@
 import { appendFileSync } from "node:fs"
 import type { Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
+import { readNftxListings } from "@ink-indexer/sdk"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import { Indexer } from "../src/loop"
 import { type GetLogsParams, LogRouter } from "../src/rpc"
@@ -75,6 +76,24 @@ describe.each(Object.entries(HOSTILE_SOURCES))("hostile input: %s", (_name, scen
 
 it("every source has a hostile scenario", () => {
   expect(Object.keys(HOSTILE_SOURCES).sort()).toEqual(
-    ["hookit", "inkfun", "inkypump", "nft", "tsunami", "v4"].sort(),
+    ["hookit", "inkfun", "inkypump", "nft", "nftx", "tsunami", "v4"].sort(),
   )
+})
+
+it("a Listings fill of 10,000 ids is read in multicalls of bounded size", async () => {
+  const sizes: number[] = []
+  const client = {
+    multicall: async ({ contracts }: { contracts: unknown[] }) => {
+      sizes.push(contracts.length)
+      return contracts.map(() => ({ status: "failure", error: new Error("reverted") }))
+    },
+  }
+  const items = Array.from({ length: 10_000 }, (_, i) => ({
+    collection: "0x00000000000000000000000000000000000000c4" as const,
+    tokenId: BigInt(i),
+  }))
+  const reads = await readNftxListings(client as never, items, 1n)
+  expect(reads).toHaveLength(10_000)
+  expect(reads.every((r) => r === null)).toBe(true)
+  expect(Math.max(...sizes)).toBeLessThanOrEqual(500)
 })
