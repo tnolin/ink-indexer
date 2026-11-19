@@ -293,6 +293,17 @@ describe("listing fills", () => {
       ])
     })
 
+    it("an unreadable item stays in the split: the other item of a two-item buy gets half the total, not all of it (synthetic)", async () => {
+      const total = 1_000_000_000_000_000_001n
+      const t = await run(["eth-zap-buy"], (x) => {
+        buyOf(x, [1n, 2n], { total, tokens: [E18, E18] })
+        x.chain.nftxListings.set(`${POOL}:2`, null)
+      })
+      const rows = await sales()
+      expect(rows.map((r) => [r.token_id, BigInt(r.price_wei)])).toEqual([["1", total / 2n]])
+      expect(t.warnings.filter((w) => w.msg.includes("listing read"))).toHaveLength(1)
+    })
+
     it("is skipped with one warning without a Zap buy (synthetic)", async () => {
       const t = await run(["eth-zap-buy"], (x) => buyOf(x, [1n], {}))
       expect(await sales()).toEqual([])

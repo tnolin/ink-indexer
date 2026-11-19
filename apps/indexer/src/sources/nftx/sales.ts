@@ -178,6 +178,13 @@ function pricedFills(
   }
   const items = new Map<string, Fill>()
   const missed = new Set<string>()
+  // Items of a Zap buy that cannot be booked (no buyer or no listing read) still took part in its
+  // total, so they keep their share of an even split.
+  const unbooked = new Map<Address, number>()
+  const skip = (collection: Address, k: string) => {
+    missed.add(k)
+    unbooked.set(collection, (unbooked.get(collection) ?? 0) + 1)
+  }
   for (const { block, logIndex, d } of tx) {
     if (d.kind !== "filled") continue
     for (const id of unique(d.tokenIds)) {
@@ -187,13 +194,13 @@ function pricedFills(
       const buyer = withdrawn.get(k)
       if (!buyer) {
         reads.warn("ignoring a fill: the item has no withdrawal in its transaction", at)
-        missed.add(k)
+        skip(d.collection, k)
         continue
       }
       const read = reads.listingsBefore.get(k)
       if (!read) {
         reads.warn("ignoring a fill: the listing read reverted", at)
-        missed.add(k)
+        skip(d.collection, k)
         continue
       }
       items.set(k, { collection: d.collection, tokenId: id, block, logIndex, buyer, read })
@@ -207,14 +214,18 @@ function pricedFills(
   const out = new Map<string, SaleDraft>()
   for (const [collection, list] of byCollection) {
     const total = zapSpent.get(collection)
-    // With a Zap's total, the parts follow the listing prices; when any price is unreadable, they are equal.
+    // With a Zap's total, the parts follow the listing prices; when any price is unreadable, or an
+    // item of the buy could not be booked, they are equal across every item of the buy.
     const prices = list.map((it) => it.read.priceTokens)
+    const unread = unbooked.get(collection) ?? 0
     const parts =
       total === undefined
         ? null
         : splitTotal(
             total,
-            prices.every((p) => p !== null) ? (prices as bigint[]) : list.map(() => 1n),
+            unread === 0 && prices.every((p) => p !== null)
+              ? (prices as bigint[])
+              : Array.from({ length: list.length + unread }, () => 1n),
           )
     for (const [i, it] of list.entries()) {
       const spot = reads.spotAt(it.block, it.logIndex, collection)
