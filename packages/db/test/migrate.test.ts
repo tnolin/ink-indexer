@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { afterAll, expect, inject, it } from "vitest"
 import { connect, migrate } from "../src/index"
 
@@ -25,6 +27,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "0016_inkfun.sql",
     "0017_tsunami.sql",
     "0018_hookit.sql",
+    "0019_nftx.sql",
   ])
   expect(await migrate(sql)).toEqual([])
   const tables = await sql<{ table_name: string }[]>`
@@ -53,6 +56,10 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "nft_seadrop_mints",
     "nft_stages",
     "nft_stats",
+    "nftx_auction_bids",
+    "nftx_auctions",
+    "nftx_collections",
+    "nftx_prices",
     "opensea_budget",
     "pools",
     "recent_blocks",
@@ -325,4 +332,118 @@ it("pools gain nullable hook, tick range and ath columns", async () => {
     ["tick_lower", "YES"],
     ["tick_upper", "YES"],
   ])
+})
+
+const COLLECTION = "0x00000000000000000000000000000000000000c1"
+
+/** Applies every migration before `last` and records them, as a database that has not seen `last` yet. */
+async function migrateBefore(last: string) {
+  await sql`drop schema if exists indexer cascade`
+  await sql`create schema indexer`
+  await sql`create table indexer.migrations (name text primary key, applied_at timestamptz not null default now())`
+  const dir = join(import.meta.dirname, "../migrations")
+  for (const name of readdirSync(dir)
+    .filter((f) => f.endsWith(".sql") && f < last)
+    .sort()) {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(readFileSync(join(dir, name), "utf8"))
+      await tx`insert into indexer.migrations (name) values (${name})`
+    })
+  }
+}
+
+it("0019 applies on a database at 0018 and keeps existing rows", async () => {
+  await migrateBefore("0019")
+  await sql`insert into indexer.nft_collections (contract, launchpad, launch_token) values (${COLLECTION}, 'chimera', '0xd1')`
+  await sql`insert into indexer.nft_launches (collection, launchpad, campaign_id, token, core, pool_id, rewards, vault, creator, block)
+    values (${COLLECTION}, 'chimera', 5, '0xd1', '0xc0', '0xp0', '0xr0', '0xv0', '0xcr', 10)`
+  await sql`insert into indexer.nft_sales (tx_hash, log_index, token_id, contract, qty, price_wei, currency, buyer, seller, order_hash, block)
+    values ('0xaa', 1, 7, ${COLLECTION}, 1, 100, 'ETH', '0xb', '0xs', '0xo', 10)`
+  await sql`insert into indexer.nft_stats (contract, at, floor_wei, owners, volume_24h_wei, sales_24h)
+    values (${COLLECTION}, now(), 5, 1, 2, 3)`
+  await sql`insert into indexer.nft_overrides (contract, verdict) values (${COLLECTION}, 'real')`
+  expect(await migrate(sql)).toEqual(["0019_nftx.sql"])
+  expect(await sql`select launchpad, campaign_id::text from indexer.nft_launches`).toEqual([
+    { launchpad: "chimera", campaign_id: "5" },
+  ])
+  expect(await sql`select market, price_wei::text from indexer.nft_sales`).toEqual([
+    { market: null, price_wei: "100" },
+  ])
+  expect(
+    await sql`select floor_market, os_floor_wei, nftx_floor_wei, pool_count, block, floor_wei::text from indexer.nft_stats`,
+  ).toEqual([
+    {
+      floor_market: null,
+      os_floor_wei: null,
+      nftx_floor_wei: null,
+      pool_count: null,
+      block: null,
+      floor_wei: "5",
+    },
+  ])
+  expect(await sql`select verdict, max_supply from indexer.nft_overrides`).toEqual([
+    { verdict: "real", max_supply: null },
+  ])
+  expect(await sql`select nftx_slug from indexer.nft_collections`).toEqual([{ nftx_slug: null }])
+})
+
+it("a Chimera and an NFTX launch of one collection both fit nft_launches", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  await sql`insert into indexer.nft_launches (collection, launchpad, campaign_id, token, core, pool_id, rewards, vault, creator, block)
+    values (${COLLECTION}, 'chimera', 5, '0xd1', '0xc0', '0xp0', '0xr0', '0xv0', '0xcr', 10)`
+  await sql`insert into indexer.nft_launches (collection, launchpad, token, pool_id, creator, block)
+    values (${COLLECTION}, 'nftx', '0xf1', '0xp1', '0xcr', 11)`
+  expect(
+    await sql`select launchpad, campaign_id::text, core from indexer.nft_launches order by launchpad`,
+  ).toEqual([
+    { launchpad: "chimera", campaign_id: "5", core: "0xc0" },
+    { launchpad: "nftx", campaign_id: null, core: null },
+  ])
+  await expect(
+    sql`insert into indexer.nft_launches (collection, launchpad, token, pool_id, creator, block)
+      values (${COLLECTION}, 'nftx', '0xf2', '0xp2', '0xcr', 12)`,
+  ).rejects.toThrow(/duplicate key/)
+})
+
+it("an nft_sales row with market 'x' is refused", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const sale = (market: string) => sql`insert into indexer.nft_sales
+    (tx_hash, log_index, token_id, contract, qty, price_wei, currency, buyer, seller, order_hash, block, market)
+    values (${`0x${market}`}, 1, 7, ${COLLECTION}, 1, 100, 'ETH', '0xb', '0xs', '0xo', 10, ${market})`
+  await sale("nftx")
+  await sale("opensea")
+  await expect(sale("x")).rejects.toThrow(/nft_sales_market_check/)
+})
+
+it("an nft_stats row without block still inserts, and one with a market and block is checked", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  await sql`insert into indexer.nft_stats (contract, at, floor_wei) values (${COLLECTION}, now(), 1)`
+  await sql`insert into indexer.nft_stats (contract, at, floor_wei, floor_market, os_floor_wei, nftx_floor_wei, pool_count, block)
+    values (${COLLECTION}, now() + interval '1 second', 1, 'nftx', 3, 1, 60, 99)`
+  await expect(
+    sql`insert into indexer.nft_stats (contract, at, floor_market) values (${COLLECTION}, now() + interval '2 second', 'x')`,
+  ).rejects.toThrow(/nft_stats_floor_market_check/)
+})
+
+it("an NFTX auction keeps one row per auction and its bids refuse an unknown kind", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const auction = "0x00000000000000000000000000000000000000a0"
+  await sql`insert into indexer.nftx_auctions (auction, token, currency, start_block, end_block, claim_block, floor_price_q96, required_raise, amount, sender, tx_to, created_block, created_log_index)
+    values (${auction}, '0xt', '0x0', 1, 2, 3, 4, 0, 5, '0xs', '0xto', 1, 0)`
+  expect(await sql`select kept, manual, collection from indexer.nftx_auctions`).toEqual([
+    { kept: false, manual: false, collection: null },
+  ])
+  const bid = (
+    kind: string,
+    log: number,
+  ) => sql`insert into indexer.nftx_auction_bids (auction, block, log_index, kind, bid_id, owner)
+    values (${auction}, 1, ${log}, ${kind}, 0, '0xo')`
+  await bid("bid", 1)
+  await bid("exit", 2)
+  await bid("claim", 3)
+  await expect(bid("other", 4)).rejects.toThrow(/nftx_auction_bids_kind_check/)
 })
