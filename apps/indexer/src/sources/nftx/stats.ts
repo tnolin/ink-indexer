@@ -55,7 +55,7 @@ export type StatsPlan = {
   combinedSince: { collection: Address; at: number }[]
 }
 
-const moved = (last: bigint, next: bigint) => {
+export const moved = (last: bigint, next: bigint) => {
   const diff = next > last ? next - last : last - next
   return next !== last && diff * 100n >= last * MOVE_PERCENT
 }

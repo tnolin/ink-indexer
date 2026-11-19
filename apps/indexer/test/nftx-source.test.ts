@@ -24,6 +24,7 @@ import { Indexer } from "../src/loop"
 import { nftSource } from "../src/sources/nft/index"
 import { createVerdictJob } from "../src/sources/nft/verdict"
 import { nftxSource } from "../src/sources/nftx/index"
+import { moved } from "../src/sources/nftx/stats"
 import { fetchNftxSlug } from "../src/sources/nftx/slug"
 import { createSnapshots } from "../src/sources/opensea/snapshot"
 import { createStore, type Store } from "../src/store"
@@ -811,6 +812,33 @@ describe("stats from pool moves", () => {
     await arbitrageAfter(t, previous)
     expect((await statsEvents()).filter(ARB_STATS)).toHaveLength(emitted)
     expect((await statRows()).filter((r) => r.block === ARB_BLOCK.toString())).toHaveLength(emitted)
+  })
+
+  it("a move of exactly 1% up or down is announced, and one just under it is not", () => {
+    expect(moved(10_000n, 10_100n)).toBe(true)
+    expect(moved(10_000n, 9_900n)).toBe(true)
+    expect(moved(10_000n, 10_099n)).toBe(false)
+    expect(moved(10_000n, 9_901n)).toBe(false)
+    expect(moved(10_000n, 10_000n)).toBe(false)
+  })
+
+  // The only older row is the opening's, 14.6 days before the move. A history that begins after
+  // it has no 24h-ago floor.
+  it.each([
+    ["begins 10 hours before the move: none", 10 * 3600, null],
+    ["begins before the opening: the opening's", 15 * 86400, "899999999999999"],
+  ])("a combined history that %s", async (_name, before, expected) => {
+    const arb = loadNftxFixture("arbitrage-lildudes")
+    const t = setup(["lildudes-created", "lildudes-init"])
+    t.chain.nftxPoolCounts.set(LD, 61)
+    await t.live()
+    await sql`update indexer.nftx_collections set combined_since = ${new Date((arb.timestamp - before) * 1000)}
+      where collection = ${LD}`
+    addFixture(t.chain, arb)
+    t.chain.head = ARB_BLOCK + 100n
+    await t.idx.trigger()
+    const [event] = (await statsEvents()).filter(ARB_STATS)
+    expect(event!.payload.floor24hAgoWei).toBe(expected)
   })
 
   it("announces a move with the combined floor, the pool size read at its block and its own id", async () => {

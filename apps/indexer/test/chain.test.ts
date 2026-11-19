@@ -1,10 +1,12 @@
 import {
   BlockNotFoundError,
   ContractFunctionExecutionError,
+  decodeFunctionData,
   encodeFunctionResult,
   parseAbi,
   SocketClosedError,
   TimeoutError,
+  toFunctionSelector,
   WebSocketRequestError,
 } from "viem"
 import { describe, expect, it } from "vitest"
@@ -752,6 +754,36 @@ describe("viemChain NFTX reads", () => {
     it("returns null when the call is empty", async () => {
       const { chain } = nftxChain({ call: async () => ({ data: undefined }) })
       expect(await chain.readAuctionCheckpoint(AUCTION, 12n)).toBeNull()
+    })
+
+    it("runs checkpoint() before the four reads in one aggregate3 call", async () => {
+      const sent: `0x${string}`[] = []
+      const { chain } = nftxChain({
+        call: async (a: { data: `0x${string}` }) => {
+          sent.push(a.data)
+          return { data: answer(true) }
+        },
+      })
+      await chain.readAuctionCheckpoint(AUCTION, 12n)
+      expect(sent).toHaveLength(1)
+      const { args } = decodeFunctionData({
+        abi: parseAbi([
+          "struct Call3 { address target; bool allowFailure; bytes callData; }",
+          "function aggregate3(Call3[] calls) payable returns ((bool success, bytes returnData)[])",
+        ]),
+        data: sent[0]!,
+      })
+      const calls = args[0]
+      expect(calls.map((c) => c.target.toLowerCase())).toEqual(Array(5).fill(AUCTION))
+      expect(calls.map((c) => c.callData)).toEqual(
+        [
+          "checkpoint()",
+          "currencyRaised()",
+          "totalCleared()",
+          "isGraduated()",
+          "clearingPrice()",
+        ].map((sig) => toFunctionSelector(sig)),
+      )
     })
   })
 })
