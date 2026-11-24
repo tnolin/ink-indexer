@@ -28,6 +28,8 @@ export type StatsBasis = {
   combinedSince: Date | null
   slug: string | null
   maxSupply: string | null
+  /** The collection's creation block, which picks its Locker. */
+  createdBlock: bigint
 }
 
 /** One `nft_stats` row written from a pool move. */
@@ -115,7 +117,13 @@ export async function planStats(
   const counts = new Map<string, number | null>()
   for (const block of new Set(moves.map((m) => m.block))) {
     const at = [...new Set(moves.filter((m) => m.block === block).map((m) => m.collection))]
-    const read = await chain.readNftxPoolCounts(at, block)
+    const read = await chain.readNftxPoolCounts(
+      at.map((collection) => ({
+        collection,
+        createdBlock: input.basis.get(collection)!.createdBlock,
+      })),
+      block,
+    )
     for (const [i, c] of at.entries()) counts.set(`${c}:${block}`, read[i] ?? null)
   }
 

@@ -284,7 +284,10 @@ export class FakeChain implements Chain {
     })
   }
 
-  async readNftxListings(items: { collection: Address; tokenId: bigint }[], block: bigint) {
+  async readNftxListings(
+    items: { collection: Address; tokenId: bigint; listings?: Address }[],
+    block: bigint,
+  ) {
     this.nftxListingReads.push({ items, block })
     return items.map((i) => {
       const v = this.nftxListings.get(`${i.collection}:${i.tokenId}`) ?? null
@@ -292,7 +295,8 @@ export class FakeChain implements Chain {
     })
   }
 
-  async readNftxPoolCounts(collections: Address[], block: bigint) {
+  async readNftxPoolCounts(reads: { collection: Address; createdBlock: bigint }[], block: bigint) {
+    const collections = reads.map((r) => r.collection)
     this.poolCountReads.push({ collections, block })
     if (this.poolCountError) throw this.poolCountError
     return collections.map((c) => {

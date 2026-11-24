@@ -333,7 +333,7 @@ For `launchpad: "nftx"` the launch is the collection's `CollectionInitialized`: 
 
 ### `nft.auction`
 
-A Uniswap continuous clearing auction of an NFTX floor token, followed for its whole life. `contract` is the collection. An auction is followed only when it sells the floor token of an NFTX collection, was created by the collection's NFTX creator, its NFT contract's owner or NFTX's launchpad, is paid in ETH, sells at least half of the floor token's supply and is the collection's first such auction. One type covers its phases:
+A Uniswap continuous clearing auction of an NFTX floor token, or of the claim token of a launch made through NFTX's launchpad, followed for its whole life. `contract` is the collection. A floor-token auction is followed only when it was created by the collection's NFTX creator, its NFT contract's owner or NFTX's launchpad, is paid in ETH, sells at least half of the floor token's supply and is the collection's first such auction. The launchpad's own auction of a launch is always followed: `token` is its claim token (one claim token is one NFT) and `currency` is `"ETH"` or the currency's address. One type covers its phases:
 
 - `created`: the indexer recognised the auction.
 - `live`: bidding opened, at `max(startBlock, the block the tokens arrived)`.

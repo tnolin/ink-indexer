@@ -377,6 +377,8 @@ export const NFTX_FIXTURES = [
   "eth-listing-created",
   "eth-floor-redeemed",
   "eth-sold-for-eth",
+  "eyeoftheseeker-created",
+  "eyeoftheseeker-deposit",
 ] as const
 export type NftxFixtureName = (typeof NFTX_FIXTURES)[number]
 

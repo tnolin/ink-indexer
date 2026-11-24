@@ -2,6 +2,19 @@
 
 Notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [indexer-v0.8.1] - 2026-11-24
+
+### Added
+
+- Indexer: auctions started by NFTX's launchpad. A launch's collection, claim token and auction are stored from its `LaunchCreated` log, and the auction is announced as `nft.auction` with the claim token as `token` and its real currency, in ETH or an ERC-20. The collection is marked real. See ADR 0046.
+- Indexer: the second NFTX Locker, with its hook and Listings contract. Collections, deposits, withdrawals, listings, sales and pool prices are read from both Lockers.
+
+### Fixed
+
+- Indexer: a collection created in the second NFTX Locker, such as Eye of the Seeker, was never stored. Run `pnpm backfill --from 61714955 --sources nftx` after upgrading to add the collections and trades of that period.
+- Indexer: a listing is read from the Listings contract that logged it, and a pool size from the Locker of the collection's generation.
+- Events: the `nft.auction` `token` comment says the token the auction sells, which is the claim token for a launchpad auction.
+
 ## [indexer-v0.8.0] - 2026-11-19
 
 ### Added

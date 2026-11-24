@@ -375,12 +375,19 @@ export async function planSales(
   if (sellers.length === 0) return plan
 
   // Listings one block before each block with a fill or a relist.
-  const listed = new Map<bigint, Map<string, { collection: Address; tokenId: bigint }>>()
+  const listed = new Map<
+    bigint,
+    Map<string, { collection: Address; tokenId: bigint; listings: Address }>
+  >()
   for (const { log, d } of known) {
     const ids = d.kind === "filled" ? d.tokenIds : d.kind === "relisted" ? [d.tokenId] : []
     for (const tokenId of ids) {
       const at = listed.get(log.blockNumber) ?? new Map()
-      at.set(`${d.collection}:${tokenId}`, { collection: d.collection, tokenId })
+      at.set(`${d.collection}:${tokenId}`, {
+        collection: d.collection,
+        tokenId,
+        listings: log.address,
+      })
       listed.set(log.blockNumber, at)
     }
   }

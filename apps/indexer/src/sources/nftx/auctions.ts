@@ -16,8 +16,9 @@ import { BLOCK_S } from "../nft/policy"
 import { servedAt } from "../senders"
 import type { EventRow } from "../source"
 
-// Uniswap continuous clearing auctions of NFTX floor tokens. Every auction the factory creates is
-// stored with its bids; only those that sell a collection's own floor token are announced.
+// Uniswap continuous clearing auctions. Every auction the factory creates is stored with its bids;
+// only those that sell a collection's own floor token, or that NFTX's launchpad started for a
+// launch, are announced (ADR 0044, ADR 0046).
 
 const ZERO: Address = "0x0000000000000000000000000000000000000000"
 const E18 = 10n ** 18n
@@ -199,11 +200,23 @@ export type AuctionDeps = {
   launchpad: Address | null
 }
 
+/** A launch the launchpad created: its collection, claim token and the auction that sells it. */
+export type LaunchInput = {
+  collection: Address
+  floorToken: Address
+  creator: Address
+  claimToken: Address
+  auction: Address
+  block: bigint
+}
+
 export type AuctionInput = {
   /** The factory's `AuctionCreated` logs. */
   factoryLogs: ChainLog[]
   /** Every log of an auction topic from any address: only those of stored or new auctions count. */
   auctionLogs: ChainLog[]
+  /** The launchpad's `LaunchCreated` logs of the batch. */
+  launches: LaunchInput[]
   /** Collections created in this batch. */
   created: { collection: Address; floorToken: Address; creator: Address; block: bigint }[]
   /** Slugs fetched in this batch. */
@@ -293,6 +306,7 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
     ...new Set([...creations.map((c) => c.d.auction), ...logs.map((l) => l.log.address)]),
   ]
   const createdTokens = new Set(input.created.map((c) => c.floorToken))
+  const launchOf = new Map(input.launches.map((l) => [l.auction, l]))
   // Stored auctions with a phase still to announce are read on every batch: another process may
   // have linked one since the last.
   const stored = await sql<DbRow[]>`
@@ -302,6 +316,7 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
       tokens_received_block::text, created_emitted_block::text, live_block::text, ended_block::text
     from indexer.nftx_auctions
     where auction = any(${sql.array(ids)}::text[])
+      or auction = any(${sql.array([...launchOf.keys()])}::text[])
       or token = any(${sql.array([...createdTokens])}::text[])
       or (kept and (created_emitted_block is null or live_block is null or ended_block is null))`
   const auctions = new Map<Address, StoredAuction>(stored.map((r) => [r.auction, fromDb(r)]))
@@ -419,7 +434,10 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
   // Keep check: for auctions created in this batch, and for stored ones whose floor token's
   // collection was created in it.
   const toCheck = [...auctions.values()]
-    .filter((a) => !a.kept && (isNew.has(a.auction) || createdTokens.has(a.token)))
+    .filter(
+      (a) =>
+        !a.kept && (isNew.has(a.auction) || createdTokens.has(a.token) || launchOf.has(a.auction)),
+    )
     .sort((x, y) =>
       x.createdBlock === y.createdBlock
         ? x.createdLogIndex - y.createdLogIndex
@@ -460,6 +478,19 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
     for (const a of auctions.values()) if (a.kept && a.collection) keptCollections.add(a.collection)
 
     for (const a of toCheck) {
+      // The launchpad creates the collection and starts its auction in one transaction, so the
+      // auction it names, selling the claim token it names, is the collection's own. The factory
+      // log is the proof that the auction exists; no floor-token, currency or sender check applies.
+      const launch = launchOf.get(a.auction)
+      if (launch && a.token === launch.claimToken) {
+        a.kept = true
+        a.collection = launch.collection
+        a.keptBlock = launch.block > a.createdBlock ? launch.block : a.createdBlock
+        dirty.add(a.auction)
+        keptCollections.add(launch.collection)
+        if (isNew.has(a.auction)) keptAtCreation.add(a.auction)
+        continue
+      }
       const col = collections.get(a.token)
       if (!col) continue
       const already = keptCollections.has(col.collection)

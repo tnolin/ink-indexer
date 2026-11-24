@@ -7,7 +7,7 @@ import {
   parseAbi,
 } from "viem"
 import { ccaAuctionAbi, nftxCollectionAbi, nftxListingsAbi } from "./abi"
-import { NFTX_LISTINGS, NFTX_LOCKER } from "./constants"
+import { NFTX_LISTINGS, nftxDeploymentAt } from "./constants"
 
 export type NftxReader = Pick<PublicClient, "multicall" | "call">
 
@@ -38,13 +38,14 @@ const chunks = <T>(items: T[]): T[][] => {
 }
 
 /**
- * The Listings contract's record, price and type of each item at one block, in the order given. A
+ * The Listings contract's record, price and type of each item at one block, in the order given. An
+ * item names the Listings contract that logged it; with none, the first deployment's answers. A
  * zero owner marks a floor item. An item whose `listings` call reverts gives null. A transport
  * failure throws. Each chunk costs two multicalls: record and price, then type.
  */
 export async function readNftxListings(
   client: Pick<PublicClient, "multicall">,
-  items: { collection: Address; tokenId: bigint }[],
+  items: { collection: Address; tokenId: bigint; listings?: Address }[],
   block: bigint,
 ): Promise<(NftxListingRead | null)[]> {
   const out: (NftxListingRead | null)[] = []
@@ -54,13 +55,13 @@ export async function readNftxListings(
       blockNumber: block,
       contracts: chunk.flatMap((i) => [
         {
-          address: NFTX_LISTINGS,
+          address: i.listings ?? NFTX_LISTINGS,
           abi: nftxListingsAbi,
           functionName: "listings",
           args: [i.collection, i.tokenId],
         } as const,
         {
-          address: NFTX_LISTINGS,
+          address: i.listings ?? NFTX_LISTINGS,
           abi: nftxListingsAbi,
           functionName: "getListingPrice",
           args: [i.collection, i.tokenId],
@@ -90,7 +91,7 @@ export async function readNftxListings(
             contracts: typed.map(
               ({ n, listing }) =>
                 ({
-                  address: NFTX_LISTINGS,
+                  address: chunk[n]?.listings ?? NFTX_LISTINGS,
                   abi: nftxListingsAbi,
                   functionName: "getListingType",
                   args: [chunk[n]?.collection as Address, listing],
@@ -122,12 +123,13 @@ export async function readNftxListings(
 }
 
 /**
- * Pool size of each collection at a block: the Locker's NFT balance minus the items listed. Null
- * for a collection whose balance or listing count reverts. A transport failure throws.
+ * Pool size of each collection at a block: its Locker's NFT balance minus the items listed. Each
+ * collection names the block it was created in, which picks its Locker and Listings contract.
+ * Null for a collection whose balance or listing count reverts. A transport failure throws.
  */
 export async function readNftxPoolCounts(
   client: Pick<PublicClient, "multicall">,
-  collections: Address[],
+  collections: { collection: Address; createdBlock: bigint }[],
   block: bigint,
 ): Promise<(number | null)[]> {
   const out: (number | null)[] = []
@@ -135,15 +137,15 @@ export async function readNftxPoolCounts(
     const res = await client.multicall({
       allowFailure: true,
       blockNumber: block,
-      contracts: chunk.flatMap((c) => [
+      contracts: chunk.flatMap(({ collection: c, createdBlock }) => [
         {
           address: c,
           abi: nftxCollectionAbi,
           functionName: "balanceOf",
-          args: [NFTX_LOCKER],
+          args: [nftxDeploymentAt(createdBlock).locker],
         } as const,
         {
-          address: NFTX_LISTINGS,
+          address: nftxDeploymentAt(createdBlock).listings,
           abi: nftxListingsAbi,
           functionName: "listingCount",
           args: [c],

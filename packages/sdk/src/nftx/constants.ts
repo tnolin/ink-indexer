@@ -17,11 +17,56 @@ export const NFTX_ROYALTY_GATE: Address = "0xb1c4e21393b3f9a3f75f3a7c7abc18cd07f
 export const NFTX_FLETH: Address = "0x000000000dd39073cfc60e7102288ccbd7bf23fe"
 /** Uniswap's continuous clearing auction factory (v2.1.0). */
 export const CCA_FACTORY: Address = "0x000000001f26a0044baa66024e7b6599c61963f8"
+/** The second Locker, deployed in block 61,714,955. It creates every collection since; the first creates none. */
+export const NFTX_LOCKER_2: Address = "0x0006741672715b36f5107e7e2c40d1a76e8d3e9c"
+/** The second Locker's hook, the `implementation()` of `NFTX_LOCKER_2`. */
+export const NFTX_HOOK_2: Address = "0xc1595f4277c94fa15c397ecad787fc0072862fc4"
+/** The Listings contract the second Locker announced with `ListingsContractAdded`. */
+export const NFTX_LISTINGS_2: Address = "0x88ac5ee9bb063315664ce1d2138a40a56bebaf86"
+/** First block of the second Locker. */
+export const NFTX_LOCKER_2_BLOCK = 61_714_955n
+
+/** A Locker with the hook and Listings contract it works with. */
+export type NftxDeployment = {
+  locker: Address
+  hook: Address
+  listings: Address
+  /** First block the Locker can create a collection in. */
+  startBlock: bigint
+}
+/** Every Locker generation, oldest first. */
+export const NFTX_DEPLOYMENTS: readonly NftxDeployment[] = [
+  { locker: NFTX_LOCKER, hook: NFTX_HOOK, listings: NFTX_LISTINGS, startBlock: 52_372_123n },
+  {
+    locker: NFTX_LOCKER_2,
+    hook: NFTX_HOOK_2,
+    listings: NFTX_LISTINGS_2,
+    startBlock: NFTX_LOCKER_2_BLOCK,
+  },
+]
+export const NFTX_LOCKERS: readonly Address[] = NFTX_DEPLOYMENTS.map((d) => d.locker)
+export const NFTX_HOOKS: readonly Address[] = NFTX_DEPLOYMENTS.map((d) => d.hook)
+export const NFTX_LISTINGS_CONTRACTS: readonly Address[] = NFTX_DEPLOYMENTS.map((d) => d.listings)
+
 /**
- * NFTX's launchpad, whose collections are created into the Locker. Null until it is deployed on
- * Ink; while null, no collection is treated as created by it.
+ * The deployment that created a collection made in `createdBlock`: the newest whose Locker had
+ * started. The first Locker creates no collection after the second's first block, so a block
+ * names the generation.
+ *
+ * shortcut: the generation is read from the creation block. A third Locker that runs beside the
+ * second needs the Locker stored with the collection.
  */
-export const NFTX_LAUNCHPAD: Address | null = null
+export function nftxDeploymentAt(createdBlock: bigint): NftxDeployment {
+  let found = NFTX_DEPLOYMENTS[0] as NftxDeployment
+  for (const d of NFTX_DEPLOYMENTS) if (createdBlock >= d.startBlock) found = d
+  return found
+}
+
+/**
+ * NFTX's launchpad. It creates each launch's collection in the second Locker and sells the
+ * launch's claim token in a Uniswap continuous clearing auction.
+ */
+export const NFTX_LAUNCHPAD: Address | null = "0x0649a64b133b089d3b67bbd87c0d2a80e968ba2b"
 
 /** Block the auction factory was deployed in, the earliest block any NFTX source reads. */
 export const NFTX_START_BLOCK = 52_372_123n
@@ -59,6 +104,8 @@ export const NFTX_EVENTS = {
     "event ListingClosedAsStale(address indexed _collection, uint256 _tokenId, address _owner, uint256 _feesCaptured, uint256 _refunded)",
   PoolStateUpdated:
     "event PoolStateUpdated(address indexed _collection, uint160 _sqrtPriceX96, int24 _tick, uint24 _protocolFee, uint24 _swapFee, uint128 _liquidity)",
+  LaunchCreated:
+    "event LaunchCreated(uint256 indexed _launchId, address indexed _collection, address indexed _creator, address _vToken, address _claimToken, address _auction, address _teamEscrow, address _gate)",
 } as const satisfies Record<string, string>
 
 /** Event signatures of the auction factory and of each auction it creates. */
@@ -93,6 +140,7 @@ export const NFTX_TOPICS = {
   ListingsCancelled: "0xa47018c42c61057e7a37594e25de41c075fe406812220210810f603c051a8fa6",
   ListingClosedAsStale: "0xe35714800fb0f70eea10b0a51c958a2d60fa2611ed849843937f751f71681da8",
   PoolStateUpdated: "0xf135dfa5b5fa680fa48985844390b91a75201b7f725abe87a4b421537db3e466",
+  LaunchCreated: "0x360d7f21bd687f4e5584ac602d1490e5cf4a8afc367c7c98910ba7a92d63ea84",
 } as const satisfies Record<keyof typeof NFTX_EVENTS, Hex>
 
 /** topic0 of each auction event. `AuctionCreated` comes from the factory, the rest from each auction. */
@@ -114,5 +162,5 @@ export const CCA_AUCTION_TOPICS: readonly Hex[] = [
   CCA_TOPICS.TokensClaimed,
 ]
 
-/** Every topic0 the Locker, Zaps, RoyaltyGate, Listings and hook emit that the source reads. */
+/** Every topic0 the Lockers, Zaps, RoyaltyGate, Listings, hooks and launchpad emit that the source reads. */
 export const NFTX_LOG_TOPICS: readonly Hex[] = Object.values(NFTX_TOPICS)

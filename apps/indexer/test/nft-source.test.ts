@@ -9,6 +9,7 @@ import {
   decodeOrderFulfilled,
   NFT_TOPICS,
   NFTX_LOCKER,
+  NFTX_LOCKER_2,
   NFTX_TOPICS,
   nftxEventsAbi,
   SEADROP_V1,
@@ -791,7 +792,9 @@ describe("NFT source", () => {
     asked.length = 0
     await idx.backfill(from, chain.head, ["nft-sales"])
     // Seaport, plus the Locker whose deposits mark the sales that go to the pool.
-    expect(asked.map((f) => f.address)).toEqual([[SEAPORT_1_6, SEAPORT_1_5, NFTX_LOCKER]])
+    expect(asked.map((f) => f.address)).toEqual([
+      [SEAPORT_1_6, SEAPORT_1_5, NFTX_LOCKER, NFTX_LOCKER_2],
+    ])
     expect(await count("nft_sales")).toBe(1)
 
     asked.length = 0
@@ -799,7 +802,7 @@ describe("NFT source", () => {
     // Mints, burns and ERC-1155 mints and burns are 3 requests, SeaDrop and the Locker's
     // deposits (which decide the mints to leave out) the 4th.
     expect(asked).toHaveLength(4)
-    expect(asked.at(-1)?.address).toEqual([SEADROP_V1, NFTX_LOCKER])
+    expect(asked.at(-1)?.address).toEqual([SEADROP_V1, NFTX_LOCKER, NFTX_LOCKER_2])
 
     // A source with none of its filters picked is left out entirely.
     asked.length = 0
@@ -1038,6 +1041,11 @@ describe("Locker deposits", () => {
     expect(c).toMatchObject({ standard: "erc721", first_mint_block: MINT_BLOCK })
   })
 
+  it("a mint to the second Locker is not stored either (synthetic)", async () => {
+    await ingest([mintLog(NFT_A, NFTX_LOCKER_2, 1n, tx(1)), mintLog(NFT_A, ALICE, 2n, tx(2))])
+    expect(await sql`select token_id from indexer.nft_mints`).toEqual([{ token_id: "2" }])
+  })
+
   it("a contract whose only mint went to the Locker still gets its standard (synthetic)", async () => {
     await ingest([mintLog(NFT_A, NFTX_LOCKER, 1n, tx(1))])
     expect(await count("nft_mints")).toBe(0)
@@ -1089,7 +1097,11 @@ describe("Locker deposits", () => {
     const chain = new FakeChain(MINT_BLOCK)
     const filters = nftSource({ sql, chain, logger: () => {} }).filters()
     expect(
-      filters.some((f) => f?.address === NFTX_LOCKER && f.topics[0] === NFTX_TOPICS.TokenDeposit),
+      filters.some(
+        (f) =>
+          JSON.stringify(f?.address) === JSON.stringify([NFTX_LOCKER, NFTX_LOCKER_2]) &&
+          f?.topics[0] === NFTX_TOPICS.TokenDeposit,
+      ),
     ).toBe(true)
   })
 })
