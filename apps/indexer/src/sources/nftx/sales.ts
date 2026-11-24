@@ -44,6 +44,8 @@ export type SaleReads = {
   /** The pool's spot price, wei per NFT, at a log; null when it has none. */
   spotAt: (block: bigint, logIndex: number, collection: Address) => bigint | null
   warn: (msg: string, fields: Record<string, unknown>) => void
+  /** The Locker holding a collection's items; the first Locker's when not given. */
+  lockerOf?: (collection: Address) => Address
 }
 
 const key = (collection: Address, tokenId: bigint) => `${collection}:${tokenId}`
@@ -138,7 +140,7 @@ export function classifySales(tx: TxLog[], reads: SaleReads): SaleDraft[] {
             collection: d.collection,
             tokenId: id,
             priceWei: parts[i]!,
-            buyer: NFTX_LOCKER,
+            buyer: reads.lockerOf?.(d.collection) ?? NFTX_LOCKER,
             seller: d.seller,
             via: "instant_sell",
             logIndex,
@@ -157,7 +159,7 @@ export function classifySales(tx: TxLog[], reads: SaleReads): SaleDraft[] {
             tokenId: id,
             priceWei: parts[i]!,
             buyer: d.redeemer,
-            seller: NFTX_LOCKER,
+            seller: reads.lockerOf?.(d.collection) ?? NFTX_LOCKER,
             via: "instant_buy",
             logIndex,
           })
@@ -255,7 +257,7 @@ function pricedFills(
         tokenId: it.tokenId,
         priceWei,
         buyer: it.buyer,
-        seller: floorItem ? NFTX_LOCKER : it.read.owner,
+        seller: floorItem ? (reads.lockerOf?.(collection) ?? NFTX_LOCKER) : it.read.owner,
         via: floorItem ? "instant_buy" : "listing",
         logIndex: it.logIndex,
       })
@@ -348,6 +350,8 @@ export async function planSales(
     slugOf: (collection: Address) => string | null | undefined
     prices: PricePoint[]
     timestamp: (block: bigint) => number
+    /** The Locker holding a collection's items. */
+    lockerOf?: (collection: Address) => Address
   },
 ): Promise<SalesPlan> {
   const { sql, chain, logger } = deps
@@ -440,6 +444,7 @@ export async function planSales(
         listingsBefore: listingsBefore(logs, block, before.get(block)),
         spotAt: (b, logIndex, collection) => spotAt(spots.get(collection), b, logIndex),
         warn: (msg, fields) => logger("warn", msg, { ...fields, tx: txHash }),
+        lockerOf: input.lockerOf,
       },
     ))
       drafts.push({ txHash, blockHash: first.blockHash, block, draft })

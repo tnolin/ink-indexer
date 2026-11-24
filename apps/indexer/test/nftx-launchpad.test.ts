@@ -6,7 +6,7 @@ import {
   ccaConfigParameter,
   decodeCcaLog,
   NFTX_LAUNCHPAD,
-  NFTX_LOCKER_2,
+  NFTX_LOCKER,
 } from "@ink-indexer/sdk"
 import { type Address, decodeAbiParameters, encodeAbiParameters, type Hex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
@@ -18,9 +18,10 @@ import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 import { synthLog } from "./nftx-harness"
 
-// A launch as the launchpad makes it: one transaction creates the collection in the second
-// Locker, starts the auction of the claim token and logs LaunchCreated. The auction's own logs are
-// the recorded INKTRONS auction's; its creation log is rewritten to sell the claim token.
+// A launch as the launchpad makes it: one transaction creates the collection, starts the auction of
+// the claim token and logs LaunchCreated. The auction's own logs are the recorded INKTRONS
+// auction's, with its creation log rewritten to sell the claim token. That auction predates the
+// second Locker, so the collection is created in the first.
 
 const fx = loadNftxAuctionFixture()
 const made = decodeCcaLog(fx.created) as Extract<CcaLog, { kind: "auctionCreated" }>
@@ -91,27 +92,26 @@ function setup(opts: Opts = {}) {
       _symbol: "THINK",
       _creator: LAUNCHPAD,
     },
-    { address: NFTX_LOCKER_2, logIndex: 40 },
+    { address: NFTX_LOCKER, logIndex: 40 },
   )
   chain.add(collection)
-  if (!opts.noLaunch)
-    chain.add(
-      synthLog(
-        created,
-        "LaunchCreated",
-        {
-          _launchId: 1n,
-          _collection: COLLECTION,
-          _creator: CREATOR,
-          _vToken: FLOOR_TOKEN,
-          _claimToken: CLAIM_TOKEN,
-          _auction: AUCTION,
-          _teamEscrow: CREATOR,
-          _gate: CREATOR,
-        },
-        { address: opts.emitter ?? LAUNCHPAD, logIndex: 200 },
-      ),
+  const launchLog = () =>
+    synthLog(
+      created,
+      "LaunchCreated",
+      {
+        _launchId: 1n,
+        _collection: COLLECTION,
+        _creator: CREATOR,
+        _vToken: FLOOR_TOKEN,
+        _claimToken: CLAIM_TOKEN,
+        _auction: AUCTION,
+        _teamEscrow: CREATOR,
+        _gate: CREATOR,
+      },
+      { address: opts.emitter ?? LAUNCHPAD, logIndex: 200 },
     )
+  if (!opts.noLaunch) chain.add(launchLog())
   const tx = created.transactionHash
   chain.senders.set(CREATED, {
     hash: chain.hashOf(CREATED),
@@ -138,7 +138,7 @@ function setup(opts: Opts = {}) {
     await idx.init()
     await idx.backfill(CREATED, chain.head)
   }
-  return { chain, backfill }
+  return { chain, backfill, launchLog }
 }
 
 const auctionRow = async () =>
@@ -151,6 +151,15 @@ const auctionEvents = () =>
     select payload from indexer.events where type = 'nft.auction' order by id`
 
 describe("launchpad auctions", () => {
+  it("keeps an auction that an earlier read stored before its LaunchCreated was seen (synthetic)", async () => {
+    const t = setup({ noLaunch: true })
+    await t.backfill()
+    expect((await auctionRow())?.kept).toBe(false)
+    t.chain.add(t.launchLog())
+    await t.backfill()
+    expect(await auctionRow()).toMatchObject({ kept: true, collection: COLLECTION })
+  })
+
   it("keeps the auction of the claim token for the launch's collection, with no floor-token check (synthetic)", async () => {
     await setup().backfill()
     expect(await auctionRow()).toMatchObject({

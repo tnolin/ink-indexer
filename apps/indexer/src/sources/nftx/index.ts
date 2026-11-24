@@ -17,6 +17,7 @@ import {
   NFTX_ROYALTY_GATE,
   NFTX_ZAPS,
   type NftxLog,
+  nftxDeploymentAt,
   nftxSpotWei,
   poolKeyOf,
 } from "@ink-indexer/sdk"
@@ -357,6 +358,15 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       switch (d.kind) {
         case "created": {
           if (c) break
+          // A Locker only creates collections in its own generation; the generation picks the
+          // Locker and Listings contract every later read of the collection goes to.
+          if (nftxDeploymentAt(log.blockNumber).locker !== log.address) {
+            logger("warn", "ignoring a CollectionCreated from a Locker that is not current", {
+              collection: d.collection,
+              tx: log.transactionHash,
+            })
+            break
+          }
           const tx = log.transactionHash
           const meta = blocks.get(log.blockNumber)!
           const from = meta.senders.get(tx)
@@ -519,6 +529,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
         slugOf: (a) => state.get(a)?.slug,
         prices: batch.prices,
         timestamp: (n) => blocks.get(n)!.timestamp,
+        lockerOf: (a) => nftxDeploymentAt(state.get(a)?.createdBlock ?? 0n).locker,
       },
     )
     batch.sales = salesPlan.rows

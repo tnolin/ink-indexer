@@ -480,9 +480,9 @@ export async function planAuctions(deps: AuctionDeps, input: AuctionInput): Prom
     for (const a of toCheck) {
       // The launchpad creates the collection and starts its auction in one transaction, so the
       // auction it names, selling the claim token it names, is the collection's own. The factory
-      // log is the proof that the auction exists; no floor-token, currency or sender check applies.
+      // log is the proof that the auction exists, and it was created in the launch's block; no floor-token, currency or sender check applies.
       const launch = launchOf.get(a.auction)
-      if (launch && a.token === launch.claimToken) {
+      if (launch && a.token === launch.claimToken && a.createdBlock === launch.block) {
         a.kept = true
         a.collection = launch.collection
         a.keptBlock = launch.block > a.createdBlock ? launch.block : a.createdBlock

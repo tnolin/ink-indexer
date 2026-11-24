@@ -7,7 +7,7 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 ### Added
 
 - Indexer: auctions started by NFTX's launchpad. A launch's collection, claim token and auction are stored from its `LaunchCreated` log, and the auction is announced as `nft.auction` with the claim token as `token` and its real currency, in ETH or an ERC-20. The collection is marked real. See ADR 0046.
-- Indexer: the second NFTX Locker, with its hook and Listings contract. Collections, deposits, withdrawals, listings, sales and pool prices are read from both Lockers.
+- Indexer: the second NFTX Locker, with its hook and Listings contract. Collections, deposits, withdrawals, listings, listing sales and pool prices are read from both Lockers. Instant buys and sells through the second Locker's `NFTXFlexZap`, which logs different events, are not read yet.
 
 ### Fixed
 

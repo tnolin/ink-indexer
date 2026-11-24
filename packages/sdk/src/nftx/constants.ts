@@ -17,7 +17,7 @@ export const NFTX_ROYALTY_GATE: Address = "0xb1c4e21393b3f9a3f75f3a7c7abc18cd07f
 export const NFTX_FLETH: Address = "0x000000000dd39073cfc60e7102288ccbd7bf23fe"
 /** Uniswap's continuous clearing auction factory (v2.1.0). */
 export const CCA_FACTORY: Address = "0x000000001f26a0044baa66024e7b6599c61963f8"
-/** The second Locker, deployed in block 61,714,955. It creates every collection since; the first creates none. */
+/** The second Locker, deployed in block 61,714,955. The first Locker has created no collection since. */
 export const NFTX_LOCKER_2: Address = "0x0006741672715b36f5107e7e2c40d1a76e8d3e9c"
 /** The second Locker's hook, the `implementation()` of `NFTX_LOCKER_2`. */
 export const NFTX_HOOK_2: Address = "0xc1595f4277c94fa15c397ecad787fc0072862fc4"

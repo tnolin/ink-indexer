@@ -7,7 +7,7 @@ Status: Accepted
 
 NFTX's launchpad runs a collection's launch from one transaction. It creates the collection through the Locker, mints a separate ERC-20 claim token for it, and starts a Uniswap continuous clearing auction that sells the claim token. After the auction settles, each whole claim token is exchanged for a newly minted NFT and any fraction is paid in the floor token. The launchpad logs `LaunchCreated` with the collection, its creator, the floor token, the claim token and the auction. The auction may be paid in ETH or in an ERC-20 the NFTX hook allows as a pair token.
 
-Floor-token auctions (ADR 0044) are kept only when they sell the collection's floor token for ETH and were started by the collection's creator, its owner or the launchpad. A launchpad auction sells neither, so none of those checks can hold for it.
+Floor-token auctions (ADR 0044) are kept only when they sell the collection's floor token for ETH and were started by the collection's creator, its owner or the launchpad. A launchpad auction need not sell the floor token, be paid in ETH or be started by the collection's creator, so those checks do not fit it.
 
 The launchpad works with a second Locker, deployed in block 61,714,955 with its own hook and Listings contract. Its events match the first Locker's. The first Locker has created no collection since the second was deployed.
 

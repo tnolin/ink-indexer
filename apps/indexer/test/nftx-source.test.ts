@@ -529,6 +529,16 @@ describe("the second Locker", () => {
     expect(t.warnings).toEqual([])
   })
 
+  it("a CollectionCreated from the first Locker after the second began is ignored with a warning (synthetic)", async () => {
+    const t = setup(["eyeoftheseeker-created"])
+    t.chain.logs = t.chain.logs.map((l) => ({ ...l, address: NFTX_LOCKER }))
+    await t.backfill()
+    expect(await sql`select 1 from indexer.nftx_collections`).toHaveLength(0)
+    expect(t.warnings.map((w) => w.msg)).toContain(
+      "ignoring a CollectionCreated from a Locker that is not current",
+    )
+  })
+
   it("a CollectionCreated logged by an address that is neither Locker is ignored (synthetic)", async () => {
     const t = setup(["eyeoftheseeker-created"])
     t.chain.logs = t.chain.logs.map((l) => ({
