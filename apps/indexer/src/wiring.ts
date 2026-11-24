@@ -17,6 +17,7 @@ import {
 } from "./sources/nft/policy"
 import { startPrune } from "./sources/nft/prune"
 import { createVerdictJob } from "./sources/nft/verdict"
+import { createLaunchImages, startLaunchImages } from "./sources/nftx/launch-images"
 import { createAccounts } from "./sources/opensea/accounts"
 import { createBudget } from "./sources/opensea/budget"
 import { createDiscoveryJob, createMetadataJob } from "./sources/opensea/discovery"
@@ -432,10 +433,32 @@ export async function startNftServices(
   return { stop }
 }
 
-/** `startNftServices` when `opensea` is enabled; otherwise nothing starts. */
+/**
+ * `startNftServices` when `opensea` is enabled, and the NFTX launch image lookup when `nftx` is.
+ * The lookup does not need an OpenSea key.
+ */
 export async function startSourceServices(
   sources: SourceSelection,
   deps: Parameters<typeof startNftServices>[0],
 ): Promise<{ stop(): void }> {
-  return sources.openSea ? startNftServices({ ...deps, nftx: sources.nftx }) : { stop() {} }
+  const nft = sources.openSea
+    ? await startNftServices({ ...deps, nftx: sources.nftx })
+    : { stop() {} }
+  if (!sources.nftx) return nft
+  const stopImages = startLaunchImages(
+    createLaunchImages({
+      sql: deps.sql,
+      snapshots: createSnapshots({ sql: deps.sql, store: deps.store, now: deps.now }),
+      log: deps.log,
+      report: deps.report,
+      fetch: deps.fetch,
+      now: deps.now,
+    }),
+  )
+  return {
+    stop() {
+      stopImages()
+      nft.stop()
+    },
+  }
 }

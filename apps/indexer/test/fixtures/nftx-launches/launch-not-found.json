@@ -1,0 +1,7 @@
+{
+    "error": {
+        "code": "LAUNCH_NOT_FOUND",
+        "message": "No launch matches that id or collection symbol",
+        "requestId": "10536c91-15da-4d9f-97c2-8cbdb4544a79"
+    }
+}

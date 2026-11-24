@@ -2,6 +2,13 @@
 
 Notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [indexer-v0.8.2] - 2026-11-25
+
+### Fixed
+
+- Indexer: auction announcements for collections made by NFTX's launchpad had no image, because OpenSea has none for them while the auction runs. A launchpad collection with no image now takes the avatar of its NFTX launch page, so `nft.collection` carries `imageUrl`. Collections already stored are filled on start, and an image from OpenSea replaces it. See ADR 0047.
+- Indexer: an OpenSea collection page that names no image no longer clears the image the collection already has.
+
 ## [indexer-v0.8.1] - 2026-11-24
 
 ### Added

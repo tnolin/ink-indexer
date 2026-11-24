@@ -1,0 +1,114 @@
+{
+    "data": [
+        {
+            "chainId": 57073,
+            "launchId": "1",
+            "launchpad": "0x0649a64b133b089d3b67bbd87c0d2a80e968ba2b",
+            "liquidity": "0x083a628477048cb37831a4a7d8ebff1a0659af3f",
+            "ref": "THINK",
+            "collection": "0xf0eb4d1ee2278b0874fb68af83e6443c04af7300",
+            "collectionName": "THINKERS_",
+            "collectionSymbol": "THINK",
+            "collectionToken": "0xc22727c038dae1f8c65ee381a25450e14cba30c3",
+            "claimToken": "0xcfd37016e1a9c74738a0e8f03ae5a8fa590adc4d",
+            "auction": "0xa06a439d02e6ce0fe8244c2bac8cd8c8efb631fa",
+            "creator": "0xee427e81b1a5eae38ce4ee4f7aa87e09cdbe6896",
+            "teamEscrow": "0x934bedba6f074d6987eaa0478a515b141b64c9ff",
+            "gate": "0x8dfc0d369b9157c895a393facef8b04d6f2e3b66",
+            "status": "LIVE",
+            "auctionSupply": 2483,
+            "lpSupply": 400,
+            "creatorSupply": 450,
+            "maxSupply": 3333,
+            "teamShareBps": 8000,
+            "startBlock": "62044785",
+            "endBlock": "62174385",
+            "tickSpacing": "2",
+            "floorPricePerNft": "153600000000000000",
+            "floorPriceX96": "12169445762191002254368350770",
+            "requiredCurrencyRaised": "156920000000000000000",
+            "auctionStepsData": "0x000031000000654000004200000097e000004f0000004e70000050000000aeaf0f42400000000001",
+            "protocolFeeBps": 0,
+            "protocolFeeRecipient": "0xbc5627b65086169ec4a8c82e535c86bdc8b08494",
+            "currency": {
+                "address": "0x4c1ae29c159838fc1b224636e28e086eb69101f7",
+                "symbol": "wQQQx",
+                "decimals": 18,
+                "isNative": false
+            },
+            "outcome": null,
+            "poolOpened": false,
+            "poolOpenedAt": null,
+            "poolId": null,
+            "preparedLpSupply": 0,
+            "creatorMinted": 0,
+            "burnedTokens": null,
+            "claimedCount": 0,
+            "claimTxCount": 0,
+            "revealed": false,
+            "revealedAt": null,
+            "revealedBaseURI": null,
+            "createdAt": 1795541452,
+            "createdTxHash": "0x888f53face567b77124e3a8a4ab76f648dc3ca22621b9bb1b165c023b7c8da22",
+            "finalizedAt": null,
+            "cancelledAt": null,
+            "updatedAt": 1795541452,
+            "profile": {
+                "avatarUrl": "https://api.nftx.io/v1/media/ipfs/bafybeigqjmaso7abaapz3b757w47px5r2k3lm55ynhblxkec5dguhcrpui",
+                "bannerUrl": "https://api.nftx.io/v1/media/ipfs/bafybeihlg5bw3hjbshnwy7xgd6jkncfevowq2uqdljqgz6zdxw2gnchunm",
+                "description": "### A world inside a thought.\nThinkers_ is a collection of 3,333 portraits. Each sitting at a computer with their mind somewhere else.\n\nThere\u2019s a little of us in all of them.\n\n### Behind the screen\nThinkers_ are an invitation to explore worlds of thoughts that feel unreal, dreams of supersized environments and places you almost remember. Old computers, grainy faces, a fleeting style from the early 2000s, an office above the clouds.\n\nIt draws on the feeling of early digital worlds, when a screen could become somewhere you disappeared into for hours. Familiar places turn strange. Images break apart and come back together. A thought becomes a place you can spend time in.\n\n### Thinkers Club\nWe\u2019re building Thinkers Club around the people who recognise something of themselves in that world.\n\nPeople with their own taste. People who make things, ask questions, or follow an idea simply because it interests them. Someone whose clothes catch your eye, then whose conversation makes you stay.\n\nArt and personal style are where it starts. We want those connections to carry beyond the screen, into shared tables, creative work and time spent together.\n\nDifferent ways of seeing things are welcome here. Bring yours.\n\n### On Ink\nThinkers is launching on Ink through the NFTX v4 launchpad.\n\n3,333 Thinkers_. A shared state of mind.",
+                "links": {
+                    "website": "https://thinkers.club",
+                    "x": "https://x.com/ThinkersClub_",
+                    "discord": null
+                },
+                "gallery": [
+                    "https://api.nftx.io/v1/media/ipfs/bafkreids754ulhmhrbrgdcylr2oarin23klgermeqkvubxdj5je7actgzq",
+                    "https://api.nftx.io/v1/media/ipfs/bafkreibqf5efiaal6mm4osbbb3derbv6cnpm2l2jptnbhfliyja5bfb6vi",
+                    "https://api.nftx.io/v1/media/ipfs/bafkreidtuxfv7hjo4evsahkmhjcvmhaqrigytgsy3xyzh46xbsd55wsqpq",
+                    "https://api.nftx.io/v1/media/ipfs/bafkreicwkzusjhj6wftms6osabqdp5v23lcw6okn64mlorhpsvu3dhmfoy",
+                    "https://api.nftx.io/v1/media/ipfs/bafkreidiirjuf7bz2zvvqaaguvlebph65gle7n7tns3oheor7bvr4zysre",
+                    "https://api.nftx.io/v1/media/ipfs/bafkreifbqtv42t52nm2mqagrgxldxi7onn3a33pkja33k7xyytgedvw7x4"
+                ],
+                "updatedAt": "2026-11-24T17:30:58.400Z"
+            },
+            "features": {
+                "royaltyBps": 500,
+                "holderRewards": false,
+                "contractURI": "",
+                "holderRoyaltyBps": 0,
+                "holderLpFeeBps": 0,
+                "royaltySplitter": "0xa254df69135d8853d6a387a1e84d2863d4e9c34a",
+                "rewardToken": null,
+                "rewardsOpenedAt": null,
+                "rewardsDeposited": "0",
+                "rewardsClaimed": "0",
+                "rewardsPushed": "0",
+                "royaltyTokensHarvested": "0",
+                "royaltiesHarvested": "0",
+                "lastHarvestedAt": null,
+                "lpTokenFeesSold": "0",
+                "lpTokenFeesReceived": "0",
+                "sweepCount": 0,
+                "lastSweptAt": null
+            },
+            "fees": [],
+            "team": {
+                "escrow": "0x934bedba6f074d6987eaa0478a515b141b64c9ff",
+                "totalShares": "10000",
+                "members": [
+                    {
+                        "address": "0xcae8f76948f913fd8a1f139d9856349daa2e3db7",
+                        "shares": "10000"
+                    }
+                ]
+            }
+        }
+    ],
+    "pageInfo": {
+        "limit": 20,
+        "cursor": null,
+        "nextCursor": null,
+        "hasNextPage": false
+    }
+}

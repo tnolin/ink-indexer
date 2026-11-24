@@ -65,7 +65,8 @@ export function pageColumns(c: OsCollection) {
   return {
     slug: c.slug,
     name: c.name,
-    image_url: c.imageUrl,
+    // An image the collection already has stays when the page names none.
+    ...(c.imageUrl === null ? {} : { image_url: c.imageUrl }),
     twitter: c.twitter,
     website: c.website,
     discord: c.discord,
