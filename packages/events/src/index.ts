@@ -359,7 +359,8 @@ export type NftLaunchEvent = NftBase & {
 }
 
 /**
- * A Uniswap continuous clearing auction of an NFTX collection's floor token. One type covers its
+ * A Uniswap continuous clearing auction of an NFTX collection's floor token, or of the claim token
+ * of a launch made through NFTX's launchpad. One type covers its
  * life: `created` when it is recognised, `live` when bidding opens, `price` when its clearing
  * price updates and `ended` at the end block. `contract` is the collection.
  */
@@ -367,9 +368,12 @@ export type NftAuctionEvent = NftBase & {
   type: "nft.auction"
   phase: "created" | "live" | "price" | "ended"
   auction: Address
-  /** The floor token the auction sells. */
+  /** The token the auction sells: the collection's floor token, or a launch's claim token, one per NFT. */
   token: Address
-  /** `"ETH"` only for the zero address; any other currency is its lowercase address. */
+  /**
+   * `"ETH"` only for the zero address; any other currency is its lowercase address. The prices and
+   * raised amounts below are in the currency's smallest unit, whatever their `Wei` suffix.
+   */
   currency: "ETH" | Address
   /** Decimal strings. */
   startBlock: string

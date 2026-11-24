@@ -1,4 +1,12 @@
-import { type AbiEvent, encodeAbiParameters, getAbiItem, type Hex, toEventSelector } from "viem"
+import {
+  type AbiEvent,
+  type Address,
+  encodeAbiParameters,
+  encodeEventTopics,
+  getAbiItem,
+  type Hex,
+  toEventSelector,
+} from "viem"
 import { describe, expect, it } from "vitest"
 import {
   auctionPriceWei,
@@ -11,7 +19,13 @@ import {
   NFTX_EVENTS,
   NFTX_FLETH,
   NFTX_HOOK,
+  NFTX_HOOK_2,
+  NFTX_LISTINGS,
+  NFTX_LISTINGS_2,
+  NFTX_LOCKER,
+  NFTX_LOCKER_2,
   NFTX_TOPICS,
+  nftxDeploymentAt,
   nftxEventsAbi,
   nftxOrderHash,
   nftxSpotWei,
@@ -88,6 +102,63 @@ describe("Lil Dudes", () => {
     expect(deposit).toHaveLength(1)
     const deposited = new Set(deposit[0]?.kind === "deposit" ? deposit[0].tokenIds : [])
     for (const id of init.tokenIds) expect(deposited.has(id)).toBe(true)
+  })
+})
+
+describe("the second Locker", () => {
+  const EYE = "0x9234d821c10b72e09c594f882f1d5dacf2621006"
+
+  it("decodes Eye of the Seeker's CollectionCreated, logged by the second Locker", () => {
+    const f = loadNftxFixture("eyeoftheseeker-created")
+    expect(f.logs.map((l) => l.address)).toEqual([NFTX_LOCKER_2])
+    expect(one(f.logs, "created")).toMatchObject({ kind: "created", collection: EYE })
+  })
+
+  it("decodes Eye of the Seeker's deposit, logged by the second Locker", () => {
+    const f = loadNftxFixture("eyeoftheseeker-deposit")
+    const deposits = f.logs.filter((l) => decodeNftxLog(l)?.kind === "deposit")
+    expect(deposits).toHaveLength(1)
+    expect(deposits[0]?.address).toBe(NFTX_LOCKER_2)
+    expect(one(f.logs, "deposit").collection).toBe(EYE)
+  })
+
+  it("names the generation of a collection by its creation block", () => {
+    expect(nftxDeploymentAt(52_372_123n).locker).toBe(NFTX_LOCKER)
+    expect(nftxDeploymentAt(61_714_954n).listings).toBe(NFTX_LISTINGS)
+    expect(nftxDeploymentAt(61_714_955n)).toMatchObject({
+      locker: NFTX_LOCKER_2,
+      hook: NFTX_HOOK_2,
+      listings: NFTX_LISTINGS_2,
+    })
+    expect(nftxDeploymentAt(61_721_832n).locker).toBe(NFTX_LOCKER_2)
+  })
+
+  it("decodes the launchpad's LaunchCreated (built from the ABI, not recorded)", () => {
+    const a = (n: number) => `0x${n.toString(16).padStart(40, "0")}` as Address
+    const topics = encodeEventTopics({
+      abi: nftxEventsAbi,
+      eventName: "LaunchCreated",
+      args: { _launchId: 1n, _collection: a(1), _creator: a(2) },
+    })
+    const data = encodeAbiParameters(
+      [
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+      ],
+      [a(3), a(4), a(5), a(6), a(7)],
+    )
+    expect(decodeNftxLog({ topics: topics as Hex[], data })).toEqual({
+      kind: "launchCreated",
+      launchId: 1n,
+      collection: a(1),
+      creator: a(2),
+      floorToken: a(3),
+      claimToken: a(4),
+      auction: a(5),
+    })
   })
 })
 

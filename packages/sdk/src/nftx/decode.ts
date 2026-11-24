@@ -117,6 +117,17 @@ export type NftxLog =
       swapFee: number
       liquidity: bigint
     }
+  | {
+      kind: "launchCreated"
+      launchId: bigint
+      collection: Address
+      creator: Address
+      /** The floor token the Locker mints for the collection. */
+      floorToken: Address
+      /** The ERC-20 the launch's auction sells; each whole token claims one NFT after settlement. */
+      claimToken: Address
+      auction: Address
+    }
 
 const lower = (a: string) => a.toLowerCase() as Address
 const listingOf = (l: {
@@ -282,6 +293,16 @@ export function decodeNftxLog(log: { topics: readonly Hex[]; data: Hex }): NftxL
         protocolFee: Number(ev.args._protocolFee),
         swapFee: Number(ev.args._swapFee),
         liquidity: ev.args._liquidity,
+      }
+    case "LaunchCreated":
+      return {
+        kind: "launchCreated",
+        launchId: ev.args._launchId,
+        collection: lower(ev.args._collection),
+        creator: lower(ev.args._creator),
+        floorToken: lower(ev.args._vToken),
+        claimToken: lower(ev.args._claimToken),
+        auction: lower(ev.args._auction),
       }
   }
 }

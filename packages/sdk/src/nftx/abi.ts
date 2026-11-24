@@ -22,6 +22,7 @@ export const nftxEventsAbi = parseAbi([
   NFTX_EVENTS.ListingsCancelled,
   NFTX_EVENTS.ListingClosedAsStale,
   NFTX_EVENTS.PoolStateUpdated,
+  NFTX_EVENTS.LaunchCreated,
 ])
 
 export const ccaEventsAbi = parseAbi([

@@ -9,14 +9,15 @@ import {
   decodeNftxLog,
   INK_CHAIN_ID,
   NFTX_FLETH,
-  NFTX_HOOK,
+  NFTX_HOOKS,
   NFTX_LAUNCHPAD,
-  NFTX_LISTINGS,
-  NFTX_LOCKER,
+  NFTX_LISTINGS_CONTRACTS,
+  NFTX_LOCKERS,
   NFTX_LOG_TOPICS,
   NFTX_ROYALTY_GATE,
   NFTX_ZAPS,
   type NftxLog,
+  nftxDeploymentAt,
   nftxSpotWei,
   poolKeyOf,
 } from "@ink-indexer/sdk"
@@ -143,19 +144,26 @@ type Known = {
  * of what the contracts emit, and the emitter decides which kind of log a topic is trusted as.
  */
 const ADDRESSES: LogFilter = {
-  address: [NFTX_LOCKER, ...NFTX_ZAPS, NFTX_ROYALTY_GATE, NFTX_LISTINGS, NFTX_HOOK],
+  address: [
+    ...NFTX_LOCKERS,
+    ...NFTX_ZAPS,
+    NFTX_ROYALTY_GATE,
+    ...NFTX_LISTINGS_CONTRACTS,
+    ...NFTX_HOOKS,
+    ...(NFTX_LAUNCHPAD ? [NFTX_LAUNCHPAD] : []),
+  ],
   topics: [[...NFTX_LOG_TOPICS]],
 }
 
 /** The contract each kind of log is accepted from. */
-function emitterOk(d: NftxLog, emitter: Address): boolean {
+function emitterOk(d: NftxLog, emitter: Address, launchpad: Address | null): boolean {
   switch (d.kind) {
     case "created":
     case "initialized":
     case "deposit":
     case "withdrawal":
     case "sunset":
-      return emitter === NFTX_LOCKER
+      return NFTX_LOCKERS.includes(emitter)
     case "zapBought":
     case "zapRedeemed":
     case "zapSold":
@@ -168,9 +176,11 @@ function emitterOk(d: NftxLog, emitter: Address): boolean {
     case "filled":
     case "cancelled":
     case "stale":
-      return emitter === NFTX_LISTINGS
+      return NFTX_LISTINGS_CONTRACTS.includes(emitter)
     case "poolState":
-      return emitter === NFTX_HOOK
+      return NFTX_HOOKS.includes(emitter)
+    case "launchCreated":
+      return launchpad !== null && emitter === launchpad
   }
 }
 
@@ -294,6 +304,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
             block: c.block,
           })),
           slugs: new Map(batch.slugs.map((x) => [x.collection, x.slug])),
+          launches,
           toBlock: ctx.toBlock,
         },
       )
@@ -311,8 +322,15 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
         dropped(log)
         continue
       }
-      if (emitterOk(d, log.address)) items.push({ log, d })
+      if (emitterOk(d, log.address, launchpad)) items.push({ log, d })
     }
+    // What the launchpad created in the span: its collection is real and its auction is the
+    // collection's own, whoever sent the transaction.
+    const launches = items.flatMap(({ log, d }) =>
+      d.kind === "launchCreated" ? [{ ...d, block: log.blockNumber }] : [],
+    )
+    const launched = new Set(launches.map((l) => l.collection))
+
     if (items.length === 0) return withAuctions()
 
     const known = await loadKnown([...new Set(items.map((i) => i.d.collection))])
@@ -340,6 +358,15 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
       switch (d.kind) {
         case "created": {
           if (c) break
+          // A Locker only creates collections in its own generation; the generation picks the
+          // Locker and Listings contract every later read of the collection goes to.
+          if (nftxDeploymentAt(log.blockNumber).locker !== log.address) {
+            logger("warn", "ignoring a CollectionCreated from a Locker that is not current", {
+              collection: d.collection,
+              tx: log.transactionHash,
+            })
+            break
+          }
           const tx = log.transactionHash
           const meta = blocks.get(log.blockNumber)!
           const from = meta.senders.get(tx)
@@ -351,7 +378,9 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
             name: text(d.name, NAME_MAX),
             symbol: text(d.symbol, SYMBOL_MAX),
             block: log.blockNumber,
-            launchpadCreated: launchpad !== null && (from === launchpad || to === launchpad),
+            launchpadCreated:
+              launched.has(d.collection) ||
+              (launchpad !== null && (from === launchpad || to === launchpad)),
           })
           const made = batch.created.at(-1)!
           state.set(d.collection, {
@@ -377,7 +406,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
           if (!c || (c.initializedBlock !== null && c.initializedBlock !== log.blockNumber)) break
           const key = poolKeyOf(d.poolKey)
           const side =
-            key && key.hooks === NFTX_HOOK
+            key && NFTX_HOOKS.includes(key.hooks)
               ? key.currency0 === NFTX_FLETH
                 ? true
                 : key.currency1 === NFTX_FLETH
@@ -478,6 +507,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
               combinedSince: c.combinedSince,
               slug: c.slug,
               maxSupply: c.maxSupply,
+              createdBlock: c.createdBlock,
             },
           ]),
         ),
@@ -499,6 +529,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
         slugOf: (a) => state.get(a)?.slug,
         prices: batch.prices,
         timestamp: (n) => blocks.get(n)!.timestamp,
+        lockerOf: (a) => nftxDeploymentAt(state.get(a)?.createdBlock ?? 0n).locker,
       },
     )
     batch.sales = salesPlan.rows
@@ -542,13 +573,17 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
     process: (logs, ctx) => process(logs, ctx),
     write: (tx, batch) => writeRows(tx, batch),
     prepareRollback: async (fork) => {
-      const rows = await sql<{ collection: Address }[]>`
-        select collection from indexer.nftx_collections where pool_count_block > ${fork.toString()}`
+      const rows = await sql<{ collection: Address; created_block: string }[]>`
+        select collection, created_block::text from indexer.nftx_collections
+        where pool_count_block > ${fork.toString()}`
       const counts =
         rows.length === 0
           ? []
           : await chain.readNftxPoolCounts(
-              rows.map((r) => r.collection),
+              rows.map((r) => ({
+                collection: r.collection,
+                createdBlock: BigInt(r.created_block),
+              })),
               fork,
             )
       return {

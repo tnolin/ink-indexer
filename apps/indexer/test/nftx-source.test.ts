@@ -516,6 +516,40 @@ describe("the NFTX launchpad", () => {
   })
 })
 
+describe("the second Locker", () => {
+  const EYE = "0x9234d821c10b72e09c594f882f1d5dacf2621006"
+
+  it("stores Eye of the Seeker, created in the second Locker, with no warning", async () => {
+    const t = setup(["eyeoftheseeker-created", "eyeoftheseeker-deposit"])
+    await t.backfill()
+    const rows = await sql`
+      select collection, created_block::text as created_block, launchpad_created
+      from indexer.nftx_collections`
+    expect(rows).toEqual([{ collection: EYE, created_block: "61721832", launchpad_created: false }])
+    expect(t.warnings).toEqual([])
+  })
+
+  it("a CollectionCreated from the first Locker after the second began is ignored with a warning (synthetic)", async () => {
+    const t = setup(["eyeoftheseeker-created"])
+    t.chain.logs = t.chain.logs.map((l) => ({ ...l, address: NFTX_LOCKER }))
+    await t.backfill()
+    expect(await sql`select 1 from indexer.nftx_collections`).toHaveLength(0)
+    expect(t.warnings.map((w) => w.msg)).toContain(
+      "ignoring a CollectionCreated from a Locker that is not current",
+    )
+  })
+
+  it("a CollectionCreated logged by an address that is neither Locker is ignored (synthetic)", async () => {
+    const t = setup(["eyeoftheseeker-created"])
+    t.chain.logs = t.chain.logs.map((l) => ({
+      ...l,
+      address: "0x00000000000000000000000000000000000000ee" as Address,
+    }))
+    await t.backfill()
+    expect(await sql`select 1 from indexer.nftx_collections`).toHaveLength(0)
+  })
+})
+
 /** A new PoolStateUpdated of Lil Dudes a few blocks above the chain's head, read by the live tick. */
 async function priceMove(t: ReturnType<typeof setup>) {
   const base = t.chain.logs.find((l) => l.topics[0] === NFTX_TOPICS.PoolStateUpdated)!

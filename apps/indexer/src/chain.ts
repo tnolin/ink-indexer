@@ -73,11 +73,14 @@ export type Chain = {
    * given; null for an item whose `listings` call reverts. Two multicalls.
    */
   readNftxListings(
-    items: { collection: Address; tokenId: bigint }[],
+    items: { collection: Address; tokenId: bigint; listings?: Address }[],
     block: bigint,
   ): Promise<(NftxListingRead | null)[]>
   /** NFTs in each collection's NFTX pool at a block; null when a read reverts. */
-  readNftxPoolCounts(collections: Address[], block: bigint): Promise<(number | null)[]>
+  readNftxPoolCounts(
+    collections: { collection: Address; createdBlock: bigint }[],
+    block: bigint,
+  ): Promise<(number | null)[]>
   /** `owner()` of each contract at a block; null when it reverts. */
   readOwners(contracts: Address[], block: bigint): Promise<(Address | null)[]>
   /** An auction's up-to-date state at a block; null when `checkpoint()` reverts. */

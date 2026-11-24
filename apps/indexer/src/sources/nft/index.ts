@@ -13,7 +13,7 @@ import {
   mergeMatchedSales,
   NFT_TOPICS,
   NFTX_LAUNCHPAD,
-  NFTX_LOCKER,
+  NFTX_LOCKERS,
   NFTX_TOPICS,
   SEADROP_V1,
   SEAPORT_1_5,
@@ -173,7 +173,7 @@ const FILTERS: LogFilter[] = [
   { address: SEADROP_V1, topics: [] },
   { address: [SEAPORT_1_6, SEAPORT_1_5], topics: [NFT_TOPICS.orderFulfilled] },
   { address: CHIMERA_FACTORY, topics: [NFT_TOPICS.campaignCreated] },
-  { address: NFTX_LOCKER, topics: [NFTX_TOPICS.TokenDeposit] },
+  { address: [...NFTX_LOCKERS], topics: [NFTX_TOPICS.TokenDeposit] },
 ]
 /**
  * The backfill name of each filter: `nft-mints` is the first five, then Seaport, Chimera, and the
@@ -264,7 +264,7 @@ export async function processLogs(
   // contract keeps its standard and its row.
   const deposits = lockerDeposits(at(LOCKER))
   const routed = (m: TransferRow) =>
-    m.account === NFTX_LOCKER ||
+    NFTX_LOCKERS.includes(m.account) ||
     m.account === NFTX_LAUNCHPAD ||
     deposits.has(`${m.txHash}:${m.contract}:${m.tokenId}`)
   const stored = mints.filter((m) => !routed(m))

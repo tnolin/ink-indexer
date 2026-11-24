@@ -1,3 +1,4 @@
+import { NFTX_LISTINGS, NFTX_LISTINGS_2, NFTX_LOCKER, NFTX_LOCKER_2 } from "@ink-indexer/sdk"
 import {
   BlockNotFoundError,
   ContractFunctionExecutionError,
@@ -686,16 +687,57 @@ describe("viemChain NFTX reads", () => {
         return a.contracts[0]?.functionName === "owner" ? [ok(OWNER)] : [ok(10n), ok(3n)]
       },
     })
-    expect(await chain.readNftxPoolCounts([COLLECTION], 10n)).toEqual([7])
+    expect(
+      await chain.readNftxPoolCounts([{ collection: COLLECTION, createdBlock: 1n }], 10n),
+    ).toEqual([7])
     expect(await chain.readOwners([COLLECTION], 10n)).toEqual([OWNER.toLowerCase()])
     expect(calls).toBe(2)
+  })
+
+  it("reads a collection's pool size from the Locker and Listings contract of its generation", async () => {
+    const asked: { address: string; args?: readonly unknown[] }[] = []
+    const { chain } = nftxChain({
+      multicall: async (a: { contracts: { address: string; args?: readonly unknown[] }[] }) => {
+        asked.push(...a.contracts)
+        return [ok(10n), ok(3n)]
+      },
+    })
+    await chain.readNftxPoolCounts([{ collection: COLLECTION, createdBlock: 61_721_832n }], 10n)
+    await chain.readNftxPoolCounts([{ collection: COLLECTION, createdBlock: 60_000_000n }], 10n)
+    expect(asked.map((c) => c.address)).toEqual([
+      COLLECTION,
+      NFTX_LISTINGS_2,
+      COLLECTION,
+      NFTX_LISTINGS,
+    ])
+    expect(asked[0]?.args).toEqual([NFTX_LOCKER_2])
+    expect(asked[2]?.args).toEqual([NFTX_LOCKER])
+  })
+
+  it("reads a listing from the Listings contract that logged it", async () => {
+    const asked: string[] = []
+    const { chain } = nftxChain({
+      multicall: async (a: { contracts: { address: string }[] }) => {
+        asked.push(...a.contracts.map((c) => c.address))
+        return [failed, failed]
+      },
+    })
+    await chain.readNftxListings(
+      [
+        { collection: COLLECTION, tokenId: 1n, listings: NFTX_LISTINGS_2 },
+        { collection: COLLECTION, tokenId: 2n },
+      ],
+      10n,
+    )
+    expect(asked).toEqual([NFTX_LISTINGS_2, NFTX_LISTINGS_2, NFTX_LISTINGS, NFTX_LISTINGS])
   })
 
   it("readNftxListings, readNftxPoolCounts and readOwners each retry a transport error", async () => {
     for (const read of [
       (c: ReturnType<typeof nftxChain>["chain"]) =>
         c.readNftxListings([{ collection: COLLECTION, tokenId: 1n }], 10n),
-      (c: ReturnType<typeof nftxChain>["chain"]) => c.readNftxPoolCounts([COLLECTION], 10n),
+      (c: ReturnType<typeof nftxChain>["chain"]) =>
+        c.readNftxPoolCounts([{ collection: COLLECTION, createdBlock: 1n }], 10n),
       (c: ReturnType<typeof nftxChain>["chain"]) => c.readOwners([COLLECTION], 10n),
     ]) {
       let calls = 0

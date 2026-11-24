@@ -162,11 +162,18 @@ export async function planListings(
   if (known.length === 0) return []
 
   // Relists and updates are read at their block.
-  const wanted = new Map<bigint, Map<string, { collection: Address; tokenId: bigint }>>()
+  const wanted = new Map<
+    bigint,
+    Map<string, { collection: Address; tokenId: bigint; listings: Address }>
+  >()
   for (const { log, d } of known) {
     if (d.kind !== "relisted" && d.kind !== "multipleUpdated") continue
     const at = wanted.get(log.blockNumber) ?? new Map()
-    at.set(key(d.collection, d.tokenId), { collection: d.collection, tokenId: d.tokenId })
+    at.set(key(d.collection, d.tokenId), {
+      collection: d.collection,
+      tokenId: d.tokenId,
+      listings: log.address,
+    })
     wanted.set(log.blockNumber, at)
   }
   const read = new Map<bigint, Map<string, NftxListingRead | null>>()
