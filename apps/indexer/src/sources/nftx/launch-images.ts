@@ -1,11 +1,12 @@
 import type { Sql } from "@ink-indexer/db"
 import type { Logger } from "../../log"
-import type { Snapshots } from "../opensea/snapshot"
+import { SnapshotRaced, type Snapshots } from "../opensea/snapshot"
 
 /** NFTX's launch API for Ink, one launch record per Launchpad collection. */
 const LAUNCHES_URL = "https://api.nftx.io/v1/57073/launches"
 /** A launch's media is served from the same API; any other host is not taken as the image. */
-const MEDIA_PREFIX = "https://api.nftx.io/v1/media/"
+const MEDIA_HOST = "api.nftx.io"
+const MEDIA_PATH = /^\/v1\/media\/[A-Za-z0-9._/-]+$/
 const REQUEST_TIMEOUT_MS = 5_000
 const ATTEMPTS = 3
 const RETRY_PAUSE_MS = 1_000
@@ -27,7 +28,18 @@ export function launchAvatar(body: unknown, collection: string): string | null {
   for (const r of list as LaunchRecord[]) {
     if (typeof r?.collection !== "string" || r.collection.toLowerCase() !== collection) continue
     const url = r.profile?.avatarUrl
-    if (typeof url === "string" && url.length <= URL_MAX && url.startsWith(MEDIA_PREFIX)) return url
+    if (typeof url === "string" && url.length <= URL_MAX) {
+      // The link is rendered in chat markup, so only a plain path on the media host passes.
+      const u = URL.canParse(url) ? new URL(url) : null
+      if (
+        u?.protocol === "https:" &&
+        u.host === MEDIA_HOST &&
+        !u.search &&
+        !u.hash &&
+        MEDIA_PATH.test(u.pathname)
+      )
+        return u.href
+    }
   }
   return null
 }
@@ -71,7 +83,10 @@ export function createLaunchImages(deps: LaunchImagesDeps) {
         })
         // A launch the API does not know answers 404 with LAUNCH_NOT_FOUND: no image yet.
         if (res.status === 404) return null
-        if (!res.ok) continue
+        if (!res.ok) {
+          void res.body?.cancel().catch(() => {})
+          continue
+        }
         return launchAvatar(await res.json(), collection)
       } catch {}
     }
@@ -106,7 +121,7 @@ export function createLaunchImages(deps: LaunchImagesDeps) {
         select c.contract from indexer.nft_collections c
         where c.launchpad = 'nftx' and coalesce(c.image_url, '') = ''
           and exists (select 1 from indexer.nftx_auctions a
-            where a.collection = c.contract and a.ended_block is null)`
+            where a.collection = c.contract and a.kept and a.ended_block is null)`
       const at = now()
       for (const { contract } of rows) {
         if ((next.get(contract)?.at ?? 0) > at) continue

@@ -31,6 +31,19 @@ describe("launchAvatar", () => {
   it("ignores a record for another collection", () => {
     expect(launchAvatar(fixture("thinkers.json"), `0x${"11".repeat(20)}`)).toBeNull()
   })
+  it("ignores an avatar link with markup or a query in it", () => {
+    for (const bad of [
+      'https://api.nftx.io/v1/media/x")[y](evil)',
+      "https://api.nftx.io/v1/media/ipfs/a b",
+      "https://api.nftx.io/v1/media/ipfs/a?x=1",
+      "http://api.nftx.io/v1/media/ipfs/a",
+      "https://api.nftx.io.evil.com/v1/media/ipfs/a",
+    ]) {
+      const body = fixture("thinkers.json")
+      body.data[0].profile.avatarUrl = bad
+      expect(launchAvatar(body, THINKERS), bad).toBeNull()
+    }
+  })
   it("ignores an avatar that is not an NFTX media link", () => {
     const body = fixture("thinkers.json")
     body.data[0].profile.avatarUrl = "https://example.com/a.png"
@@ -160,6 +173,14 @@ describe("launch images", () => {
     await images.tick()
     expect(urls).toEqual([])
     expect(await imageOf()).toBe("https://opensea.example/a.png")
+  })
+
+  it("leaves a collection whose only auction is not kept", async () => {
+    await addLaunch()
+    await sql`update indexer.nftx_auctions set kept = false`
+    const { images, urls } = setup([json(fixture("thinkers.json"))])
+    await images.tick()
+    expect(urls).toEqual([])
   })
 
   it("leaves collections of other launchpads alone", async () => {
