@@ -1,0 +1,9 @@
+{
+    "data": [],
+    "pageInfo": {
+        "limit": 20,
+        "cursor": null,
+        "nextCursor": null,
+        "hasNextPage": false
+    }
+}
