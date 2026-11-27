@@ -26,6 +26,7 @@ import { nftSource } from "../src/sources/nft/index"
 import { nftxSource } from "../src/sources/nftx/index"
 import type { Ranks } from "../src/sources/opensea/ranks"
 import { PoolRegistry } from "../src/sources/pools"
+import { BACKFILL_SOURCES, LAUNCHPAD_SOURCES, SOURCE_GROUPS } from "../src/sources/source"
 import { tsunamiSource } from "../src/sources/tsunami/index"
 import { v4Source } from "../src/sources/v4/index"
 import { createStore } from "../src/store"
@@ -336,5 +337,48 @@ describe("startSourceServices", () => {
     expect(warnings).toEqual([
       "OPENSEA_API_KEY is not set: OpenSea collections, drops, stats and listings are off",
     ])
+  })
+})
+
+describe("SOURCE_GROUPS", () => {
+  const realSources = () => {
+    const chain = new FakeChain(1000n)
+    const pools = new PoolRegistry()
+    const ipfs = { gateway: "https://gw.example" }
+    return [
+      inkypumpSource({ sql, chain, pools, logger: quiet }),
+      inkfunSource({ sql, chain, pools, logger: quiet, ipfs }),
+      tsunamiSource({ sql, chain, pools, logger: quiet, ipfs }),
+      hookitSource({ sql, chain, pools, logger: quiet, ipfs }),
+      v4Source({ sql, chain, pools, logger: quiet }),
+      nftSource({ sql, chain, logger: quiet }),
+      nftxSource({ sql, chain, logger: quiet }),
+    ]
+  }
+
+  it("covers every BACKFILL_SOURCES name exactly once", () => {
+    const named = Object.values(SOURCE_GROUPS).flat()
+    expect([...named].sort()).toEqual([...BACKFILL_SOURCES].sort())
+  })
+
+  it("lists the launchpad sources", () => {
+    expect(LAUNCHPAD_SOURCES).toEqual(["inkypump", "inkfun", "tsunami", "hookit"])
+    for (const name of LAUNCHPAD_SOURCES) expect(name in SOURCE_GROUPS).toBe(true)
+  })
+
+  it("gives each source a name that is a SOURCE_GROUPS key and that entry as its groups", () => {
+    const sources = realSources()
+    expect(sources.map((s) => s.name).sort()).toEqual(Object.keys(SOURCE_GROUPS).sort())
+    for (const s of sources)
+      expect(s.groups).toEqual(SOURCE_GROUPS[s.name as keyof typeof SOURCE_GROUPS])
+  })
+
+  it("makes each source's filters pick only its own groups", () => {
+    for (const s of realSources()) {
+      for (const g of BACKFILL_SOURCES) {
+        const picked = s.filters([g]).some((f) => f !== null) || s.readsLate?.([g]) === true
+        expect(picked, `${s.name} with ${g}`).toBe(s.groups.includes(g))
+      }
+    }
   })
 })

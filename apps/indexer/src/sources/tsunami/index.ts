@@ -31,7 +31,7 @@ import { droppedLogs } from "../dropped"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { blockSendersFor } from "../senders"
-import { type EventRow, pick, type Source } from "../source"
+import { type EventRow, pick, SOURCE_GROUPS, type Source } from "../source"
 import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
 
 /** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */
@@ -471,6 +471,7 @@ export function tsunamiSource(deps: TsunamiDeps): Source<TsunamiBatch, Rollback>
 
   return {
     name: "tsunami",
+    groups: SOURCE_GROUPS.tsunami,
     filters: (only) => [pick(only, "tsunami", LOG_FILTER)],
     process: ([logs], { live }) => process(logs ?? [], live),
     write: writeRows,

@@ -29,7 +29,14 @@ import type { LogFilter } from "../../rpc"
 import { seenItems } from "../opensea/listings"
 import { cachedRanks, itemKey } from "../opensea/ranks"
 import { latestFloors } from "../opensea/stats"
-import { type BackfillSource, type EventRow, pick, type Source, type SourceBatch } from "../source"
+import {
+  type BackfillSource,
+  type EventRow,
+  pick,
+  SOURCE_GROUPS,
+  type Source,
+  type SourceBatch,
+} from "../source"
 import {
   loadMilestoneContexts,
   loadRealMintContexts,
@@ -201,6 +208,7 @@ const [MINTS_721, BURNS_721, MINTS_1155, BURNS_1155, SEADROP, SEAPORT, CHIMERA, 
 export function nftSource(deps: NftDeps): Source<NftBatch, null> {
   return {
     name: "nft",
+    groups: SOURCE_GROUPS.nft,
     filters: (only) => FILTERS.map((f, i) => pick(only, FILTER_GROUPS[i]!, f)),
     process: (logs, ctx) => processLogs(logs, deps, ctx.toBlock),
     write: writeRows,

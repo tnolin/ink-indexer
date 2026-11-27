@@ -9,7 +9,7 @@ import {
 import type { Address } from "viem"
 import { describe, expect, inject, it } from "vitest"
 import { tradeLog } from "../../../packages/sdk/test/builders"
-import { BlockNotServedError } from "../src/errors"
+import { BlockNotServedError, DependencyError } from "../src/errors"
 import type { Logger } from "../src/log"
 import { HookRegistry, nativeHookRows } from "../src/sources/inkypump/hooks"
 import { inkypumpSource, type KnownLaunch, processLogs } from "../src/sources/inkypump/index"
@@ -199,10 +199,31 @@ describe("processLogs", () => {
     expect(warnings[0]!.fields).toMatchObject({ address: FAKE })
   })
 
-  it("throws on a trade for a launch it has never seen", async () => {
+  it("throws DependencyError naming the launch, hook and tx for a trade on a launch never stored", async () => {
     const { chain, run } = setup()
     trade(chain, { n: 6, block: B, sold: 1n })
-    await expect(run()).rejects.toThrow(/unknown launch/)
+    const err = await run().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(DependencyError)
+    expect((err as Error).name).toBe("DependencyError")
+    const message = (err as Error).message
+    expect(message).toContain(`trade for unknown launch ${launchIdOf(6)}`)
+    expect(message).toContain(HOOK)
+    expect(message).toMatch(/in tx 0x[0-9a-f]+/)
+  })
+
+  it("throws DependencyError for a bond on a launch never stored", async () => {
+    const { chain, run } = setup()
+    bond(chain, { n: 7, block: B })
+    const err = await run().catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(DependencyError)
+    expect((err as Error).message).toContain(`bond for unknown launch ${launchIdOf(7)}`)
+  })
+
+  it("processes a trade whose launch is only in the database", async () => {
+    const { chain, run } = setup([knownLaunch(8, 0)])
+    trade(chain, { n: 8, block: B, sold: 1n })
+    const batch = await run()
+    expect(batch.events.map((e) => e.event.type)).toEqual(["launchpad.trade"])
   })
 
   it("throws BlockNotServedError when the block of a trade-less event is not served", async () => {

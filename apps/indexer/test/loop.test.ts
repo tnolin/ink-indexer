@@ -481,6 +481,7 @@ describe("Indexer over several sources", () => {
     const rollbackTxs: Tx[] = []
     const source: Source<{ events: []; blocks: { number: bigint; hash: Hash }[] }, string> = {
       name,
+      groups: [],
       filters: () => filters,
       async process(logs, ctx) {
         seen.push({ logs, toBlock: ctx.toBlock })

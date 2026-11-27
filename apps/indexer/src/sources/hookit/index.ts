@@ -39,7 +39,7 @@ import { droppedLogs } from "../dropped"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { blockSendersFor, servedAt } from "../senders"
-import { type EventRow, pick, type Source } from "../source"
+import { type EventRow, pick, SOURCE_GROUPS, type Source } from "../source"
 import { curvesToRefresh, loadCurves, loadHooks, rollbackRows, writeRows } from "./store"
 
 /** Gateways rate-limit, so a span of many launches fetches this many documents at a time. */
@@ -704,6 +704,7 @@ export function hookitSource(deps: HookitDeps): Source<HookitBatch, Rollback> {
 
   return {
     name: "hookit",
+    groups: SOURCE_GROUPS.hookit,
     filters: (only) => [pick(only, "hookit", LOG_FILTER)],
     process: ([logs], { live }) => process(logs ?? [], live),
     write: writeRows,

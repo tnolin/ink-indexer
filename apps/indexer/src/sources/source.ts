@@ -18,6 +18,8 @@ export type SourceBatch = { events: EventRow[]; blocks: { number: bigint; hash: 
  */
 export interface Source<B extends SourceBatch = SourceBatch, R = unknown> {
   name: string
+  /** The backfill groups this source's filters pick (`SOURCE_GROUPS`). */
+  groups: readonly BackfillSource[]
   /**
    * The log filters, in the order `process` receives their logs. With `only` (backfill names such
    * as `nft-sales`), a filter the list does not pick is null: the loop reads nothing for it and
@@ -73,6 +75,29 @@ export const BACKFILL_SOURCES = [
   "nftx",
 ] as const
 export type BackfillSource = (typeof BACKFILL_SOURCES)[number]
+
+/**
+ * The backfill groups each source's filters pick. Every group belongs to exactly one source, so
+ * leaving a source's groups out of a span's `only` leaves the source out.
+ */
+export const SOURCE_GROUPS = {
+  inkypump: ["inkypump"],
+  inkfun: ["inkfun"],
+  tsunami: ["tsunami"],
+  hookit: ["hookit"],
+  v4: ["v4-swaps"],
+  nft: ["nft-mints", "nft-sales", "nft-launches"],
+  nftx: ["nftx"],
+} as const satisfies Record<string, readonly BackfillSource[]>
+export type SourceName = keyof typeof SOURCE_GROUPS
+
+/** The sources that create launchpad tokens; their tokens' swaps are read by the `v4` source. */
+export const LAUNCHPAD_SOURCES = [
+  "inkypump",
+  "inkfun",
+  "tsunami",
+  "hookit",
+] as const satisfies readonly SourceName[]
 
 /**
  * `filter` when `only` is absent or names `group` (any of them, for a filter several groups
