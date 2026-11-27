@@ -126,6 +126,18 @@ export async function startPauses(sql: Sql, log: Logger): Promise<SourceName[]> 
   return known
 }
 
+/**
+ * The sources an `Indexer` built for `command` starts with paused: those with an open live pause
+ * for `start`, none read for any other command (a backfill runs the sources a live pause left out).
+ */
+export async function pausesForCommand(
+  sql: Sql,
+  log: Logger,
+  command: string,
+): Promise<SourceName[] | undefined> {
+  return command === "start" ? await startPauses(sql, log) : undefined
+}
+
 /** Lifts the source's open live pause; null when there is none. Skips and backfill rows stay. */
 export async function clearLivePause(
   sql: Sql,

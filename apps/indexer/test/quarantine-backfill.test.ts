@@ -188,6 +188,22 @@ describe("a backfill's quarantine", () => {
     expect(await written()).toEqual(["tsunami:24"])
   })
 
+  it("a missing record after the skip's watch has ended still pauses from the skip's first block", async () => {
+    const chain = chainTo(S + 39n)
+    launch(chain, { n: 1, block: S + 2n })
+    launch(chain, { n: 2, block: S + 12n })
+    launch(chain, { n: 3, block: S + 22n })
+    trade(chain, { n: 1, block: S + 32n, sold: 1n })
+    const t = rig(chain, pumpAndWriter([1]))
+    await (await t.open()).backfill(S, S + 39n)
+
+    expect(await tokens()).toEqual([tokenOf(2), tokenOf(3)].sort())
+    expect(await rows()).toMatchObject([
+      { kind: "skip", mode: "backfill", from_block: S, to_block: S + 9n },
+      { kind: "pause", mode: "backfill", from_block: S, to_block: S + 39n, sqlstate: "dependency" },
+    ])
+  })
+
   it("a backfill's rows never pause a later start", async () => {
     const chain = chainTo(S + 39n)
     launch(chain, { n: 1, block: S + 2n })

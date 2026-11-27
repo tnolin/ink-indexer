@@ -5,7 +5,7 @@ import type { Address } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
-import { clearLivePause, replaySources, startPauses } from "../src/quarantine"
+import { clearLivePause, pausesForCommand, replaySources, startPauses } from "../src/quarantine"
 import { nftSource } from "../src/sources/nft/index"
 import type { BackfillSource, Source, SourceName } from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
@@ -203,5 +203,70 @@ describe("sources with an open live pause at start", () => {
         fields: { sources: ["tsunami"], unknown: ["zorbl"] },
       },
     ])
+  })
+})
+
+describe("the pauses a command starts with", () => {
+  const row = (source: SourceName, kind: "skip" | "pause", mode: "live" | "backfill") =>
+    store.recordQuarantine({
+      source,
+      kind,
+      mode,
+      fromBlock: S,
+      toBlock: kind === "skip" || mode === "backfill" ? S + 9n : null,
+      replaySources: replaySources(source, kind),
+      sqlstate: "22003",
+      message: "refused",
+    })
+
+  /** The `only` the first tick offers each of two sources, with the pauses `command` reads. */
+  async function firstTick(command: "start" | "backfill") {
+    const chain = new FakeChain(S + 9n)
+    const seen: Record<string, (readonly BackfillSource[] | undefined)[]> = {
+      inkypump: [],
+      tsunami: [],
+    }
+    const idx = new Indexer({
+      chain,
+      store,
+      logger: quiet,
+      sources: [
+        watching("inkypump", ["inkypump"], ADDRESS(0xa1), seen.inkypump!),
+        watching("tsunami", ["tsunami"], ADDRESS(0xa2), seen.tsunami!),
+      ],
+      paused: await pausesForCommand(sql, quiet, command),
+    })
+    await idx.init()
+    await idx.trigger()
+    return { seen, idx }
+  }
+
+  it("an open live pause leaves the source's groups out of the first tick's filters", async () => {
+    await row("inkypump", "pause", "live")
+    const { seen, idx } = await firstTick("start")
+    expect(seen.inkypump).toEqual([])
+    expect(seen.tsunami).toHaveLength(1)
+    expect(seen.tsunami?.[0]).toContain("tsunami")
+    expect(seen.tsunami?.[0]).not.toContain("inkypump")
+    expect(idx.paused()).toEqual(["inkypump"])
+  })
+
+  it("a cleared pause, a backfill pause and a skip leave nothing out", async () => {
+    await row("inkypump", "pause", "live")
+    await clearLivePause(sql, "inkypump")
+    await row("tsunami", "pause", "backfill")
+    await row("tsunami", "skip", "live")
+    const { seen, idx } = await firstTick("start")
+    expect(seen.inkypump).toEqual([undefined])
+    expect(seen.tsunami).toEqual([undefined])
+    expect(idx.paused()).toEqual([])
+  })
+
+  it("a command other than start reads no pauses", async () => {
+    await row("inkypump", "pause", "live")
+    const logs = recordingLogger()
+    expect(await pausesForCommand(sql, logs.logger, "backfill")).toBeUndefined()
+    expect(logs.lines).toEqual([])
+    expect(await pausesForCommand(sql, quiet, "start")).toEqual(["inkypump"])
   })
 })

@@ -5,7 +5,7 @@ import { parseCli } from "./cli"
 import { log } from "./log"
 import { Indexer } from "./loop"
 import { applyMark } from "./mark-cli"
-import { startPauses } from "./quarantine"
+import { pausesForCommand } from "./quarantine"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
@@ -88,7 +88,7 @@ let indexer: Indexer
 const combineNftx = () => sources.nftx && !indexer.isPaused("nftx")
 try {
   await migrate(sql)
-  const paused = cli.command === "start" ? await startPauses(sql, log) : undefined
+  const paused = await pausesForCommand(sql, log, cli.command)
   if (cli.command === "collections-from-sales") {
     const created = await createCollectionsFromSales(sql)
     log("info", "collections from sales created", { created })
