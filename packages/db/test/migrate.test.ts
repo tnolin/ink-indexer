@@ -28,6 +28,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "0017_tsunami.sql",
     "0018_hookit.sql",
     "0019_nftx.sql",
+    "0020_quarantine.sql",
   ])
   expect(await migrate(sql)).toEqual([])
   const tables = await sql<{ table_name: string }[]>`
@@ -62,6 +63,7 @@ it("applies migrations to an empty database, then does nothing on a second run",
     "nftx_prices",
     "opensea_budget",
     "pools",
+    "quarantine",
     "recent_blocks",
     "tokens",
     "trades",
@@ -362,7 +364,7 @@ it("0019 applies on a database at 0018 and keeps existing rows", async () => {
   await sql`insert into indexer.nft_stats (contract, at, floor_wei, owners, volume_24h_wei, sales_24h)
     values (${COLLECTION}, now(), 5, 1, 2, 3)`
   await sql`insert into indexer.nft_overrides (contract, verdict) values (${COLLECTION}, 'real')`
-  expect(await migrate(sql)).toEqual(["0019_nftx.sql"])
+  expect(await migrate(sql)).toEqual(["0019_nftx.sql", "0020_quarantine.sql"])
   expect(await sql`select launchpad, campaign_id::text from indexer.nft_launches`).toEqual([
     { launchpad: "chimera", campaign_id: "5" },
   ])
@@ -446,4 +448,91 @@ it("an NFTX auction keeps one row per auction and its bids refuse an unknown kin
   await bid("exit", 2)
   await bid("claim", 3)
   await expect(bid("other", 4)).rejects.toThrow(/nftx_auction_bids_kind_check/)
+})
+
+const quarantine = (row: {
+  source?: string
+  kind?: string
+  mode?: string
+  from?: number
+  to?: number | null
+  message?: string
+  cleared?: boolean
+}) => {
+  const { source = "nft", kind = "skip", mode = "live", from = 10, to = 12 } = row
+  const { message = "refused write", cleared = false } = row
+  return sql`insert into indexer.quarantine
+    (source, kind, mode, from_block, to_block, replay_sources, sqlstate, message, cleared_at)
+    values (${source}, ${kind}, ${mode}, ${from}, ${to ?? null}, 'nft-mints,nft-sales,nft-launches',
+      '23505', ${message}, ${cleared ? sql`now()` : null})`
+}
+
+it("0020 applies on a database at 0019 and keeps existing rows", async () => {
+  await migrateBefore("0020")
+  await sql`insert into indexer.nft_collections (contract, launchpad, launch_token) values (${COLLECTION}, 'nftx', '0xf1')`
+  expect(await migrate(sql)).toEqual(["0020_quarantine.sql"])
+  expect(await sql`select contract, launchpad from indexer.nft_collections`).toEqual([
+    { contract: COLLECTION, launchpad: "nftx" },
+  ])
+  expect(await sql`select count(*)::int as n from indexer.quarantine`).toEqual([{ n: 0 }])
+})
+
+it("a second open live pause for one source is refused with 23505, and one after a clear is accepted", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  const pause = (cleared = false) =>
+    quarantine({ kind: "pause", to: null, source: "inkfun", cleared })
+  await pause()
+  const error = await pause().catch((e: unknown) => e)
+  expect(error).toMatchObject({ code: "23505" })
+  expect(String(error)).toMatch(/quarantine_open_live_pause/)
+  await sql`update indexer.quarantine set cleared_at = now() where source = 'inkfun'`
+  await pause()
+  await quarantine({ kind: "pause", to: null, source: "nft" })
+  expect(
+    await sql`select source, cleared_at is null as open from indexer.quarantine order by id`,
+  ).toEqual([
+    { source: "inkfun", open: false },
+    { source: "inkfun", open: true },
+    { source: "nft", open: true },
+  ])
+})
+
+it("a skip and a backfill pause for a source with an open live pause are accepted", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  await quarantine({ kind: "pause", to: null })
+  await quarantine({ kind: "skip" })
+  await quarantine({ kind: "skip", mode: "backfill" })
+  await quarantine({ kind: "pause", mode: "backfill", to: 20 })
+  await quarantine({ kind: "pause", mode: "backfill", to: 30 })
+  expect(await sql`select count(*)::int as n from indexer.quarantine`).toEqual([{ n: 5 }])
+})
+
+it("a message of 501 characters is refused", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  await quarantine({ message: "x".repeat(500) })
+  await expect(quarantine({ message: "x".repeat(501) })).rejects.toMatchObject({ code: "23514" })
+})
+
+it("a kind other than skip or pause is refused", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  await expect(quarantine({ kind: "other" })).rejects.toThrow(/quarantine_kind_check/)
+  await expect(quarantine({ mode: "other" })).rejects.toThrow(/quarantine_mode_check/)
+})
+
+it("a live skip or a backfill row without to_block is refused, and a live pause with one is refused", async () => {
+  await sql`drop schema if exists indexer cascade`
+  await migrate(sql)
+  await expect(quarantine({ kind: "skip", to: null })).rejects.toMatchObject({ code: "23514" })
+  await expect(quarantine({ kind: "skip", mode: "backfill", to: null })).rejects.toMatchObject({
+    code: "23514",
+  })
+  await expect(quarantine({ kind: "pause", mode: "backfill", to: null })).rejects.toMatchObject({
+    code: "23514",
+  })
+  await expect(quarantine({ kind: "pause", to: 12 })).rejects.toMatchObject({ code: "23514" })
+  expect(await sql`select count(*)::int as n from indexer.quarantine`).toEqual([{ n: 0 }])
 })
