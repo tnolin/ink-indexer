@@ -4,6 +4,7 @@ import { resetDb } from "@ink-indexer/db/testing"
 import type { IndexerEvent } from "@ink-indexer/events"
 import { pad, toHex } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
+import type { Logger } from "../src/log"
 import {
   badDataError,
   clearLivePause,
@@ -14,6 +15,7 @@ import {
   replaySteps,
   subtractPaused,
 } from "../src/quarantine"
+import { runQuarantineClear } from "../src/quarantine-cli"
 import type { BackfillSource, EventRow, SourceBatch } from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
 
@@ -361,5 +363,31 @@ describe("probeEvents", () => {
     await sql`create trigger refuse_events before insert on indexer.events
       for each row execute function indexer.refuse_events()`
     expect(await store.probeEvents([batchOf(eventRow(1))])).toBe("other")
+  })
+})
+
+describe("runQuarantineClear", () => {
+  const lines: { level: string; msg: string; fields?: Record<string, unknown> }[] = []
+  const logger = (level: string, msg: string, fields?: Record<string, unknown>) => {
+    lines.push({ level, msg, fields })
+  }
+
+  it("lifts an open pause and logs quarantine cleared with the source, block and time", async () => {
+    await store.recordQuarantine(
+      row({ source: "nft", kind: "pause", toBlock: null, fromBlock: 77n, sqlstate: "dependency" }),
+    )
+    lines.length = 0
+    await runQuarantineClear(sql, logger as Logger, "nft")
+    expect(lines).toHaveLength(1)
+    expect(lines[0]?.msg).toBe("quarantine cleared")
+    expect(lines[0]?.fields).toMatchObject({ source: "nft", fromBlock: 77n })
+    expect(lines[0]?.fields?.createdAt).toBeInstanceOf(Date)
+    expect(await openLivePauses(sql)).toEqual([])
+  })
+
+  it("logs no open pause when there is none", async () => {
+    lines.length = 0
+    await runQuarantineClear(sql, logger as Logger, "nft")
+    expect(lines).toEqual([{ level: "info", msg: "no open pause", fields: { source: "nft" } }])
   })
 })

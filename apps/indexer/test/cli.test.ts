@@ -54,7 +54,7 @@ describe("parseCli", () => {
   it("carries the usage line with every rejection", () => {
     const r = parseCli(["backfill"])
     expect(r.ok === false && r.usage).toBe(
-      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> [--max-supply <n>] | auction <auction> <contract> | collections-from-sales",
+      "usage: main.ts start | backfill --from <block> [--to <block>] [--sources <names>] [--block-reads <1-16>] | mark <contract> <mark> [--max-supply <n>] | auction <auction> <contract> | quarantine clear <source> | collections-from-sales",
     )
   })
 
@@ -216,5 +216,45 @@ describe("parseCli auction", () => {
       expect(r.ok, argv.join(" ")).toBe(false)
       expect(r.ok === false && r.usage).toContain("auction <auction> <contract>")
     }
+  })
+})
+
+describe("parseCli quarantine", () => {
+  const ALLOWED = "inkypump, inkfun, tsunami, hookit, v4, nft, nftx"
+
+  it("quarantine clear nft parses", () => {
+    expect(parseCli(["quarantine", "clear", "nft"])).toEqual({
+      ok: true,
+      command: "quarantine",
+      source: "nft",
+    })
+  })
+
+  it("quarantine clear with an unknown, upper-case, padded or empty name is refused, naming the allowed sources", () => {
+    for (const name of ["nope", "NFT", " nft", "nft ", ""]) {
+      const r = parseCli(["quarantine", "clear", name])
+      expect(r.ok, JSON.stringify(name)).toBe(false)
+      expect(r.ok === false && r.usage).toContain("quarantine clear <source>")
+      expect(r.ok === false && r.reason).toContain(ALLOWED)
+    }
+  })
+
+  it("quarantine with no subcommand, another subcommand or an extra argument is refused", () => {
+    for (const argv of [
+      ["quarantine"],
+      ["quarantine", "list"],
+      ["quarantine", "clear"],
+      ["quarantine", "clear", "nft", "nft"],
+      ["quarantine", "nft"],
+    ]) {
+      const r = parseCli(argv)
+      expect(r.ok, argv.join(" ")).toBe(false)
+      expect(r.ok === false && r.usage).toContain("quarantine clear <source>")
+    }
+  })
+
+  it("a quarantine name that is a group (v4-swaps) is refused", () => {
+    for (const name of ["v4-swaps", "nft-mints", "nft-sales", "nft-launches"])
+      expect(parseCli(["quarantine", "clear", name]).ok, name).toBe(false)
   })
 })

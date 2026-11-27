@@ -6,6 +6,7 @@ import { log } from "./log"
 import { Indexer } from "./loop"
 import { applyMark } from "./mark-cli"
 import { pausesForCommand } from "./quarantine"
+import { runQuarantineClear } from "./quarantine-cli"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
@@ -98,6 +99,11 @@ try {
   if (cli.command === "auction") {
     await applyAuctionLink(sql, { auction: cli.auction, contract: cli.contract })
     log("info", "auction linked", { auction: cli.auction, contract: cli.contract })
+    await sql.end()
+    process.exit(0)
+  }
+  if (cli.command === "quarantine") {
+    await runQuarantineClear(sql, log, cli.source)
     await sql.end()
     process.exit(0)
   }
