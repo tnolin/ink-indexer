@@ -1,9 +1,10 @@
-import type { Sql } from "@ink-indexer/db"
+import type { PostgresError, Sql } from "@ink-indexer/db"
 import type { NftEvent } from "@ink-indexer/events"
 import type postgres from "postgres"
 import type { Hash } from "viem"
 import { UnconfirmedAboveHeadError } from "./errors"
-import { entityOf, type SourceBatch, type Tx } from "./sources/source"
+import { badDataError, cutMessage, type QuarantineRow } from "./quarantine"
+import { type EventRow, entityOf, type SourceBatch, type Tx } from "./sources/source"
 
 export type Cursor = { block: bigint; hash: Hash }
 
@@ -13,6 +14,8 @@ export type TxStep = (tx: Tx) => Promise<void>
 // shortcut: the shared cursor keeps its historical name, 'inkypump', for every source. Renaming it
 // needs a migration and a coordinated deploy.
 export const CURSOR_ROW = "inkypump"
+/** Thrown inside a probe transaction after its insert succeeded, so the transaction rolls back. */
+const PROBE_PASSED = Symbol("probe passed")
 const RECENT_BLOCKS = 128
 /**
  * `pg_advisory_xact_lock` key that serialises every store write across processes (the indexer and
@@ -24,6 +27,21 @@ const s = (x: bigint) => x.toString()
 const CHUNK = 1_000
 function* chunks<T>(rows: T[]): Generator<T[]> {
   for (let i = 0; i < rows.length; i += CHUNK) yield rows.slice(i, i + CHUNK)
+}
+
+/** The `indexer.events` rows for `events`; those below `head` are confirmed. */
+function eventValues(tx: Tx, events: EventRow[], head: bigint) {
+  return events.map((e) => ({
+    type: e.event.type,
+    entity: entityOf(e.event),
+    payload: tx.json(e.event as unknown as postgres.JSONValue),
+    block: s(e.block),
+    block_hash: e.blockHash,
+    tx_hash: e.event.txHash,
+    log_index: e.event.logIndex,
+    sub: e.sub ?? "",
+    confirmed: e.block <= head - 1n,
+  }))
 }
 
 /**
@@ -114,17 +132,7 @@ export function createStore(sql: Sql) {
           .sort((a, b) =>
             a.block === b.block ? a.event.logIndex - b.event.logIndex : a.block < b.block ? -1 : 1,
           )
-        const rows = events.map((e) => ({
-          type: e.event.type,
-          entity: entityOf(e.event),
-          payload: tx.json(e.event as unknown as postgres.JSONValue),
-          block: s(e.block),
-          block_hash: e.blockHash,
-          tx_hash: e.event.txHash,
-          log_index: e.event.logIndex,
-          sub: e.sub ?? "",
-          confirmed: e.block <= opts.head - 1n,
-        }))
+        const rows = eventValues(tx, events, opts.head)
         for (const part of chunks(rows))
           await tx`insert into indexer.events ${tx(part)} on conflict (tx_hash, log_index, sub) do nothing`
         // A backfill adds old, confirmed rows. A row the live tick or an off-chain writer left
@@ -187,6 +195,64 @@ export function createStore(sql: Sql) {
           await tx`insert into indexer.events ${tx(part)} on conflict (tx_hash, log_index, sub) do nothing`
         if (extra) await extra(tx)
       })
+    },
+
+    /**
+     * Records a skipped span or a paused source in `indexer.quarantine` and returns the `from_block`
+     * it stored. With `fromEarliestSkip` (a pause for a missing record), the pause starts at the
+     * source's earliest live skip created after its last cleared live pause, read in the same
+     * transaction; `row.fromBlock` stays when there is none.
+     */
+    async recordQuarantine(
+      row: QuarantineRow,
+      opts: { fromEarliestSkip?: boolean } = {},
+    ): Promise<bigint> {
+      let stored = row.fromBlock
+      await locked(async (tx) => {
+        if (opts.fromEarliestSkip) {
+          const [skip] = await tx<{ from_block: bigint | null }[]>`
+            select min(from_block) as from_block from indexer.quarantine
+            where source = ${row.source} and kind = 'skip' and mode = 'live'
+              and created_at > coalesce(
+                (select max(cleared_at) from indexer.quarantine
+                 where source = ${row.source} and kind = 'pause' and mode = 'live'),
+                '-infinity')`
+          if (skip?.from_block != null) stored = BigInt(skip.from_block)
+        }
+        await tx`
+          insert into indexer.quarantine
+            (source, kind, mode, from_block, to_block, replay_sources, sqlstate, message)
+          values (${row.source}, ${row.kind}, ${row.mode}, ${s(stored)},
+            ${row.toBlock === null ? null : s(row.toBlock)}, ${row.replaySources.join(",")},
+            ${row.sqlstate}, ${cutMessage(row.message)})`
+      })
+      return stored
+    },
+
+    /**
+     * Inserts each batch's events alone in a transaction that always rolls back, to find the batch
+     * the database refuses. Returns the first such batch with its error, "other" when a probe
+     * failed for a reason that is not bad data, or null when every batch passed. Nothing it inserts
+     * is committed.
+     */
+    async probeEvents(
+      batches: SourceBatch[],
+    ): Promise<{ index: number; error: PostgresError } | "other" | null> {
+      for (const [index, batch] of batches.entries()) {
+        try {
+          await locked(async (tx) => {
+            const rows = eventValues(tx, batch.events, 0n)
+            for (const part of chunks(rows))
+              await tx`insert into indexer.events ${tx(part)} on conflict (tx_hash, log_index, sub) do nothing`
+            throw PROBE_PASSED
+          })
+        } catch (err) {
+          if (err === PROBE_PASSED) continue
+          const error = badDataError(err)
+          return error ? { index, error } : "other"
+        }
+      }
+      return null
     },
 
     async confirm(head: bigint) {

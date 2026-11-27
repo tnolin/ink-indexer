@@ -32,6 +32,8 @@ export default async function setup(project: TestProject) {
     password: "ink",
     port,
     persistent: false,
+    // Without a locale the cluster is SQL_ASCII, where char_length counts bytes; the hosted databases are UTF8.
+    initdbFlags: ["--encoding=UTF8"],
   })
   await pg.initialise()
   await pg.start()

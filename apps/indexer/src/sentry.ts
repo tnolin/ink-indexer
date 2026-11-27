@@ -9,10 +9,17 @@ export type Reporter = {
   capture(err: unknown): void
   /** A warning message. Callers send each distinct warning once, so this is not rate limited here. */
   warn(message: string, context?: Record<string, unknown>): void
+  /** An error-level message for a record that needs a person to look, such as skipped blocks. */
+  error(message: string, context?: Record<string, unknown>): void
   flush(ms: number): Promise<boolean>
 }
 
-export const noopReporter: Reporter = { capture() {}, warn() {}, flush: async () => true }
+export const noopReporter: Reporter = {
+  capture() {},
+  warn() {},
+  error() {},
+  flush: async () => true,
+}
 
 type Sdk = Pick<typeof Sentry, "init" | "captureException" | "captureMessage" | "flush">
 
@@ -88,6 +95,8 @@ export function initSentry(env: Record<string, string | undefined>, sdk: Sdk = S
     capture: (err) => void sdk.captureException(err),
     warn: (message, context) =>
       void sdk.captureMessage(message, { level: "warning", extra: context }),
+    error: (message, context) =>
+      void sdk.captureMessage(message, { level: "error", extra: context }),
     flush: (ms) => sdk.flush(ms),
   }
 }

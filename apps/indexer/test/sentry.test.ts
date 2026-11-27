@@ -45,6 +45,39 @@ describe("initSentry", () => {
   })
 })
 
+describe("Reporter.error", () => {
+  it("error sends a message at level error with the context, redacted", () => {
+    const sdk = fakeSdk()
+    const r = initSentry(
+      {
+        SENTRY_DSN: "https://k@o1.ingest.sentry.io/1",
+        INK_RPC_WS_URLS: "wss://rpc.example.com/v2/abc123key",
+      },
+      sdk,
+    )
+    r.error("inkfun skipped blocks 1 to 2 after a refused write", {
+      source: "inkfun",
+      sqlstate: "22003",
+    })
+    expect(sdk.captureMessage).toHaveBeenCalledWith(
+      "inkfun skipped blocks 1 to 2 after a refused write",
+      { level: "error", extra: { source: "inkfun", sqlstate: "22003" } },
+    )
+    const opts = sdk.init.mock.calls[0]?.[0] as { beforeSend: (e: Ev) => Ev | null }
+    const out = opts.beforeSend({
+      message: "x",
+      level: "error",
+      extra: { message: "failed wss://rpc.example.com/v2/abc123key" },
+    })
+    expect(JSON.stringify(out)).not.toContain("abc123key")
+    expect(out?.level).toBe("error")
+  })
+
+  it("does nothing without SENTRY_DSN", () => {
+    expect(() => noopReporter.error("x", { a: 1 })).not.toThrow()
+  })
+})
+
 describe("Reporter.warn", () => {
   it("sends a warning-level message with its context when SENTRY_DSN is set", () => {
     const sdk = fakeSdk()
