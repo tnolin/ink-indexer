@@ -639,6 +639,11 @@ describe("a failure that another try may clear", () => {
         () => undefined,
         (e: unknown) => e,
       )
+      // After the backend is gone, postgres.js still issues the transaction's rollback on the dead
+      // socket and queues the write for the next turn of the event loop. Ending the pool in the turn
+      // the failure surfaces cancels that write; any awaited query before this point would let it run
+      // against a closed socket and surface as an unhandled error.
+      await own.end({ timeout: 0 })
       expect(err).toBeInstanceOf(Error)
       expect(badDataError(err)).toBeNull()
       expect((err as { code?: string }).code).toBe("CONNECTION_CLOSED")
