@@ -430,6 +430,8 @@ export class Indexer {
         )
       } catch (err) {
         await this.reloadSources(moveCursor ? undefined : { athAsOf: from - 1n })
+        // The failed record is what stops the indexer; the refused write stays attached to it.
+        if (err instanceof Error && err.cause === undefined) err.cause = attempt.err
         throw err
       }
     }

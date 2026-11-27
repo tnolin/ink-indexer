@@ -518,6 +518,31 @@ describe("the database refuses a write outside every source's step", () => {
   })
 })
 
+describe("a quarantine record that cannot be stored", () => {
+  it("the error is the database's refusal of the record, with the refused write as its cause, and every source reloads", async () => {
+    await sql`alter table indexer.quarantine rename column message to message_text`
+    const chain = chainTo(S + 9n)
+    launch(chain, { n: 1, block: S + 2n })
+    chain.add(writerLog(FAKE, S + 3n))
+    const calls: string[] = []
+    const t = rig(chain, pumpAndWriter([1], calls))
+    const idx = await t.open()
+    const err = await idx.trigger().then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+
+    expect(err).toBeInstanceOf(PostgresError)
+    expect((err as PostgresError).code).toBe("42703")
+    const cause = (err as Error).cause
+    expect(cause).toBeInstanceOf(PostgresError)
+    expect((cause as PostgresError).code).toBe("22003")
+    expect(calls).toEqual(["reload", "process", "reload"])
+    expect(await store.getCursor()).toBeNull()
+    expect(t.report.errors).toEqual([])
+  })
+})
+
 describe("a failure that another try may clear", () => {
   const KEY = 570_730_778
 
