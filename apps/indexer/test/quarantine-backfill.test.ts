@@ -156,11 +156,15 @@ describe("a backfill's quarantine", () => {
     const t = rig(chain, pumpAndWriter([1]))
     await (await t.open()).backfill(S, S + 29n)
 
-    const [skip] = await rows()
-    expect(skip).toMatchObject({ kind: "skip", mode: "backfill", from_block: S })
-    expect(skip?.to_block).toBe(S + 29n)
-    expect(skip?.to_block).toBeGreaterThanOrEqual(S + 26n)
+    const [skip, pause] = await rows()
+    expect(skip).toMatchObject({ kind: "skip", mode: "backfill", from_block: S, to_block: S + 29n })
     expect(skip?.replay_sources.split(",")).toEqual(["inkypump", "v4-swaps"])
+    expect(pause).toMatchObject({
+      kind: "pause",
+      mode: "backfill",
+      from_block: S,
+      to_block: S + 29n,
+    })
   })
 
   it.each([
