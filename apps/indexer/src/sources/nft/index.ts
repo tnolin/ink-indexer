@@ -141,8 +141,8 @@ export type NftDeps = {
   sql: Sql
   chain: Pick<Chain, "getBlock" | "readMintStats" | "readTotalSupplyAt" | "readErc20Names">
   logger: Logger
-  /** Whether this process runs the NFTX source: only then does a sale's floor take the pool's price into account. */
-  nftx?: boolean
+  /** Whether this process runs the NFTX source, asked per batch: only then does a sale's floor take the pool's price into account. */
+  combineNftx?: () => boolean
 }
 
 const TRANSFER = NFT_TOPICS.transfer
@@ -425,7 +425,7 @@ export async function processLogs(
   const floors = await latestFloors(
     deps.sql,
     [...new Set(saleLogs.flatMap((x) => x.sales.map((r) => r.contract)))],
-    deps.nftx === true,
+    deps.combineNftx?.() === true,
   )
   // And the item's name, image and rank, from what the listings cached (no network; a sale never
   // fetches a rank). The same shortcut applies: the cache as it stands when the sale is processed.

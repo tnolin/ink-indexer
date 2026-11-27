@@ -1,4 +1,5 @@
 import { PostgresError, type Sql } from "@ink-indexer/db"
+import type { Logger } from "./log"
 import {
   type BackfillSource,
   LAUNCHPAD_SOURCES,
@@ -46,6 +47,8 @@ export function cutMessage(s: string): string {
 
 /** The sources whose skip replays up to the live cursor: they follow only what they loaded. */
 export const CURSOR_REPLAY_SOURCES = ["inkfun", "tsunami", "hookit", "nftx"] as const
+
+export const isSourceName = (name: string): name is SourceName => Object.hasOwn(SOURCE_GROUPS, name)
 
 const isLaunchpad = (source: SourceName) =>
   (LAUNCHPAD_SOURCES as readonly SourceName[]).includes(source)
@@ -105,6 +108,22 @@ export async function openLivePauses(sql: Sql): Promise<{ source: string; fromBl
     where kind = 'pause' and mode = 'live' and cleared_at is null
     order by id`
   return rows.map((r) => ({ source: r.source, fromBlock: BigInt(r.from_block) }))
+}
+
+/**
+ * The sources an indexer starting now leaves out: those with an open live pause. Names that are no
+ * source are ignored and listed with the others in the one warning.
+ */
+export async function startPauses(sql: Sql, log: Logger): Promise<SourceName[]> {
+  const open = await openLivePauses(sql)
+  const known = open.map((p) => p.source).filter(isSourceName)
+  const unknown = open.map((p) => p.source).filter((name) => !isSourceName(name))
+  if (open.length > 0)
+    log("warn", "paused sources left out until cleared", {
+      sources: known,
+      ...(unknown.length > 0 && { unknown }),
+    })
+  return known
 }
 
 /** Lifts the source's open live pause; null when there is none. Skips and backfill rows stay. */

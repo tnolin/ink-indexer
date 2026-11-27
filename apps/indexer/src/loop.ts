@@ -8,15 +8,16 @@ import { readLogs } from "./log-plan"
 import {
   badDataError,
   cutMessage,
+  isSourceName,
   type QuarantineRow,
   replaySources,
   replaySteps,
+  subtractPaused,
 } from "./quarantine"
 import type { Reporter } from "./sentry"
 import {
   BACKFILL_SOURCES,
   type BackfillSource,
-  SOURCE_GROUPS,
   type Source,
   type SourceBatch,
   type SourceName,
@@ -36,7 +37,19 @@ const SERVED_GIVE_UP_MS = 10 * 60_000
 /** Spans a skipped source stays on watch for: a refused write in either of them pauses it. */
 const WATCH_SPANS = 2
 
-const isSourceName = (name: string): name is SourceName => Object.hasOwn(SOURCE_GROUPS, name)
+/** What a span knows about the sources it left out: kept per live process and per backfill run. */
+type Run = {
+  live: boolean
+  /** Sources left out of every span of the run. */
+  paused: Set<SourceName>
+  /**
+   * Sources skipped recently. A refused write in one of the next `spansLeft` spans in which the
+   * source has something to write pauses it from `skipFrom`.
+   */
+  watch: Map<SourceName, { spansLeft: number; skipFrom: bigint }>
+  /** A backfill's earliest skipped block per source, where a missing record starts its pause. */
+  firstSkip: Map<SourceName, bigint>
+}
 
 /** What a failed attempt pins on one source: a missing record (`refused` null) or a refused write. */
 type Pinned = { source: Source; refused: PostgresError | null }
@@ -147,11 +160,8 @@ export class Indexer {
   cursorBlock: bigint | null | undefined
   /** Sources with an open live pause: left out of every live span until the pause is cleared. */
   private readonly livePaused: Set<SourceName>
-  /**
-   * Sources skipped recently. A refused write in one of the next `spansLeft` spans in which the
-   * source has something to write pauses it from `skipFrom`. Kept in memory, so a restart starts clean.
-   */
-  private readonly watch = new Map<SourceName, { spansLeft: number; skipFrom: bigint }>()
+  /** The live loop's pauses and watch. The watch is kept in memory, so a restart starts clean. */
+  private readonly liveRun: Run
 
   constructor(
     private readonly deps: {
@@ -175,6 +185,7 @@ export class Indexer {
     },
   ) {
     this.livePaused = new Set(deps.paused)
+    this.liveRun = { live: true, paused: this.livePaused, watch: new Map(), firstSkip: new Map() }
     this.staleHead = new Condition("stale head", deps.logger)
     this.notServed = new Condition("block not yet served", deps.logger)
   }
@@ -257,7 +268,8 @@ export class Indexer {
       let from = cursor ? cursor.block + 1n : INKYPUMP_START_BLOCK
       head = await this.headFor(head, from)
       this.lastHead = head
-      while (from <= head) from = (await this.ingest(from, head, head, true, this.deps.only)) + 1n
+      while (from <= head)
+        from = (await this.ingest(from, head, head, this.liveRun, this.deps.only)) + 1n
       await store.confirm(head)
       this.tickSuccesses++
       const ended = this.notServed.end()
@@ -318,6 +330,11 @@ export class Indexer {
    * confirmed yet, and it starts from the ath as it stood before `from`, so its rows do not depend
    * on what was written above its range. A block the endpoint has not served yet is retried with a
    * growing wait; after ten minutes on one block it throws, naming the block to resume from.
+   *
+   * A source the database refuses is left out of one span, or of the rest of the range after a
+   * repeat or a missing record, and the run goes on (see `ingest`). The rows are recorded with mode
+   * `backfill`. The run keeps its own pauses and ignores the live ones, so a replay can run a source
+   * the live loop has paused.
    */
   async backfill(from: bigint, to?: bigint, only?: readonly BackfillSource[]) {
     const end = to ?? (await this.deps.chain.getBlockNumber())
@@ -325,10 +342,11 @@ export class Indexer {
     await this.reloadSources({ athAsOf: from - 1n })
     const resume = (n: bigint) =>
       `--from ${n} --to ${end}${only ? ` --sources ${only.join(",")}` : ""}`
+    const run: Run = { live: false, paused: new Set(), watch: new Map(), firstSkip: new Map() }
     let stuck = null as { next: bigint; since: number; waitMs: number } | null
     for (let next = from; next <= end; ) {
       try {
-        next = (await this.ingest(next, end, end, false, only)) + 1n
+        next = (await this.ingest(next, end, end, run, only)) + 1n
         if (stuck) {
           const ended = this.notServed.end()
           this.deps.logger("info", "backfill block served after retrying", {
@@ -374,10 +392,11 @@ export class Indexer {
     from: bigint,
     to: bigint,
     head: bigint,
-    moveCursor: boolean,
+    run: Run,
     only?: readonly BackfillSource[],
   ): Promise<bigint> {
-    const excluded = new Set<string>(moveCursor ? this.livePaused : [])
+    const moveCursor = run.live
+    const excluded = new Set<string>(run.paused)
     const touched = new Set<string>()
     let end: bigint | null = null
     let next = from
@@ -386,7 +405,7 @@ export class Indexer {
       if (attempt.ok) {
         for (const name of attempt.touched) touched.add(name)
         if (end === null || attempt.toBlock >= end) {
-          if (moveCursor) this.countDown(touched)
+          this.countDown(run.watch, touched)
           return end ?? attempt.toBlock
         }
         next = attempt.toBlock + 1n
@@ -401,9 +420,16 @@ export class Indexer {
       }
       end ??= attempt.toBlock
       try {
-        await this.quarantine(pinned, attempt.err, next, end, excluded, touched)
+        await this.quarantine(
+          pinned,
+          attempt.err,
+          { from: next, to: end, spanFrom: from, last: to },
+          run,
+          excluded,
+          touched,
+        )
       } catch (err) {
-        await this.reloadSources()
+        await this.reloadSources(moveCursor ? undefined : { athAsOf: from - 1n })
         throw err
       }
     }
@@ -419,11 +445,10 @@ export class Indexer {
     excluded: ReadonlySet<string>,
   ): Promise<Attempt> {
     const { chain, store, logger } = this.deps
-    const leftOut = new Set(
-      this.deps.sources.filter((s) => excluded.has(s.name)).flatMap((s) => s.groups),
-    )
     const spanOnly =
-      excluded.size === 0 ? only : (only ?? BACKFILL_SOURCES).filter((group) => !leftOut.has(group))
+      excluded.size === 0
+        ? only
+        : subtractPaused(only ?? BACKFILL_SOURCES, [...excluded].filter(isSourceName))
     const picked = this.deps.sources
       .filter((source) => !excluded.has(source.name))
       .map((source) => ({ source, filters: source.filters(spanOnly) }))
@@ -479,7 +504,7 @@ export class Indexer {
       if (cursor) this.cursorBlock = cursor.block
       events = batches.reduce((n, b) => n + b.events.length, 0)
     } catch (err) {
-      const pinned = moveCursor ? await this.pin(err, processing, writing, sources, batches) : null
+      const pinned = await this.pin(err, processing, writing, sources, batches)
       return { ok: false, toBlock, err, pinned }
     }
     if (events > 0) logger("info", "ingested", { from, to: toBlock, events })
@@ -521,39 +546,47 @@ export class Indexer {
   /**
    * Records the failure, leaves the source out of the rest of the span and reloads every source.
    * A missing record pauses the source. A refused write skips the source for this span, or pauses
-   * it when it was skipped within the last two spans in which it had something to write.
+   * it when it was skipped within the last two spans in which it had something to write. A live
+   * pause lasts until it is cleared; a backfill's, to the end of the range.
    */
   private async quarantine(
     { source, refused }: Pinned,
     err: unknown,
-    from: bigint,
-    to: bigint,
+    span: { from: bigint; to: bigint; spanFrom: bigint; last: bigint },
+    run: Run,
     excluded: Set<string>,
     touched: Set<string>,
   ) {
     const { store, logger, report } = this.deps
+    const { from, to } = span
     const name = source.name as SourceName
-    const watched = this.watch.get(name)
+    const watched = run.watch.get(name)
     const pause = refused === null || watched !== undefined
+    const mode = run.live ? "live" : "backfill"
+    // A refused write that repeats pauses from the first skip. A missing record pauses from the
+    // earliest skip still open: the store looks that up live; a backfill keeps its own.
+    const earlier = refused ? watched?.skipFrom : run.firstSkip.get(name)
     const row: QuarantineRow = {
       source: name,
       kind: pause ? "pause" : "skip",
-      mode: "live",
-      fromBlock: refused && watched ? watched.skipFrom : from,
-      toBlock: pause ? null : to,
+      mode,
+      fromBlock: earlier ?? from,
+      toBlock: pause ? (run.live ? null : span.last) : to,
       replaySources: replaySources(name, pause ? "pause" : "skip"),
       sqlstate: refused?.code ?? "dependency",
       message: cutMessage(err instanceof Error ? err.message : String(err)),
     }
-    // A missing record starts the pause at the source's earliest skip that is still open.
-    const fromBlock = await store.recordQuarantine(row, { fromEarliestSkip: refused === null })
+    const fromBlock = await store.recordQuarantine(row, {
+      fromEarliestSkip: run.live && refused === null,
+    })
     const stored = { ...row, fromBlock }
     excluded.add(source.name)
     if (pause) {
-      this.livePaused.add(name)
-      this.watch.delete(name)
+      run.paused.add(name)
+      run.watch.delete(name)
     } else {
-      this.watch.set(name, { spansLeft: WATCH_SPANS, skipFrom: from })
+      run.watch.set(name, { spansLeft: WATCH_SPANS, skipFrom: from })
+      if (!run.live && !run.firstSkip.has(name)) run.firstSkip.set(name, from)
       touched.delete(source.name)
     }
     const context = {
@@ -566,23 +599,24 @@ export class Indexer {
       message: stored.message,
       replay: replaySteps(stored),
     }
-    if (pause) {
-      const text = `${name} paused from block ${fromBlock}; the other sources keep running`
-      logger("error", text, context)
-      report?.error(text, context)
-    } else {
-      const text = `${name} skipped blocks ${from} to ${to} after a refused write; the other sources kept the span`
-      logger("error", text, context)
-      report?.warn(text, context)
-    }
-    await this.reloadSources()
+    const text = pause
+      ? run.live
+        ? `${name} paused from block ${fromBlock}; the other sources keep running`
+        : `backfill: ${name} left out from block ${fromBlock} to ${stored.toBlock}`
+      : run.live
+        ? `${name} skipped blocks ${from} to ${to} after a refused write; the other sources kept the span`
+        : `backfill: ${name} skipped blocks ${from} to ${to}`
+    logger("error", text, context)
+    if (pause) report?.error(text, context)
+    else report?.warn(text, context)
+    await this.reloadSources(run.live ? undefined : { athAsOf: span.spanFrom - 1n })
   }
 
   /** Counts one span off the watch of each source that had something to write in it. */
-  private countDown(touched: ReadonlySet<string>) {
-    for (const [name, w] of this.watch) {
+  private countDown(watch: Run["watch"], touched: ReadonlySet<string>) {
+    for (const [name, w] of watch) {
       if (!touched.has(name)) continue
-      if (w.spansLeft <= 1) this.watch.delete(name)
+      if (w.spansLeft <= 1) watch.delete(name)
       else w.spansLeft--
     }
   }

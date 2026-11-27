@@ -4,6 +4,7 @@ import { inkfunClosingSold, INKYPUMP_START_BLOCK as S } from "@ink-indexer/sdk"
 import type { Address } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import { Indexer } from "../src/loop"
+import { badDataError } from "../src/quarantine"
 import { inkfunSource } from "../src/sources/inkfun/index"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { PoolRegistry } from "../src/sources/pools"
@@ -609,7 +610,13 @@ describe("a failure that another try may clear", () => {
         { store: createStore(own) },
       )
       const idx = await t.open()
-      await expect(idx.trigger()).rejects.toBeDefined()
+      const err = await idx.trigger().then(
+        () => undefined,
+        (e: unknown) => e,
+      )
+      expect(err).toBeInstanceOf(Error)
+      expect(badDataError(err)).toBeNull()
+      expect((err as { code?: string }).code).toBe("CONNECTION_CLOSED")
       expect(calls).toEqual(["reload", "process", "reload"])
       expect(await rows()).toEqual([])
       expect(t.report.errors).toEqual([])

@@ -227,7 +227,7 @@ describe("the floor the listings read", () => {
       rest: undefined as never,
       log: () => {},
       now: () => T0,
-      nftx: true,
+      combineNftx: () => true,
     })
 
   it("an NFTX floor takes the time of the event, an OpenSea floor its own row's time", async () => {

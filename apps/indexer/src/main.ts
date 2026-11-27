@@ -5,6 +5,7 @@ import { parseCli } from "./cli"
 import { log } from "./log"
 import { Indexer } from "./loop"
 import { applyMark } from "./mark-cli"
+import { startPauses } from "./quarantine"
 import { connectRpc, DEFAULT_WS_URLS, watchHeads } from "./rpc"
 import { initSentry } from "./sentry"
 import { createShutdown } from "./shutdown"
@@ -83,8 +84,11 @@ const report = (err: unknown) => {
 }
 let rpc: Awaited<ReturnType<typeof connectRpc>>
 let indexer: Indexer
+/** The NFTX pool price joins the OpenSea floor while the source runs and is not paused. */
+const combineNftx = () => sources.nftx && !indexer.isPaused("nftx")
 try {
   await migrate(sql)
+  const paused = cli.command === "start" ? await startPauses(sql, log) : undefined
   if (cli.command === "collections-from-sales") {
     const created = await createCollectionsFromSales(sql)
     log("info", "collections from sales created", { created })
@@ -122,6 +126,8 @@ try {
     store,
     logger: log,
     only: sources.groups,
+    report: reporter,
+    paused,
     tickMinIntervalMs,
     sources: [
       inkypumpSource({ sql, chain, logger: log, pools }),
@@ -151,7 +157,12 @@ try {
       }),
       // After the launchpads: a pool either registers at bond is known when this span's swaps are processed.
       v4Source({ sql, chain, logger: log, pools, blockReads }),
-      nftSource({ sql, chain, logger: log, nftx: sources.nftx }),
+      nftSource({
+        sql,
+        chain,
+        logger: log,
+        combineNftx,
+      }),
       nftxSource({ sql, chain, logger: log, report: reporter, blockReads, ranks }),
     ],
   })
@@ -166,6 +177,7 @@ try {
         log,
         report,
         ranks,
+        combineNftx,
       })
     ).stop
 } catch (err) {

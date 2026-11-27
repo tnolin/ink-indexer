@@ -346,8 +346,8 @@ export async function startNftServices(
     fetch?: typeof fetch
     socket?: (url: string) => WebSocketLike
     tickMs?: number
-    /** Whether the NFTX source runs in this process (see `SourceSelection.nftx`). */
-    nftx?: boolean
+    /** Whether the NFTX source runs in this process and is not paused, asked when a floor is combined. */
+    combineNftx?: () => boolean
     /** Set to the rank lookup while the services run, for the NFTX source's listings. */
     ranks?: { current: Pick<Ranks, "getRank"> | null }
   },
@@ -377,7 +377,7 @@ export async function startNftServices(
     const snapshots = createSnapshots({ sql, store, now })
     const accounts = createAccounts({ sql, rest, now })
     const jobDeps = { sql, store, rest, snapshots, accounts, log, now }
-    const stats = createStats({ sql, store, rest, log, now, nftx: deps.nftx })
+    const stats = createStats({ sql, store, rest, log, now, combineNftx: deps.combineNftx })
     const ranks = createRanks({ sql, rest, log, now })
     if (deps.ranks) {
       const shared = deps.ranks
@@ -441,9 +441,7 @@ export async function startSourceServices(
   sources: SourceSelection,
   deps: Parameters<typeof startNftServices>[0],
 ): Promise<{ stop(): void }> {
-  const nft = sources.openSea
-    ? await startNftServices({ ...deps, nftx: sources.nftx })
-    : { stop() {} }
+  const nft = sources.openSea ? await startNftServices(deps) : { stop() {} }
   if (!sources.nftx) return nft
   const stopImages = startLaunchImages(
     createLaunchImages({
