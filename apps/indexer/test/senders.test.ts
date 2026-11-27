@@ -36,11 +36,11 @@ describe("blockSendersFor", () => {
     expect(chain.sendersOrder).toEqual(asked)
   })
 
-  it("backfill: reads every block up front, at most 8 at a time", async () => {
-    expect(BACKFILL_BLOCK_READS).toBe(8)
+  it("senders: a backfill reads at most 4 blocks at a time", async () => {
+    expect(BACKFILL_BLOCK_READS).toBe(4)
     const { chain, blocks } = chainOf(40)
     await blockSendersFor(chain, blocks, { live: false })
-    expect(chain.maxSendersInFlight).toBe(8)
+    expect(chain.maxSendersInFlight).toBe(4)
     expect(chain.getBlockSendersCalls).toBe(40)
     expect([...chain.sendersOrder].sort()).toEqual([...blocks].sort())
   })

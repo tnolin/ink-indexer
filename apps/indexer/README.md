@@ -5,7 +5,7 @@ Follows Ink mainnet and writes InkyPump V2 launches, curve trades, bonds and Uni
     pnpm start                                  # backfill to head, then follow new blocks
     pnpm backfill --from <block> [--to <block>] # re-scan a range; safe to repeat
     pnpm backfill --from <block> --sources nft-sales,nft-launches
-    pnpm backfill --from <block> --block-reads 4 # block reads in flight, 1 to 16 (default 8)
+    pnpm backfill --from <block> --block-reads 2 # block reads in flight, 1 to 16 (default 4)
     pnpm nft:mark <contract> <real|filtered|continuous|drop|clear> [--max-supply <n>]
     pnpm nft:auction <auction> <contract>       # link an auction to a collection by hand
     pnpm quarantine clear <source>              # lift a source's live pause (see below)

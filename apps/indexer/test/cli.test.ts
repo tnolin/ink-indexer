@@ -184,6 +184,11 @@ describe("parseCli mark", () => {
       expect(parseCli(["backfill", "--from", "1", "--block-reads", n]).ok, n).toBe(false)
   })
 
+  it("cli: backfill without --block-reads leaves blockReads undefined, so the default of 4 applies", () => {
+    const r = parseCli(["backfill", "--from", "1"])
+    expect(r.ok && "blockReads" in r && r.blockReads).toBeUndefined()
+  })
+
   it("--block-reads is not an option of the other commands", () => {
     for (const command of ["start", "collections-from-sales"])
       expect(parseCli([command, "--block-reads", "4"]).ok, command).toBe(false)

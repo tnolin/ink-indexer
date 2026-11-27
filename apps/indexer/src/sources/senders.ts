@@ -4,7 +4,7 @@ import { BlockNotServedError } from "../errors"
 import { isTipRefusal } from "../rpc"
 
 /** Block-sender reads a backfill span keeps in flight. Each is one request, retried and moved between endpoints on its own. */
-export const BACKFILL_BLOCK_READS = 8
+export const BACKFILL_BLOCK_READS = 4
 
 export type BlockSenders = NonNullable<Awaited<ReturnType<Chain["getBlockSenders"]>>>
 
