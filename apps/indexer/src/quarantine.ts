@@ -24,7 +24,7 @@ export type QuarantineRow = {
  * The error when the database refused the data itself: class 22 (data exception) or 23 (integrity
  * constraint violation). Anything else, such as a lock timeout, a serialization failure or a lost
  * connection, may succeed on another try, so it is not bad data. Connection errors carry a `code`
- * too, so the class is checked as well.
+ * too but are not PostgresErrors, so the class is tested as well as the code.
  */
 export function badDataError(err: unknown): PostgresError | null {
   return err instanceof PostgresError && /^2[23]/.test(err.code) ? err : null

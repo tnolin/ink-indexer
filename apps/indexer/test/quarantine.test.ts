@@ -279,9 +279,9 @@ describe("replaySteps", () => {
   })
 
   it("a backfill row resumes with the run's own range", () => {
-    expect(replaySteps(row({ mode: "backfill", source: "inkfun" }))).toEqual([
-      "resume with pnpm backfill --from 100 --to 110 --sources inkypump",
-    ])
+    expect(
+      replaySteps(row({ mode: "backfill", source: "inkfun", replaySources: ["inkfun"] })),
+    ).toEqual(["resume with pnpm backfill --from 100 --to 110 --sources inkfun"])
   })
 })
 
