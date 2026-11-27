@@ -31,7 +31,7 @@ git ls-files -z | perl -e '
   if (length $ENV{GUARD_ALLOW}) {
     $allow = eval { qr/$ENV{GUARD_ALLOW}/i };
   }
-  if (!defined $re || (length $ENV{GUARD_ALLOW} && !defined $allow)) {
+  if (!defined $re || (length $ENV{GUARD_ALLOW} && !defined $allow) || (defined $allow && "" =~ $allow)) {
     print STDERR "guard: a pattern does not compile\n";
     exit 2;
   }
@@ -41,6 +41,7 @@ git ls-files -z | perl -e '
   my @files = <STDIN>;
   chomp @files;
   my $hits = 0;
+  eval {
   for my $file (@files) {
     my ($base) = $file =~ m{([^/]*)\z};
     next if $skip_names{$base};
@@ -58,5 +59,10 @@ git ls-files -z | perl -e '
     }
     close $fh;
   }
+  1;
+  } or do {
+    print STDERR "guard: a pattern does not compile\n";
+    exit 2;
+  };
   exit($hits ? 1 : 0);
 '

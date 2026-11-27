@@ -181,6 +181,31 @@ describe("check-names.sh", () => {
     expect(r.all).toBe("")
   })
 
+  it("a pattern that fails only at match time exits 2 without printing it", () => {
+    const cwd = repo({ "a.txt": "zorblax\n" })
+    for (const env of [
+      { GUARD_PATTERN: "zorb\\p{IsQuuxle}lax", GUARD_ALLOW: "" },
+      { GUARD_PATTERN: "zorblax", GUARD_ALLOW: "zorb\\p{IsQuuxle}lax" },
+    ]) {
+      const r = run(cwd, env)
+      expect(r.status).toBe(2)
+      expect(r.stdout).toBe("")
+      expect(r.stderr.trim()).toBe("guard: a pattern does not compile")
+      expect(r.all).not.toContain("zorb")
+      expect(r.all).not.toContain("Quuxle")
+    }
+  })
+
+  it("an allowed-phrase pattern that matches empty text exits 2", () => {
+    const cwd = repo({ "a.txt": "zorblax\n" })
+    for (const allow of ["quux|", "x?"]) {
+      const r = run(cwd, { GUARD_PATTERN: "zorblax", GUARD_ALLOW: allow })
+      expect(r.status).toBe(2)
+      expect(r.stdout).toBe("")
+      expect(r.stderr.trim()).toBe("guard: a pattern does not compile")
+    }
+  })
+
   it("a clean repo exits 0", () => {
     const cwd = repo({ "a.txt": "nothing here\n", "src/b.ts": "export {}\n" })
     const r = run(cwd, { GUARD_PATTERN: "zorblax", GUARD_ALLOW: "zorblax-ok" })
