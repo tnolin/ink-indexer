@@ -66,6 +66,15 @@ export function replaySources(source: SourceName, kind: "skip" | "pause"): Backf
   return withSwaps && isLaunchpad(source) ? [...own, "v4-swaps"] : own
 }
 
+/**
+ * Whether a backfill skip of `source` is recorded through the end of the run. These sources follow
+ * only the curves, collections or pools they loaded, so a launch inside the skipped span loses its
+ * later events up to the run's end unless the replay covers them. InkyPump's pool swaps are indexed
+ * by `v4-swaps`, which a replay of the span alone would also miss after the span.
+ */
+export const backfillSkipToEnd = (source: SourceName) =>
+  source === "inkypump" || replaysToCursor(source)
+
 const BELOW_CURSOR = "<a block at or below the live cursor>"
 const TAIL_FROM = "<that --to + 1>"
 const CURSOR_BLOCK = "<the cursor block>"
@@ -136,6 +145,19 @@ export async function pausesForCommand(
   command: string,
 ): Promise<SourceName[] | undefined> {
   return command === "start" ? await startPauses(sql, log) : undefined
+}
+
+/**
+ * The `only` and `paused` inputs of the `Indexer` that runs `command`: the platform's backfill
+ * groups, and for `start` the sources an open live pause leaves out.
+ */
+export async function indexerInputs(
+  sql: Sql,
+  log: Logger,
+  command: string,
+  groups: readonly BackfillSource[],
+): Promise<{ only: readonly BackfillSource[]; paused: SourceName[] | undefined }> {
+  return { only: groups, paused: await pausesForCommand(sql, log, command) }
 }
 
 /** Lifts the source's open live pause; null when there is none. Skips and backfill rows stay. */

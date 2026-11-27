@@ -9,7 +9,7 @@ export type Reporter = {
   capture(err: unknown): void
   /** A warning message. Callers send each distinct warning once, so this is not rate limited here. */
   warn(message: string, context?: Record<string, unknown>): void
-  /** An error-level message for a record that needs a person to look, such as skipped blocks. */
+  /** An error-level message for a record that needs a person to look, such as a paused source. */
   error(message: string, context?: Record<string, unknown>): void
   flush(ms: number): Promise<boolean>
 }

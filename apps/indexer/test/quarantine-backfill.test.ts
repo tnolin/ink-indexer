@@ -7,7 +7,12 @@ import { Indexer } from "../src/loop"
 import { openLivePauses, startPauses } from "../src/quarantine"
 import { inkypumpSource } from "../src/sources/inkypump/index"
 import { PoolRegistry } from "../src/sources/pools"
-import type { Source, SourceBatch, SourceName } from "../src/sources/source"
+import {
+  SOURCE_GROUPS,
+  type Source,
+  type SourceBatch,
+  type SourceName,
+} from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
 import { FakeChain } from "./fake-chain"
 import {
@@ -129,9 +134,9 @@ describe("a backfill's quarantine", () => {
         kind: "skip",
         mode: "backfill",
         from_block: S,
-        to_block: S + 9n,
+        to_block: S + 29n,
         sqlstate: "22003",
-        replay_sources: "inkypump",
+        replay_sources: "inkypump,v4-swaps",
         cleared_at: null,
       },
     ])
@@ -141,6 +146,72 @@ describe("a backfill's quarantine", () => {
     expect(await store.getCursor()).toBeNull()
     expect(idx.paused()).toEqual([])
   })
+
+  it("a skipped span's curve keeps its later trades inside the recorded replay range", async () => {
+    const chain = chainTo(S + 29n)
+    launch(chain, { n: 1, block: S + 2n })
+    trade(chain, { n: 1, block: S + 15n, sold: 1n })
+    trade(chain, { n: 1, block: S + 26n, sold: 2n })
+    chain.add(writerLog(FAKE, S + 27n))
+    const t = rig(chain, pumpAndWriter([1]))
+    await (await t.open()).backfill(S, S + 29n)
+
+    const [skip] = await rows()
+    expect(skip).toMatchObject({ kind: "skip", mode: "backfill", from_block: S })
+    expect(skip?.to_block).toBe(S + 29n)
+    expect(skip?.to_block).toBeGreaterThanOrEqual(S + 26n)
+    expect(skip?.replay_sources.split(",")).toEqual(["inkypump", "v4-swaps"])
+  })
+
+  it.each([
+    ["inkfun", ["inkfun", "v4-swaps"]],
+    ["tsunami", ["tsunami", "v4-swaps"]],
+    ["hookit", ["hookit", "v4-swaps"]],
+    ["nftx", ["nftx"]],
+  ] as const)(
+    "a backfill skip of %s is recorded through the end of the run",
+    async (name, sources) => {
+      const chain = chainTo(S + 29n)
+      chain.add(writerLog(FAKE, S + 3n))
+      chain.add(writerLog(FAKE, S + 25n))
+      const t = rig(chain, () => [
+        refusing(
+          plainWriter(name, SOURCE_GROUPS[name], FAKE),
+          (b) => b.events.length > 0,
+          "numeric",
+        ),
+      ])
+      await (await t.open()).backfill(S, S + 29n)
+
+      const [skip] = await rows()
+      expect(skip).toMatchObject({ source: name, kind: "skip", from_block: S, to_block: S + 29n })
+      expect(skip?.replay_sources.split(",")).toEqual(sources)
+    },
+  )
+
+  it.each([
+    ["v4", ["v4-swaps"]],
+    ["nft", ["nft-mints", "nft-sales", "nft-launches"]],
+  ] as const)(
+    "a backfill skip of %s records the skipped span and its own groups only",
+    async (name, groups) => {
+      const chain = chainTo(S + 29n)
+      chain.add(writerLog(FAKE, S + 3n))
+      chain.add(writerLog(FAKE, S + 25n))
+      const t = rig(chain, () => [
+        refusing(
+          plainWriter(name, SOURCE_GROUPS[name], FAKE),
+          (b) => b.events.length > 0,
+          "numeric",
+        ),
+      ])
+      await (await t.open()).backfill(S, S + 29n)
+
+      const [skip] = await rows()
+      expect(skip).toMatchObject({ source: name, kind: "skip", from_block: S, to_block: S + 9n })
+      expect(skip?.replay_sources.split(",")).toEqual(groups)
+    },
+  )
 
   it("a backfill pause drops the source to --to, the others reach --to, and the row's to_block is --to", async () => {
     const chain = chainTo(S + 39n)
@@ -156,7 +227,7 @@ describe("a backfill's quarantine", () => {
     expect(await tokens()).toEqual([])
     expect(await written()).toEqual(["tsunami:13", "tsunami:33"])
     expect(await rows()).toMatchObject([
-      { kind: "skip", mode: "backfill", from_block: S, to_block: S + 9n },
+      { kind: "skip", mode: "backfill", from_block: S, to_block: S + 39n },
       {
         kind: "pause",
         mode: "backfill",
@@ -182,7 +253,7 @@ describe("a backfill's quarantine", () => {
     await (await t.open()).backfill(S, S + 29n)
 
     expect(await rows()).toMatchObject([
-      { kind: "skip", mode: "backfill", from_block: S, to_block: S + 9n },
+      { kind: "skip", mode: "backfill", from_block: S, to_block: S + 29n },
       { kind: "pause", mode: "backfill", from_block: S, to_block: S + 29n, sqlstate: "dependency" },
     ])
     expect(await written()).toEqual(["tsunami:24"])
@@ -199,7 +270,7 @@ describe("a backfill's quarantine", () => {
 
     expect(await tokens()).toEqual([tokenOf(2), tokenOf(3)].sort())
     expect(await rows()).toMatchObject([
-      { kind: "skip", mode: "backfill", from_block: S, to_block: S + 9n },
+      { kind: "skip", mode: "backfill", from_block: S, to_block: S + 39n },
       { kind: "pause", mode: "backfill", from_block: S, to_block: S + 39n, sqlstate: "dependency" },
     ])
   })
@@ -311,8 +382,8 @@ describe("a backfill's quarantine", () => {
       kind: "skip",
       mode: "backfill",
       fromBlock: S,
-      toBlock: S + 9n,
-      replay: [`resume with pnpm backfill --from ${S} --to ${S + 9n} --sources inkypump`],
+      toBlock: S + 19n,
+      replay: [`resume with pnpm backfill --from ${S} --to ${S + 19n} --sources inkypump,v4-swaps`],
     })
     expect(t.report.errors[0]?.context).toMatchObject({
       kind: "pause",
@@ -340,7 +411,7 @@ describe("a backfill's quarantine", () => {
     await (await t.open()).backfill(S, S + 29n)
 
     expect(seen).toEqual([undefined, S - 1n, S + 9n])
-    expect(await rows()).toMatchObject([{ kind: "skip", from_block: S + 10n, to_block: S + 19n }])
+    expect(await rows()).toMatchObject([{ kind: "skip", from_block: S + 10n, to_block: S + 29n }])
   })
 
   it("a failure another try may clear is rethrown from a backfill and not recorded", async () => {

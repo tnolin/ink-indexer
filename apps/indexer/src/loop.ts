@@ -6,6 +6,7 @@ import { BlockNotServedError, DependencyError, UnconfirmedAboveHeadError } from 
 import type { Level, Logger } from "./log"
 import { readLogs } from "./log-plan"
 import {
+  backfillSkipToEnd,
   badDataError,
   cutMessage,
   isSourceName,
@@ -423,7 +424,7 @@ export class Indexer {
         await this.quarantine(
           pinned,
           attempt.err,
-          { from: next, to: end, spanFrom: from, last: to },
+          { from: next, to: end, last: to },
           run,
           excluded,
           touched,
@@ -554,7 +555,7 @@ export class Indexer {
   private async quarantine(
     { source, refused }: Pinned,
     err: unknown,
-    span: { from: bigint; to: bigint; spanFrom: bigint; last: bigint },
+    span: { from: bigint; to: bigint; last: bigint },
     run: Run,
     excluded: Set<string>,
     touched: Set<string>,
@@ -568,13 +569,16 @@ export class Indexer {
     // A refused write that repeats pauses from the first skip. A missing record pauses from the
     // earliest skip still open: the store looks that up live; a backfill keeps its own.
     const earlier = refused ? watched?.skipFrom : run.firstSkip.get(name)
+    // A backfill skip of a source that follows only what it loaded is recorded through the run's
+    // end, with the same replay sources as a pause.
+    const toEnd = !run.live && !pause && backfillSkipToEnd(name)
     const row: QuarantineRow = {
       source: name,
       kind: pause ? "pause" : "skip",
       mode,
       fromBlock: earlier ?? from,
-      toBlock: pause ? (run.live ? null : span.last) : to,
-      replaySources: replaySources(name, pause ? "pause" : "skip"),
+      toBlock: pause ? (run.live ? null : span.last) : toEnd ? span.last : to,
+      replaySources: replaySources(name, pause || toEnd ? "pause" : "skip"),
       sqlstate: refused?.code ?? "dependency",
       message: cutMessage(err instanceof Error ? err.message : String(err)),
     }
@@ -611,7 +615,7 @@ export class Indexer {
     logger("error", text, context)
     if (pause) report?.error(text, context)
     else report?.warn(text, context)
-    await this.reloadSources(run.live ? undefined : { athAsOf: span.spanFrom - 1n })
+    await this.reloadSources(run.live ? undefined : { athAsOf: span.from - 1n })
   }
 
   /** Counts one span off the watch of each source that had something to write in it. */

@@ -9,7 +9,6 @@ Notable changes are listed here. The format follows [Keep a Changelog](https://k
 - Indexer: a source whose rows Postgres refuses as bad data (SQLSTATE class 22 or 23) is skipped for that span while every other source writes it. It is paused if it fails again within its next two spans that carried data, or if it finds a launch missing. Each skip and pause is recorded in `indexer.quarantine` with the backfill command that replays it. See ADR 0048.
 - Indexer: `pnpm quarantine clear <source>` resumes a paused source after its blocks are replayed.
 - DB: migration 0020 adds `indexer.quarantine`.
-- Indexer: the `guard` CI check scans tracked files with `scripts/check-names.sh`, a script that reads its patterns from the environment and fails a pull request on a match.
 
 ### Changed
 

@@ -5,7 +5,13 @@ import type { Address } from "viem"
 import { afterEach, beforeEach, describe, expect, inject, it } from "vitest"
 import type { Logger } from "../src/log"
 import { Indexer } from "../src/loop"
-import { clearLivePause, pausesForCommand, replaySources, startPauses } from "../src/quarantine"
+import {
+  clearLivePause,
+  indexerInputs,
+  pausesForCommand,
+  replaySources,
+  startPauses,
+} from "../src/quarantine"
 import { nftSource } from "../src/sources/nft/index"
 import type { BackfillSource, Source, SourceName } from "../src/sources/source"
 import { createStore, type Store } from "../src/store"
@@ -234,7 +240,7 @@ describe("the pauses a command starts with", () => {
         watching("inkypump", ["inkypump"], ADDRESS(0xa1), seen.inkypump!),
         watching("tsunami", ["tsunami"], ADDRESS(0xa2), seen.tsunami!),
       ],
-      paused: await pausesForCommand(sql, quiet, command),
+      ...(await indexerInputs(sql, quiet, command, ["inkypump", "tsunami"])),
     })
     await idx.init()
     await idx.trigger()
@@ -257,8 +263,8 @@ describe("the pauses a command starts with", () => {
     await row("tsunami", "pause", "backfill")
     await row("tsunami", "skip", "live")
     const { seen, idx } = await firstTick("start")
-    expect(seen.inkypump).toEqual([undefined])
-    expect(seen.tsunami).toEqual([undefined])
+    expect(seen.inkypump).toEqual([["inkypump", "tsunami"]])
+    expect(seen.tsunami).toEqual([["inkypump", "tsunami"]])
     expect(idx.paused()).toEqual([])
   })
 

@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-The RPC client halves an endpoint's `eth_getLogs` range each time the endpoint answers that the range is too large or that it is rate limited, and doubles it back toward its seed. The doubling happened only when the endpoint was picked for a read. An endpoint that was cut to a small range ranked below the others, so it was rarely picked, and its range stayed small for as long as the others worked. The endpoint was effectively out of use after a burst of rate limits.
+The RPC client halves an endpoint's `eth_getLogs` range each time a `getLogs` call to the endpoint fails, other than for a connection error, a refusal at the chain tip or a refusal of a list of logs, and doubles it back toward its seed. The doubling happened only when the endpoint was picked for a read. An endpoint that was cut to a small range ranked below the others, so it was rarely picked, and its range stayed small for as long as the others worked. The endpoint was effectively out of use after a burst of rate limits.
 
 Backfills read 8 blocks at a time by default (ADR 0037, ADR 0038). Beside `start`, that default pushed the public endpoints into rate limits more often than a smaller one.
 
