@@ -125,6 +125,8 @@ The indexer owns the `indexer` schema. Everything in it can be rebuilt from the 
 - A tick whose head is not above the cursor reads every endpoint's own `eth_blockNumber` and uses the highest, so one endpoint stuck on an old block cannot stall ingestion (ADR 0025).
 - Events are written unconfirmed and marked confirmed after 1 block, so consumers can choose how to handle reorgs.
 - RPC: dRPC, Ink's public QuickNode and Gelato endpoints over HTTP with a 15 second request limit. Reads go to the endpoint with the best recent success and latency and fail over on error. See ADR 0014 and [Ink RPC docs](https://docs.inkonchain.com/tools/rpc).
+- When Postgres refuses one source's rows as bad data (SQLSTATE class 22 or 23), that source skips the span while the others write it, and is paused if it fails again within its next two spans that carried data or finds a launch missing. Each skip and pause is recorded in `indexer.quarantine`, and `pnpm quarantine clear <source>` resumes a paused source (ADR 0048).
+- A getLogs range cut by an endpoint doubles back toward its seed every 2 minutes, so a rate-limited endpoint is used again (ADR 0049).
 - A stall watchdog exits the process when the cursor stops moving, so a supervisor restarts it (ADR 0014). With `SENTRY_DSN` set, fatal and stall exits are reported to Sentry (ADR 0015), as are a few warnings that mean a launch or graduation could not be indexed as the chain reports it (ADR 0039). Other errors are logged as JSON.
 
 ## Decisions

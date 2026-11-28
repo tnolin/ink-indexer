@@ -29,7 +29,14 @@ import type { LogFilter } from "../../rpc"
 import { seenItems } from "../opensea/listings"
 import { cachedRanks, itemKey } from "../opensea/ranks"
 import { latestFloors } from "../opensea/stats"
-import { type BackfillSource, type EventRow, pick, type Source, type SourceBatch } from "../source"
+import {
+  type BackfillSource,
+  type EventRow,
+  pick,
+  SOURCE_GROUPS,
+  type Source,
+  type SourceBatch,
+} from "../source"
 import {
   loadMilestoneContexts,
   loadRealMintContexts,
@@ -134,8 +141,8 @@ export type NftDeps = {
   sql: Sql
   chain: Pick<Chain, "getBlock" | "readMintStats" | "readTotalSupplyAt" | "readErc20Names">
   logger: Logger
-  /** Whether this process runs the NFTX source: only then does a sale's floor take the pool's price into account. */
-  nftx?: boolean
+  /** Whether this process runs the NFTX source, asked per batch: only then does a sale's floor take the pool's price into account. */
+  combineNftx?: () => boolean
 }
 
 const TRANSFER = NFT_TOPICS.transfer
@@ -201,6 +208,7 @@ const [MINTS_721, BURNS_721, MINTS_1155, BURNS_1155, SEADROP, SEAPORT, CHIMERA, 
 export function nftSource(deps: NftDeps): Source<NftBatch, null> {
   return {
     name: "nft",
+    groups: SOURCE_GROUPS.nft,
     filters: (only) => FILTERS.map((f, i) => pick(only, FILTER_GROUPS[i]!, f)),
     process: (logs, ctx) => processLogs(logs, deps, ctx.toBlock),
     write: writeRows,
@@ -417,7 +425,7 @@ export async function processLogs(
   const floors = await latestFloors(
     deps.sql,
     [...new Set(saleLogs.flatMap((x) => x.sales.map((r) => r.contract)))],
-    deps.nftx === true,
+    deps.combineNftx?.() === true,
   )
   // And the item's name, image and rank, from what the listings cached (no network; a sale never
   // fetches a rank). The same shortcut applies: the cache as it stands when the sale is processed.

@@ -20,3 +20,15 @@ export class UnconfirmedAboveHeadError extends Error {
     this.name = "UnconfirmedAboveHeadError"
   }
 }
+
+/**
+ * A source cannot process a log because a record an earlier span should have written is missing,
+ * such as the launch a trade belongs to. Reading the same span again will not help; the missing
+ * record has to be written first.
+ */
+export class DependencyError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "DependencyError"
+  }
+}

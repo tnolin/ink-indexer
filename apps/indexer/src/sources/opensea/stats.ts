@@ -156,11 +156,12 @@ class StatsRaced extends Error {
 export type StatsDeps = Pick<OsJobDeps, "sql" | "store" | "rest" | "log"> & {
   now?: () => number
   /**
-   * Whether this process runs the NFTX source. Only then does a poll combine the OpenSea floor with
-   * the NFTX pool's price; without it rows are written as before NFTX, so a backfill window that
-   * runs without the source leaves the combined history to the first live poll.
+   * Whether this process runs the NFTX source, asked at each poll. Only then does a poll combine
+   * the OpenSea floor with the NFTX pool's price; without it rows are written as before NFTX, so a
+   * stretch without the source (not selected, or paused) leaves the combined history to the first
+   * poll that has it.
    */
-  nftx?: boolean
+  combineNftx?: () => boolean
 }
 
 type CollectionRow = {
@@ -309,7 +310,8 @@ export function createStats(deps: StatsDeps) {
     const supply = supplyOf(row)
 
     // A collection trading on NFTX is floored by the cheaper of the two markets.
-    const onPool = deps.nftx === true && (await onNftx(sql, [contract])).has(contract)
+    const nftx = deps.combineNftx?.() === true
+    const onPool = nftx && (await onNftx(sql, [contract])).has(contract)
     const spot = onPool
       ? ((await floorParts(sql, [contract], true)).get(contract)?.nftxFloorWei ?? null)
       : null
@@ -343,9 +345,9 @@ export function createStats(deps: StatsDeps) {
     const values = {
       contract,
       at,
-      floor_wei: toDb(deps.nftx === true ? combined.floorWei : stats.floorWei),
-      floor_market: deps.nftx === true ? (onPool ? combined.market : "opensea") : null,
-      os_floor_wei: deps.nftx === true ? toDb(stats.floorWei) : null,
+      floor_wei: toDb(nftx ? combined.floorWei : stats.floorWei),
+      floor_market: nftx ? (onPool ? combined.market : "opensea") : null,
+      os_floor_wei: nftx ? toDb(stats.floorWei) : null,
       nftx_floor_wei: onPool ? toDb(spot) : null,
       pool_count: pool?.pool_count ?? null,
       owners: int(stats.owners),
@@ -507,7 +509,7 @@ export function createStats(deps: StatsDeps) {
     market: "opensea" | "nftx" | null
     osAt: Date | null
   } | null> {
-    const parts = (await floorParts(sql, [contract], deps.nftx === true)).get(contract)
+    const parts = (await floorParts(sql, [contract], deps.combineNftx?.() === true)).get(contract)
     if (!parts) return null
     const { floorWei, market } = combineFloor(parts)
     const at = market === "nftx" ? eventAt : parts.osAt

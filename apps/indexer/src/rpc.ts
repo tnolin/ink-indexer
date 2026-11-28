@@ -99,6 +99,8 @@ export const LIST_SEED = 50
 const SIZE_REFUSAL =
   /(too many|exceeds?|maximum|limit)\b.*\b(topics?|addresses|address list|filter)|\b(topics?|addresses|filter)\b.*\b(too many|exceeds?|maximum|limit)|payload too large|request entity too large|body size/i
 const GROW_AFTER = 20
+/** A cut range doubles back toward its seed once this long has passed since its last cut, so a transport that was halved while the endpoint was struggling is not held down by a long run of successes alone. */
+export const REGROW_MS = 120_000
 const BENCH_AFTER = 5
 const BENCH_MS = 60_000
 const MAX_WAIT_MS = 30_000
@@ -121,6 +123,8 @@ type TransportState = {
   /** Failures in a row, not reset by benching; drives the error-level log. */
   consecutive: number
   benchedUntil: number
+  /** When the range was last halved or regrown; the next regrowth is `REGROW_MS` after it. */
+  cutAt: number
   head: bigint
   headAt: number
 }
@@ -213,6 +217,7 @@ export class LogRouter {
       failures: 0,
       consecutive: 0,
       benchedUntil: 0,
+      cutAt: Number.NEGATIVE_INFINITY,
       head: 0n,
       headAt: Number.NEGATIVE_INFINITY,
     }))
@@ -282,6 +287,7 @@ export class LogRouter {
     let tipRefusals = 0
     for (;;) {
       const now = this.clock.now()
+      this.regrow(now)
       let failed = false
       for (const s of this.healthyByRange(now)) {
         try {
@@ -346,6 +352,7 @@ export class LogRouter {
             const wasMin = s.range === 1
             s.successes = 0
             s.range = Math.max(1, Math.floor(s.range / 2))
+            s.cutAt = now
             if (wasMin || ++s.failures >= BENCH_AFTER) {
               s.benchedUntil = now + BENCH_MS
               s.failures = 0
@@ -391,6 +398,20 @@ export class LogRouter {
         ),
     )
     return read.filter((h) => h !== null)
+  }
+
+  /**
+   * Doubles the range of every transport that was cut and has not been cut or regrown for `REGROW_MS`,
+   * up to its seed. A benched transport regrows too; its bench is not touched. A transport that fails
+   * again at the larger range is cut again.
+   */
+  private regrow(now: number): void {
+    for (const s of this.states) {
+      if (s.range < s.t.seed && now - s.cutAt >= REGROW_MS) {
+        s.range = Math.min(s.t.seed, s.range * 2)
+        s.cutAt = now
+      }
+    }
   }
 
   /** Healthy transports, largest range first; ties keep priority order. */

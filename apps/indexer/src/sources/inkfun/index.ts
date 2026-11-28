@@ -35,7 +35,7 @@ import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import type { AthRow, CurveRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
-import { type EventRow, pick, type Source } from "../source"
+import { type EventRow, pick, SOURCE_GROUPS, type Source } from "../source"
 import { bondedAbove, curvesToRefresh, loadCurves, rollbackRows, writeRows } from "./store"
 
 const WHOLE_TOKEN = 10n ** 18n
@@ -369,6 +369,7 @@ export function inkfunSource(deps: InkfunDeps): Source<InkfunBatch, Rollback> {
 
   return {
     name: "inkfun",
+    groups: SOURCE_GROUPS.inkfun,
     filters: (only) => [pick(only, "inkfun", LOG_FILTER)],
     process: ([logs]) => process(logs ?? []),
     write: writeRows,

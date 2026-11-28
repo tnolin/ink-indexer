@@ -2,6 +2,23 @@
 
 Notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [indexer-v0.9.0] - 2026-11-27
+
+### Added
+
+- Indexer: a source whose rows Postgres refuses as bad data (SQLSTATE class 22 or 23) is skipped for that span while every other source writes it. It is paused if it fails again within its next two spans that carried data, or if it finds a launch missing. Each skip and pause is recorded in `indexer.quarantine` with the backfill command that replays it. See ADR 0048.
+- Indexer: `pnpm quarantine clear <source>` resumes a paused source after its blocks are replayed.
+- DB: migration 0020 adds `indexer.quarantine`.
+
+### Changed
+
+- Indexer: backfills read 4 blocks at a time by default (was 8). `--block-reads` still takes 1 to 16. See ADR 0049.
+
+### Fixed
+
+- Indexer: an endpoint whose getLogs range was cut after rate limits grows it back every 2 minutes, so it is used again.
+- Indexer: `@sentry/node` 11.19.0, which clears the advisories on `glob` and `minimatch`.
+
 ## [indexer-v0.8.2] - 2026-11-25
 
 ### Fixed

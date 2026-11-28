@@ -5,4 +5,8 @@ export function connect(url: string) {
 }
 
 export type Sql = ReturnType<typeof connect>
+
+/** The error class `Sql` throws for a server-side failure, so callers need no second `postgres` copy to test for it. */
+export const PostgresError = postgres.PostgresError
+export type PostgresError = InstanceType<typeof postgres.PostgresError>
 export { migrate } from "./migrate"

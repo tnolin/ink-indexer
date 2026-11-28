@@ -23,7 +23,7 @@ import { droppedLogs } from "../dropped"
 import type { AthRow, TradeRow } from "../inkypump/index"
 import type { PoolEntry, PoolRegistry } from "../pools"
 import { blockSendersFor, servedAt } from "../senders"
-import { type EventRow, pick, type Source } from "../source"
+import { type EventRow, pick, SOURCE_GROUPS, type Source } from "../source"
 import { deadAbove, resetDead, resetSupply, supplyAbove, writeRows } from "./store"
 
 export type PoolTradeRow = TradeRow & { poolId: Hash }
@@ -120,6 +120,7 @@ export function v4Source(deps: {
   const readSinceWrite = new Set<Address>()
   return {
     name: "v4",
+    groups: SOURCE_GROUPS.v4,
     filters(only) {
       const poolIds = pools.poolIds()
       const tokens = pools.tokens()

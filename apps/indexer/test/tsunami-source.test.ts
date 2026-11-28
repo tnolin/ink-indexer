@@ -1258,7 +1258,7 @@ describe("Tsunami backfill reads", () => {
     curve: await sql`select * from indexer.curve_state order by token`,
   })
 
-  it("a backfill span gives the same batch with 8 reads in flight as with 1", async () => {
+  it("a backfill span gives the same batch with 4 reads in flight as with 1", async () => {
     const batches = []
     const widest = []
     for (const blockReads of [1, undefined]) {
@@ -1272,13 +1272,13 @@ describe("Tsunami backfill reads", () => {
         await t.sql.end()
       }
     }
-    expect(widest).toEqual([1, 5])
+    expect(widest).toEqual([1, 4])
     expect(batches[0]!.tsunami.events.length).toBeGreaterThan(5)
     expect(batches[0]!.swaps.events).toHaveLength(1)
     expect(batches[1]).toEqual(batches[0])
   })
 
-  it("the same span written twice, with 1 and with 8 reads in flight, leaves identical rows", async () => {
+  it("the same span written twice, with 1 and with 4 reads in flight, leaves identical rows", async () => {
     const written = []
     for (const blockReads of [1, undefined]) {
       const t = await setup({ blockReads })
@@ -1302,7 +1302,7 @@ describe("Tsunami backfill reads", () => {
     expect(written[1]!.events).toEqual(written[0]!.events)
   })
 
-  it("a backfill span reads each block with Tsunami logs once, at most 8 at a time", async () => {
+  it("a backfill span reads each block with Tsunami logs once, at most 4 at a time", async () => {
     const t = await setup()
     try {
       const { blocks, to } = manyTrades(t.chain, 24)
@@ -1312,7 +1312,7 @@ describe("Tsunami backfill reads", () => {
       expect(tsunamiBlocks).toBeGreaterThanOrEqual(25)
       expect(t.chain.getBlockSendersCalls).toBe(tsunamiBlocks)
       expect(new Set(t.chain.sendersOrder).size).toBe(tsunamiBlocks)
-      expect(t.chain.maxSendersInFlight).toBe(8)
+      expect(t.chain.maxSendersInFlight).toBe(4)
     } finally {
       await t.sql.end()
     }

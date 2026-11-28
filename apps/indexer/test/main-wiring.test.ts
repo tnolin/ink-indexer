@@ -474,3 +474,96 @@ describe("NFT settings", () => {
     expect(await resolveHistoryStart(sql, chain, undefined)).toEqual({ block: 500n, ts: 500 })
   })
 })
+
+describe("the NFTX floor in the scheduled OpenSea stats", () => {
+  const ETH = 10n ** 18n
+  const POOL_PRICE = 308_559_859_825_663n
+  const HEAD = 10_000_000n
+
+  /** One OpenSea stats poll of a collection that also trades on NFTX, run by `startNftServices`. */
+  async function scheduledPoll(combineNftx: () => boolean) {
+    await store.writeBatch([], [], {
+      cursor: { block: HEAD, hash: pad("0x11", { size: 32 }) as Hash },
+      head: HEAD,
+    })
+    await sql`insert into indexer.nft_collections ${sql({
+      contract: NFT,
+      standard: "erc721",
+      slug: "lil-dudes",
+      nftx_slug: "lil-dudes",
+      verdict: "real",
+      stats_tier: "hot",
+      next_stats_at: new Date(T0 - 1000),
+      next_discovery_at: null,
+    })}`
+    await sql`insert into indexer.nft_mints ${sql({
+      tx_hash: "0x01",
+      log_index: 0,
+      idx: 0,
+      contract: NFT,
+      token_id: "1",
+      recipient: OWNER,
+      qty: "1",
+      block: (HEAD - 60n).toString(),
+    })}`
+    await sql`insert into indexer.nftx_collections ${sql({
+      collection: NFT,
+      floor_token: "0x00000000000000000000000000000000000000f1",
+      creator: OWNER,
+      created_block: "100",
+      initialized_block: "110",
+      fleth_is_currency0: true,
+      pool_count: 60,
+      pool_count_block: "250",
+    })}`
+    await sql`insert into indexer.nftx_prices ${sql({
+      collection: NFT,
+      block: "200",
+      log_index: 0,
+      sqrt_price_x96: "1",
+      price_wei: POOL_PRICE.toString(),
+      at: new Date(T0 - 3 * HOUR),
+    })}`
+    const services = await startNftServices({
+      env: { OPENSEA_API_KEY: KEY, OPENSEA_MIN_INTERVAL_MS: "0" },
+      sql,
+      store,
+      chain: new FakeChain(HEAD),
+      log,
+      report,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname
+        if (path.endsWith("/stats"))
+          return Response.json({
+            total: { floor_price: 0.4, num_owners: 10 },
+            intervals: [{ interval: "one_day", volume: 0, sales: 0 }],
+          })
+        if (path.endsWith("/best")) return Response.json({ listings: [], next: null })
+        return new Response(null, { status: 404 })
+      },
+      socket: new FakeStream().factory,
+      now,
+      tickMs: 10,
+      combineNftx,
+    })
+    stop = services.stop
+    await until(async () => (await count("nft_stats")) > 0)
+    const [row] = await sql<{ floor_wei: string; floor_market: string | null }[]>`
+      select floor_wei::text as floor_wei, floor_market from indexer.nft_stats`
+    return row
+  }
+
+  it("combineNftx returning false: the poll writes the OpenSea floor with floor_market null", async () => {
+    expect(await scheduledPoll(() => false)).toEqual({
+      floor_wei: ((4n * ETH) / 10n).toString(),
+      floor_market: null,
+    })
+  })
+
+  it("combineNftx returning true: the poll combines the NFTX pool price into the floor", async () => {
+    expect(await scheduledPoll(() => true)).toEqual({
+      floor_wei: POOL_PRICE.toString(),
+      floor_market: "nftx",
+    })
+  })
+})

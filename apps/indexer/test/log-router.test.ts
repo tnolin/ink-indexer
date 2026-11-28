@@ -14,6 +14,7 @@ import {
   type LogFilter,
   LogRouter,
   type LogTransport,
+  REGROW_MS,
   seedFor,
 } from "../src/rpc"
 
@@ -285,6 +286,93 @@ describe("LogRouter", () => {
     for (let i = 0; i < 19; i++) await router.getLogs(1n, FAR, NO_FILTER)
     expect(router.ranges()[0]!.range).toBe(1_000)
     for (let i = 0; i < 20; i++) await router.getLogs(1n, FAR, NO_FILTER)
+    expect(router.ranges()[0]!.range).toBe(1_000)
+  })
+
+  it("a transport halved below another is picked again once REGROW_MS has passed, and grows back to its seed over successive intervals", async () => {
+    const clock = fakeClock()
+    let limit = 62n
+    const a = transport("a", 1_000, (f, t) => t - f + 1n > limit)
+    const b = transport("b", 100)
+    const router = new LogRouter([a, b], clock, quiet)
+    expect((await router.getLogs(1n, FAR, NO_FILTER)).toBlock).toBe(100n)
+    expect(router.ranges()[0]!.range).toBe(62)
+    limit = FAR
+    const sizes: bigint[] = []
+    const ranges: number[] = []
+    for (let i = 0; i < 5; i++) {
+      clock.t += REGROW_MS
+      const before = a.calls.length
+      await router.getLogs(1n, FAR, NO_FILTER)
+      const call = a.calls[before]
+      sizes.push(call ? call[1] - call[0] + 1n : 0n)
+      ranges.push(router.ranges()[0]!.range)
+    }
+    expect(sizes).toEqual([124n, 248n, 496n, 992n, 1_000n])
+    expect(ranges).toEqual([124, 248, 496, 992, 1_000])
+  })
+
+  it("a transport that keeps failing keeps being cut: regrowth never takes it above its seed and does not lift its bench", async () => {
+    const clock = fakeClock()
+    const a = transport("a", 1_000, () => true)
+    const b = transport("b", 10)
+    const router = new LogRouter([a, b], clock, quiet)
+    await router.getLogs(1n, FAR, NO_FILTER)
+    expect(router.ranges()[0]).toEqual({ name: "a", range: 31, healthy: false })
+    clock.t = 59_999
+    await router.getLogs(1n, FAR, NO_FILTER)
+    expect(a.calls.length).toBe(5)
+    clock.t = 60_000
+    await router.getLogs(1n, FAR, NO_FILTER)
+    expect(a.calls.length).toBe(7)
+    expect(router.ranges()[0]!.range).toBe(7)
+    // Each interval doubles the cut range and the next failure cuts it again.
+    for (let i = 1; i <= 3; i++) {
+      clock.t += REGROW_MS
+      const cut = router.ranges()[0]!.range
+      const before = a.calls.length
+      await router.getLogs(1n, FAR, NO_FILTER)
+      const sizes = a.calls.slice(before).map(([f, t]) => Number(t - f + 1n))
+      expect(Math.max(...sizes)).toBeLessThanOrEqual(1_000)
+      expect(sizes[0]).toBe(cut * 2)
+      expect(router.ranges()[0]!.range).toBeLessThanOrEqual(1_000)
+    }
+  })
+
+  it("a benched transport regrows its range but stays benched until its bench ends", async () => {
+    const clock = fakeClock()
+    let down = false
+    const a = transport("a", 1_000, (f, t) => {
+      if (down) throw new SocketClosedError({ url: "wss://x" })
+      return t - f + 1n > 500n
+    })
+    const b = transport("b", 10)
+    const router = new LogRouter([a, b], clock, quiet)
+    await router.getLogs(1n, FAR, NO_FILTER) // a is cut to 500
+    expect(router.ranges()[0]!.range).toBe(500)
+    down = true
+    clock.t = REGROW_MS - 1
+    await router.getLogs(1n, FAR, NO_FILTER) // a drops its connection and is benched for 60 s
+    expect(router.ranges()[0]).toEqual({ name: "a", range: 500, healthy: false })
+    const calls = a.calls.length
+    clock.t = REGROW_MS + 1_000
+    await router.getLogs(1n, FAR, NO_FILTER)
+    expect(a.calls.length).toBe(calls)
+    expect(router.ranges()[0]).toEqual({ name: "a", range: 1_000, healthy: false })
+  })
+
+  it("less than REGROW_MS after a cut the range stays where it is", async () => {
+    const clock = fakeClock()
+    const a = transport("a", 1_000, (_f, _t, call) => call === 1)
+    const b = transport("b", 100)
+    const router = new LogRouter([a, b], clock, quiet)
+    await router.getLogs(1n, FAR, NO_FILTER)
+    expect(router.ranges()[0]!.range).toBe(500)
+    clock.t += REGROW_MS - 1
+    for (let i = 0; i < 3; i++) await router.getLogs(1n, FAR, NO_FILTER)
+    expect(router.ranges()[0]!.range).toBe(500)
+    clock.t += 1
+    await router.getLogs(1n, FAR, NO_FILTER)
     expect(router.ranges()[0]!.range).toBe(1_000)
   })
 

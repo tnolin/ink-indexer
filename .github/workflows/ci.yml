@@ -90,3 +90,13 @@ jobs:
             | select((.level // (if .ruleIndex == null then null else $run.tool.driver.rules[.ruleIndex].defaultConfiguration.level end) // "warning") == "error")] | length' sarif-results/*.sarif)
           echo "error-severity alerts: $count"
           test "$count" -eq 0
+
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: scripts/check-names.sh
+        env:
+          GUARD_PATTERN: ${{ secrets.GUARD_PATTERN }}
+          GUARD_ALLOW: ${{ secrets.GUARD_ALLOW }}
+          GUARD_FORK: ${{ github.event.pull_request.head.repo.fork }}

@@ -22,13 +22,13 @@ import {
 } from "@ink-indexer/sdk"
 import type { Address, Hash } from "viem"
 import type { Chain } from "../../chain"
-import { BlockNotServedError } from "../../errors"
+import { BlockNotServedError, DependencyError } from "../../errors"
 import type { Logger } from "../../log"
 import type { LogFilter } from "../../rpc"
 import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import type { PoolEntry, PoolRegistry } from "../pools"
-import { type EventRow, pick, type Source } from "../source"
+import { type EventRow, pick, SOURCE_GROUPS, type Source } from "../source"
 import { HookRegistry, type HookRow, nativeHookRows } from "./hooks"
 import {
   launchesToRefresh,
@@ -138,6 +138,7 @@ export function inkypumpSource(deps: {
   })
   return {
     name: "inkypump",
+    groups: SOURCE_GROUPS.inkypump,
     filters: (only) => [pick(only, "inkypump", LOG_FILTER)],
     process: ([logs]) =>
       processLogs(logs ?? [], {
@@ -318,7 +319,7 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
       } else if (d.kind === "trade") {
         const launch = launches.get(k)
         if (!launch)
-          throw new Error(
+          throw new DependencyError(
             `trade for unknown launch ${d.launchId} on ${log.address} in tx ${log.transactionHash}`,
           )
         if (!athBefore.has(launch.token))
@@ -363,7 +364,7 @@ export async function processLogs(input: ChainLog[], deps: SourceDeps): Promise<
       } else if (d.kind === "launchFinalized") {
         const launch = launches.get(k)
         if (!launch)
-          throw new Error(
+          throw new DependencyError(
             `bond for unknown launch ${d.launchId} on ${log.address} in tx ${log.transactionHash}`,
           )
         const state = states.get(k)!

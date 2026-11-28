@@ -732,17 +732,17 @@ describe("v4 source through the database", () => {
       return blocks
     }
 
-    it("a backfill span reads each swap block's senders once, at most 8 at a time", async () => {
+    it("a backfill span reads each swap block's senders once, at most 4 at a time", async () => {
       const { chain, pools, run } = setup()
       pools.setDead(TOKEN, 0n, B - 50n)
       const blocks = manySwaps(chain, 30)
       await run(B + 30n)
       expect(chain.getBlockSendersCalls).toBe(30)
-      expect(chain.maxSendersInFlight).toBe(8)
+      expect(chain.maxSendersInFlight).toBe(4)
       expect([...chain.sendersOrder].sort()).toEqual([...blocks].sort())
     })
 
-    it("a backfill span gives the same batch with 8 reads in flight as with 1", async () => {
+    it("a backfill span gives the same batch with 4 reads in flight as with 1", async () => {
       const make = async (blockReads?: number) => {
         const { chain, pools, run } = setup(B + 20n, [entry(1)], blockReads)
         pools.setDead(TOKEN, 0n, B - 50n)
@@ -752,10 +752,10 @@ describe("v4 source through the database", () => {
         return { batch, widest: chain.maxSendersInFlight }
       }
       const { batch: one, widest: widestOne } = await make(1)
-      const { batch: eight, widest: widestEight } = await make()
-      expect([widestOne, widestEight]).toEqual([1, 8])
+      const { batch: four, widest: widestFour } = await make()
+      expect([widestOne, widestFour]).toEqual([1, 4])
       expect(one.trades).toHaveLength(12)
-      expect(eight).toEqual(one)
+      expect(four).toEqual(one)
     })
 
     it("the live tick reads swap blocks one at a time in block order", async () => {

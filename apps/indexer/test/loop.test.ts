@@ -479,8 +479,10 @@ describe("Indexer over several sources", () => {
     const seen: { logs: ChainLog[][]; toBlock: bigint }[] = []
     const live: boolean[] = []
     const rollbackTxs: Tx[] = []
+    const failures: Error[] = []
     const source: Source<{ events: []; blocks: { number: bigint; hash: Hash }[] }, string> = {
       name,
+      groups: [],
       filters: () => filters,
       async process(logs, ctx) {
         seen.push({ logs, toBlock: ctx.toBlock })
@@ -490,7 +492,11 @@ describe("Indexer over several sources", () => {
       },
       async write(tx, batch) {
         calls.push(`${name}.write`)
-        if (failWrite) throw new Error(`${name} write failed`)
+        if (failWrite) {
+          const err = new Error(`${name} write failed`)
+          failures.push(err)
+          throw err
+        }
         for (const b of batch.blocks)
           await tx`insert into indexer.fake_writes values (${name}, ${b.number.toString()})`
       },
@@ -507,7 +513,7 @@ describe("Indexer over several sources", () => {
         calls.push(`${name}.reload`)
       },
     }
-    return { source, seen, live, rollbackTxs }
+    return { source, seen, live, rollbackTxs, failures }
   }
 
   /** Records [from - S, to - S, filter] for every getLogs call. */
@@ -640,6 +646,20 @@ describe("Indexer over several sources", () => {
     expect(await fakeWrites()).toEqual([])
     expect(await store.getCursor()).toBeNull()
     expect(idx.cursorBlock).toBeNull()
+  })
+
+  it("the rethrown error is the same object the write threw", async () => {
+    const chain = new FakeChain(S + 20n)
+    chain.add(log(B, T1, S + 12n))
+    const b = fakeSource("b", [filterB1], [], true)
+    const idx = new Indexer({ chain, store, logger: () => {}, sources: [b.source] })
+    await idx.init()
+    const err = await idx.trigger().then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+    expect(b.failures).toHaveLength(1)
+    expect(err).toBe(b.failures[0])
   })
 
   it("rollback calls prepareRollback outside and rollback inside one transaction for every source", async () => {

@@ -30,7 +30,7 @@ import type { Reporter } from "../../sentry"
 import { droppedLogs } from "../dropped"
 import type { Ranks } from "../opensea/ranks"
 import { blockSendersFor } from "../senders"
-import { pick, type Source, type SourceBatch } from "../source"
+import { pick, SOURCE_GROUPS, type Source, type SourceBatch } from "../source"
 import { type AuctionPlan, planAuctions } from "./auctions"
 import { planListings } from "./listings"
 import { planSales, type SalesPlan } from "./sales"
@@ -565,6 +565,7 @@ export function nftxSource(deps: NftxDeps): Source<NftxBatch, NftxRollback> {
 
   return {
     name: "nftx",
+    groups: SOURCE_GROUPS.nftx,
     filters: (only) => [
       pick(only, "nftx", ADDRESSES),
       pick(only, "nftx", FACTORY),

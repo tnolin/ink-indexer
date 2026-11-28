@@ -80,7 +80,7 @@ async function ingest(
     chain,
     store,
     logger: () => {},
-    sources: [nftSource({ sql, chain, logger: () => {}, nftx })],
+    sources: [nftSource({ sql, chain, logger: () => {}, combineNftx: () => nftx })],
   })
   await idx.init()
   await idx.backfill(firstBlock(logs), chain.head)

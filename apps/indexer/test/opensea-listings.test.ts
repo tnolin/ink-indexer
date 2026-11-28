@@ -110,7 +110,7 @@ function setup(
 ) {
   const fetch = fakeFetch({ [statsPath]: osStats(0.1), ...routes })
   const rest = createOpenSeaRest({ key: KEY, budget, fetch, log, report, now })
-  const stats = createStats({ sql, store, rest, log, now, nftx })
+  const stats = createStats({ sql, store, rest, log, now, combineNftx: () => nftx })
   const ranks = createRanks({ sql, rest, log, now })
   const listings = createListings({ sql, store: withStore, stats, ranks, log, report, now })
   return { fetch, rest, stats, ranks, listings, handle: listings.handleStreamEvent }
