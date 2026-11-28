@@ -1,4 +1,4 @@
-import { connect, PostgresError, type Sql } from "@ink-indexer/db"
+import { PostgresError, type Sql } from "@ink-indexer/db"
 import { resetDb } from "@ink-indexer/db/testing"
 import { inkfunClosingSold, INKYPUMP_START_BLOCK as S } from "@ink-indexer/sdk"
 import type { Address } from "viem"
@@ -612,47 +612,45 @@ describe("a failure that another try may clear", () => {
     expect(await count("events")).toBe(0)
   })
 
-  it("a terminated connection during the write is rethrown and not recorded", async () => {
-    // Its own connection, so ending the backend does not take the test's other queries with it.
-    const own = connect(inject("databaseUrl"))
-    try {
-      const chain = chainTo(S + 9n)
-      chain.add(writerLog(FAKE, S + 3n))
-      const calls: string[] = []
-      const t = rig(
-        chain,
-        () => [
-          afterWrite(
-            plainWriter("tsunami", ["tsunami"], FAKE, calls),
-            () => true,
-            async (tx) => {
-              const [me] = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`
-              await sql`select pg_terminate_backend(${me!.pid})`
-              await tx`select 1`
-            },
-          ),
-        ],
-        { store: createStore(own) },
-      )
-      const idx = await t.open()
-      const err = await idx.trigger().then(
-        () => undefined,
-        (e: unknown) => e,
-      )
-      // After the backend is gone, postgres.js still issues the transaction's rollback on the dead
-      // socket and queues the write for the next turn of the event loop. Ending the pool in the turn
-      // the failure surfaces cancels that write; any awaited query before this point would let it run
-      // against a closed socket and surface as an unhandled error.
-      await own.end({ timeout: 0 })
-      expect(err).toBeInstanceOf(Error)
-      expect(badDataError(err)).toBeNull()
-      expect((err as { code?: string }).code).toBe("CONNECTION_CLOSED")
-      expect(calls).toEqual(["reload", "process", "reload"])
-      expect(await rows()).toEqual([])
-      expect(t.report.errors).toEqual([])
-    } finally {
-      await own.end({ timeout: 0 })
-    }
+  it("a cancelled statement during the write is rethrown and not recorded", async () => {
+    const chain = chainTo(S + 9n)
+    chain.add(writerLog(FAKE, S + 3n))
+    const calls: string[] = []
+    const t = rig(chain, () => [
+      afterWrite(
+        plainWriter("tsunami", ["tsunami"], FAKE, calls),
+        () => true,
+        async (tx) => {
+          const [me] = await tx<{ pid: number }[]>`select pg_backend_pid() as pid`
+          // Cancel from another connection once the backend reports the sleep as running.
+          const cancelled = (async () => {
+            for (;;) {
+              const [active] = await sql<{ pid: number }[]>`
+                select pid from pg_stat_activity
+                where pid = ${me!.pid} and state = 'active' and query like '%pg_sleep%'`
+              if (active) break
+              await new Promise((r) => setTimeout(r, 5))
+            }
+            await sql`select pg_cancel_backend(${me!.pid})`
+          })()
+          try {
+            await tx`select pg_sleep(30)`
+          } finally {
+            await cancelled
+          }
+        },
+      ),
+    ])
+    const idx = await t.open()
+    const err = await idx.trigger().then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+    expect((err as PostgresError).code).toBe("57014")
+    expect(badDataError(err)).toBeNull()
+    expect(calls).toEqual(["reload", "process", "reload"])
+    expect(await rows()).toEqual([])
+    expect(t.report.errors).toEqual([])
   })
 })
 
